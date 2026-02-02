@@ -1,0 +1,81 @@
+# Build directories
+build*/
+cmake-build-*/
+out/
+*.dir/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Compiled files
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.dylib
+*.dll
+*.exe
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+CTestTestfile.cmake
+Testing/
+DartConfiguration.tcl
+compile_commands.json
+*.cmake
+
+# Test outputs
+*.log
+*.txt.user
+benchmark-results/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+venv/
+env/
+.venv/
+*.egg-info/
+
+# Profiling
+*.profraw
+*.profdata
+callgrind.out.*
+perf.data*
+
+# Generated files
+*.generated.*
+*_generated.*
+
+# Platform specific
+Thumbs.txt
+ehthumbs.db
+
+# CUDA
+*.cubin
+*.ptx
+*.fatbin
+
+# Backup files
+*.bak
+*.backup
+*~
+
+# Package files
+*.tar.gz
+*.zip
+*.7z
+
+# Documentation build
+docs/_build/
+docs/.buildinfo
