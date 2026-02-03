@@ -1,6 +1,7 @@
 #pragma once
 #include <cuda_runtime.h>
 #include <cstdint>
+#include "hash160.cuh"
 
 namespace secp256k1 {
 namespace cuda {
@@ -212,6 +213,9 @@ __constant__ static const uint64_t GENERATOR_Y[4] = {
     0x5DA4FBFC0E1108A8ULL,
     0x483ADA7726A3C465ULL
 };
+
+// Hash160 kernel: RIPEMD160(SHA256(pubkey)) with no prefixes/base58
+__global__ void hash160_pubkey_kernel(const uint8_t* pubkeys, int pubkey_len, uint8_t* out_hashes, int count);
 
 // Helper functions for 128-bit arithmetic
 __device__ __forceinline__ uint64_t add_cc(uint64_t a, uint64_t b, uint64_t& carry) {

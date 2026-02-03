@@ -63,5 +63,14 @@ __global__ void point_dbl_kernel(const JacobianPoint* a, JacobianPoint* r, int c
     }
 }
 
+__global__ void hash160_pubkey_kernel(const uint8_t* pubkeys, int pubkey_len, uint8_t* out_hashes, int count) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < count) {
+        const uint8_t* pk = pubkeys + static_cast<size_t>(idx) * static_cast<size_t>(pubkey_len);
+        uint8_t* out = out_hashes + static_cast<size_t>(idx) * 20U;
+        hash160_pubkey(pk, static_cast<size_t>(pubkey_len), out);
+    }
+}
+
 } // namespace cuda
 } // namespace secp256k1
