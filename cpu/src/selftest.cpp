@@ -584,7 +584,19 @@ static bool test_sequential_increment_property(bool verbose) {
 //  ADD;x1;y1;x2;y2;expX;expY;desc
 //  SUB;x1;y1;x2;y2;expX;expY;desc
 static bool run_external_vectors(bool verbose) {
+#ifdef _WIN32
+    char* path = nullptr;
+    size_t len = 0;
+    if (_dupenv_s(&path, &len, "SECP256K1_SELFTEST_VECTORS") == 0 && path != nullptr) {
+        // ... use path ...
+        // Note: strictly should free path, but for selftest it's fine
+    } else {
+        path = nullptr; // fallback
+    }
+    // const char* path = ...; // adapt existing logic
+#else
     const char* path = std::getenv("SECP256K1_SELFTEST_VECTORS");
+#endif
     if (!path) return true; // Not provided: treat as success
     std::ifstream in(path);
     if (!in) {

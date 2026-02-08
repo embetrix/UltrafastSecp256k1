@@ -55,16 +55,20 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     # Platform-specific -march flag
     if(SECP256K1_PLATFORM STREQUAL "riscv64")
         set(MARCH_FLAG "-march=rv64gc_zba_zbb")
-    else()
+    elseif(SECP256K1_PLATFORM STREQUAL "x86_64")
         set(MARCH_FLAG "-march=native")
+    else()
+        set(MARCH_FLAG "")
     endif()
     
     add_compile_options(
-        -Wall -Wextra -Wpedantic
-        -Wno-unused-parameter
-        ${MARCH_FLAG}
-        $<$<CONFIG:Release>:-O3>
-        $<$<CONFIG:Release>:-DNDEBUG>
+        $<$<COMPILE_LANGUAGE:C,CXX>:-Wall>
+        $<$<COMPILE_LANGUAGE:C,CXX>:-Wextra>
+        $<$<COMPILE_LANGUAGE:C,CXX>:-Wpedantic>
+        $<$<COMPILE_LANGUAGE:C,CXX>:-Wno-unused-parameter>
+        $<$<COMPILE_LANGUAGE:C,CXX>:${MARCH_FLAG}>
+        $<$<AND:$<CONFIG:Release>,$<COMPILE_LANGUAGE:C,CXX>>:-O3>
+        $<$<AND:$<CONFIG:Release>,$<COMPILE_LANGUAGE:C,CXX>>:-DNDEBUG>
     )
 elseif(MSVC)
     add_compile_options(
@@ -81,8 +85,16 @@ if(SECP256K1_BUILD_CPU)
 endif()
 
 if(SECP256K1_BUILD_CUDA)
-    enable_language(CUDA)
-    add_subdirectory(cuda)
+    # On some platforms (notably Windows), nvcc requires an MSVC host compiler (cl.exe).
+    # If it's not available, we'd rather fall back to CPU-only than fail configuration.
+    include(CheckLanguage)
+    check_language(CUDA)
+    if(CMAKE_CUDA_COMPILER)
+        enable_language(CUDA)
+        add_subdirectory(cuda)
+    else()
+        message(WARNING "SECP256K1_BUILD_CUDA=ON მაგრამ CUDA toolchain ვერ მოიძებნა/არ იკონფიგურება (მაგ: nvcc ვერ პოულობს cl.exe). CPU-only ბილდზე გადავდივართ.")
+    endif()
 endif()
 
 if(SECP256K1_BUILD_OPENCL)

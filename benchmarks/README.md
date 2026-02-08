@@ -43,6 +43,9 @@ cmake --build build -j
 ./build/cpu/bench/benchmark_point
 ./build/cpu/bench/benchmark_scalar
 
+# RISC-V comprehensive benchmark
+./build/libs/UltrafastSecp256k1/cpu/bench_comprehensive_riscv
+
 # Save results
 ./build/cpu/bench/benchmark_field > benchmarks/cpu/x86-64/linux/field_$(date +%Y%m%d).txt
 ```
@@ -114,24 +117,45 @@ gcc --version  # or clang --version
 See individual platform directories for detailed results:
 - [x86-64 Windows](cpu/x86-64/windows/)
 - [x86-64 Linux](cpu/x86-64/linux/)
-- [RISC-V Linux](cpu/riscv64/linux/)
+- [**RISC-V Linux (Milk-V Mars)** ✓](cpu/riscv64/linux/) - **Updated 2026-02-08**
 - [ARM64 Linux](cpu/arm64/linux/)
 - [CUDA RTX 4090](gpu/cuda/rtx-40xx/)
 
-## 🏆 Leaderboards
+## 🏆 Platform Performance Comparison
 
-### Fastest Field Multiplication
-1. x86-64 + Assembly: ~8ns (AMD Zen 5)
-2. RISC-V + Assembly: ~75ns (StarFive JH7110)
-3. ARM64: TBD
-4. Portable C++: ~25ns (x86-64)
+### RISC-V (Milk-V Mars - StarFive JH7110 @ 1.5 GHz)
+**Configuration:** Assembly + RVV + Fast Modular Reduction  
+**Date:** 2026-02-08 | **Tests:** 29/29 ✓
 
-### Highest GPU Throughput
-1. RTX 4090: 8M ops/s (batch multiply)
-2. RTX 3090: TBD
-3. A100: TBD
+| Operation | Performance |
+|-----------|-------------|
+| Field Multiply | 200 ns |
+| Field Square | 185 ns |
+| Point Scalar Mul | 665 μs |
+| Generator Mul | 44 μs |
+| Batch Inverse (1000) | 611 ns/element |
 
-**Contribute your results to update these leaderboards!**
+### x86-64 (Typical Desktop/Server)
+| Operation | Performance (est.) |
+|-----------|-------------|
+| Field Multiply | 8-12 ns |
+| Point Scalar Mul | 60-80 μs |
+| Generator Mul | 4-6 μs |
+
+*Note: x86-64 performance varies by CPU model (Intel/AMD), clock speed (3-5 GHz typical), and assembly optimizations.*
+
+### Performance Insights
+
+- **RISC-V vs x86-64:** ~8-10x difference, primarily due to:
+  - Clock speed (1.5 GHz vs 3.5+ GHz)
+  - ISA maturity and compiler optimizations
+  - Memory subsystem performance
+  
+- **RISC-V Achievement:** Production-ready performance for embedded/IoT cryptographic applications
+
+- **Assembly Impact:** 2-3x speedup vs portable C++ on both platforms
+
+**Contribute your results to expand this comparison!**
 
 ---
 

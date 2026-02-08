@@ -15,8 +15,22 @@
 
 // External assembly functions
 #if defined(SECP256K1_HAS_ASM)
-    #if defined(_MSC_VER) && defined(_M_X64)
+    // Handle Clang on Windows specifically to use GAS assembly with SysV ABI
+    #if defined(_WIN32) && (defined(__clang__) || defined(__GNUC__)) && !defined(__MASM__)
+        #define SECP_USE_GAS_ASM
+        #define SECP_ASM_CC __attribute__((sysv_abi))
+    #elif defined(_MSC_VER) && defined(_M_X64)
         // Windows x64 MASM
+        #define SECP_USE_MASM
+    #elif defined(__GNUC__) && defined(__x86_64__)
+        // Linux x64 GAS (GNU Assembler)
+        #define SECP_USE_GAS_ASM
+        #define SECP_ASM_CC
+    #else
+        // Fallback or Unknown
+    #endif
+
+    #if defined(SECP_USE_MASM)
         extern "C" {
             void mul_4x4_asm(const uint64_t* a, const uint64_t* b, uint64_t* result);
             void sqr_4x4_asm(const uint64_t* a, uint64_t* result);
@@ -26,18 +40,18 @@
             void field_mul_full_asm(const uint64_t* a, const uint64_t* b, uint64_t* result);
             void field_sqr_full_asm(const uint64_t* a, uint64_t* result);
         }
-    #elif defined(__GNUC__) && defined(__x86_64__)
-        // Linux x64 GAS (GNU Assembler)
+    #elif defined(SECP_USE_GAS_ASM)
+        // Linux x64 GAS (GNU Assembler) or Windows Clang (SysV ABI)
         extern "C" {
-            void mul_4x4_asm(const uint64_t* a, const uint64_t* b, uint64_t* result);
-            void sqr_4x4_asm(const uint64_t* a, uint64_t* result);
-            void add_4_asm(const uint64_t* a, const uint64_t* b, uint64_t* result);
-            void sub_4_asm(const uint64_t* a, const uint64_t* b, uint64_t* result);
-            void reduce_4_asm(uint64_t* data);
+            void SECP_ASM_CC mul_4x4_asm(const uint64_t* a, const uint64_t* b, uint64_t* result);
+            void SECP_ASM_CC sqr_4x4_asm(const uint64_t* a, uint64_t* result);
+            void SECP_ASM_CC add_4_asm(const uint64_t* a, const uint64_t* b, uint64_t* result);
+            void SECP_ASM_CC sub_4_asm(const uint64_t* a, const uint64_t* b, uint64_t* result);
+            void SECP_ASM_CC reduce_4_asm(uint64_t* data);
             // NEW: Full multiplication + Montgomery reduction (7-10ns target!)
-            void field_mul_full_asm(const uint64_t* a, const uint64_t* b, uint64_t* result);
+            void SECP_ASM_CC field_mul_full_asm(const uint64_t* a, const uint64_t* b, uint64_t* result);
             // NEW: Full squaring + Montgomery reduction
-            void field_sqr_full_asm(const uint64_t* a, uint64_t* result);
+            void SECP_ASM_CC field_sqr_full_asm(const uint64_t* a, uint64_t* result);
         }
     #endif
 #endif

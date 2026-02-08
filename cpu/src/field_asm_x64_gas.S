@@ -8,6 +8,30 @@
 # Required: BMI2 instruction set (Intel Haswell 2013+, AMD Excavator 2015+)
 # ==============================================================================
 
+#if defined(_WIN32) || defined(__WIN32__) || defined(WIN32)
+    #define ELF_TYPE(name)
+    #define ELF_SIZE(name)
+    #define ELF_SECTION(...)
+
+    /* Windows (Clang with sysv_abi) Compatibility Layer */
+    /* C++ calls with __attribute__((sysv_abi)), so regs are RDI, RSI, RDX... */
+    /* No shims needed for registers! Just hide ELF directives. */
+    #define PROLOGUE_3ARG
+    #define PROLOGUE_2ARG
+    #define PROLOGUE_1ARG
+    #define EPILOGUE
+#else
+    #define ELF_TYPE(name) .type name, @function
+    #define ELF_SIZE(name) .size name, .-name
+    /* Accept commas by taking varargs and emitting them verbatim. */
+    #define ELF_SECTION(...) __VA_ARGS__
+
+    #define PROLOGUE_3ARG
+    #define PROLOGUE_2ARG
+    #define PROLOGUE_1ARG
+    #define EPILOGUE
+#endif
+
 .text
 .intel_syntax noprefix
 
@@ -27,8 +51,9 @@
 # ==============================================================================
 
 .globl mul_4x4_asm
-.type mul_4x4_asm, @function
+ELF_TYPE(mul_4x4_asm)
 mul_4x4_asm:
+    PROLOGUE_3ARG
     # Preserve non-volatile registers (callee-saved: rbx, rbp, r12-r15)
     push rbx
     push rbp
@@ -188,19 +213,15 @@ mul_4x4_asm:
     mov [rcx+48], r14
     mov [rcx+56], r15
 
-    # Restore non-volatile registers
     pop r15
     pop r14
     pop r13
     pop r12
     pop rbp
     pop rbx
-    
+    EPILOGUE
     ret
-
-.size mul_4x4_asm, .-mul_4x4_asm
-
-.text
+ELF_SIZE(mul_4x4_asm)
 
 # ==============================================================================
 # sqr_4x4_asm: 256-bit Squaring -> 512-bit result
@@ -213,8 +234,9 @@ mul_4x4_asm:
 # ==============================================================================
 
 .globl sqr_4x4_asm
-.type sqr_4x4_asm, @function
+ELF_TYPE(sqr_4x4_asm)
 sqr_4x4_asm:
+    PROLOGUE_2ARG
     push rbx
     push rbp
     push r12
@@ -348,11 +370,9 @@ sqr_4x4_asm:
     pop r12
     pop rbp
     pop rbx
+    EPILOGUE
     ret
-
-.size sqr_4x4_asm, .-sqr_4x4_asm
-
-.text
+ELF_SIZE(sqr_4x4_asm)
 
 # ==============================================================================
 # add_4_asm: 256-bit Modular Addition (a + b mod p)
@@ -366,8 +386,9 @@ sqr_4x4_asm:
 # ==============================================================================
 
 .globl add_4_asm
-.type add_4_asm, @function
+ELF_TYPE(add_4_asm)
 add_4_asm:
+    PROLOGUE_3ARG
     push rbx
     push rbp
     
@@ -422,9 +443,10 @@ add_4_asm:
     
     pop rbp
     pop rbx
+    EPILOGUE
     ret
 
-.size add_4_asm, .-add_4_asm
+ELF_SIZE(add_4_asm)
 
 # ==============================================================================
 # sub_4_asm: 256-bit Modular Subtraction (a - b mod p)
@@ -436,8 +458,9 @@ add_4_asm:
 # ==============================================================================
 
 .globl sub_4_asm
-.type sub_4_asm, @function
+ELF_TYPE(sub_4_asm)
 sub_4_asm:
+    PROLOGUE_3ARG
     push rbx
     push rbp
     
@@ -484,9 +507,10 @@ sub_4_asm:
     
     pop rbp
     pop rbx
+    EPILOGUE
     ret
 
-.size sub_4_asm, .-sub_4_asm
+ELF_SIZE(sub_4_asm)
 
 .text
 
@@ -503,8 +527,9 @@ sub_4_asm:
 # ==============================================================================
 
 .globl reduce_4_asm
-.type reduce_4_asm, @function
+ELF_TYPE(reduce_4_asm)
 reduce_4_asm:
+    PROLOGUE_1ARG
     push rbx
     push r12
     push r13
@@ -656,7 +681,7 @@ reduce_4_asm:
     pop r12
     pop rbx
     ret
-.size reduce_4_asm, .-reduce_4_asm
+ELF_SIZE(reduce_4_asm)
 
 # ==============================================================================
 # field_mul_full_asm: 256x256 -> 512 -> 256-bit Modular Multiplication
@@ -671,8 +696,9 @@ reduce_4_asm:
 # ==============================================================================
 
 .globl field_mul_full_asm
-.type field_mul_full_asm, @function
+ELF_TYPE(field_mul_full_asm)
 field_mul_full_asm:
+    PROLOGUE_3ARG
     push rbx
     push rbp
     push r12
@@ -963,8 +989,9 @@ field_mul_full_asm:
     pop r12
     pop rbp
     pop rbx
+    EPILOGUE
     ret
-.size field_mul_full_asm, .-field_mul_full_asm
+ELF_SIZE(field_mul_full_asm)
 
 # ==============================================================================
 # field_sqr_full_asm: 256 -> 512 -> 256-bit Modular Squaring
@@ -977,8 +1004,9 @@ field_mul_full_asm:
 # ==============================================================================
 
 .globl field_sqr_full_asm
-.type field_sqr_full_asm, @function
+ELF_TYPE(field_sqr_full_asm)
 field_sqr_full_asm:
+    PROLOGUE_2ARG
     push rbx
     push rbp
     push r12
@@ -1215,7 +1243,12 @@ field_sqr_full_asm:
     pop r12
     pop rbp
     pop rbx
+    EPILOGUE
     ret
-.size field_sqr_full_asm, .-field_sqr_full_asm
+ELF_SIZE(field_sqr_full_asm)
 
+/* Mark stack as non-executable (ELF). No-op on Windows. */
+#if !defined(_WIN32)
 .section .note.GNU-stack,"",@progbits
+#endif
+

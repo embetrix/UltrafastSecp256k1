@@ -15,58 +15,102 @@ set(SECP256K1_SOURCES
 # Optional inline assembly (Tier 3: Maximum performance, x64/RISC-V)
 option(SECP256K1_USE_ASM "Enable inline assembly optimizations (x64/RISC-V, 2-5x speedup)" ON)
 
+# Fast modular reduction (platform-independent)
+option(SECP256K1_USE_FAST_REDUCTION "Use fast modular reduction (RISC-V asm, x64 BMI2)" ON)
+
 # RISC-V specific options (only relevant when building on RISC-V)
 option(SECP256K1_RISCV_USE_VECTOR "Enable RISC-V Vector Extension (RVV) if available" ON)
-option(SECP256K1_RISCV_FAST_REDUCTION "Use fast modular reduction in assembly" ON)
 option(SECP256K1_RISCV_USE_PREFETCH "Enable prefetch hints for cache optimization" ON)
 
 if(SECP256K1_USE_ASM)
-    if(MSVC AND CMAKE_SIZEOF_VOID_P EQUAL 8)
-        # Windows x64 with MASM assembler
-        enable_language(ASM_MASM)
-        message(STATUS "Secp256k1: Inline assembly enabled (x64 MASM) - Expected 3-5x speedup on field operations")
-        list(APPEND SECP256K1_SOURCES src/field_asm_x64.asm)
-        set_source_files_properties(src/field_asm_x64.asm PROPERTIES COMPILE_FLAGS "/c /Zi")
-        set(SECP256K1_HAS_ASM TRUE CACHE INTERNAL "Assembly support enabled")
-    elseif(UNIX AND CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64|X64")
-        # Linux x64 with GAS assembler (GNU Assembler, AT&T/Intel syntax)
-        # Ensure ASM language is enabled for this directory (may already be enabled at top-level).
-        enable_language(ASM)
-        message(STATUS "Secp256k1: Inline assembly enabled (x64 GAS) - Expected 3-5x speedup on field operations")
-        list(APPEND SECP256K1_SOURCES src/field_asm_x64_gas.S)
-        # GAS assembler flags: allow Intel syntax, enable BMI2/ADX
-        set_source_files_properties(src/field_asm_x64_gas.S PROPERTIES 
-            COMPILE_FLAGS "-x assembler-with-cpp -mbmi2 -madx -fno-lto")
-        set(SECP256K1_HAS_ASM TRUE CACHE INTERNAL "Assembly support enabled")
+    if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64|X64" AND CMAKE_SIZEOF_VOID_P EQUAL 8)
+        # x64 Assembly (Windows/Linux/macOS)
+        if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+            # GAS syntax for Clang/GCC (Windows MinGW, Linux, macOS)
+            enable_language(ASM)
+            message(STATUS "Secp256k1: Inline assembly enabled (x64 GAS) - Expected 3-5x speedup on field operations")
+            list(APPEND SECP256K1_SOURCES src/field_asm_x64_gas.S)
+
+            # GAS assembler flags
+            set(ASM_FLAGS "-x assembler-with-cpp -mbmi2 -madx -fno-lto")
+            set_source_files_properties(src/field_asm_x64_gas.S PROPERTIES
+                COMPILE_FLAGS "${ASM_FLAGS}")
+            set(SECP256K1_HAS_ASM TRUE CACHE INTERNAL "Assembly support enabled")
+
+            # Enable fast reduction on x64 (uses BMI2/ADX)
+            if(SECP256K1_USE_FAST_REDUCTION)
+                add_compile_definitions(SECP256K1_USE_FAST_REDUCTION=1)
+                message(STATUS "Secp256k1: Fast modular reduction enabled (x64 BMI2/ADX)")
+            endif()
+        elseif(MSVC)
+            # MASM syntax for MSVC
+            enable_language(ASM_MASM)
+            message(STATUS "Secp256k1: Inline assembly enabled (x64 MASM) - Expected 3-5x speedup on field operations")
+            list(APPEND SECP256K1_SOURCES src/field_asm_x64.asm)
+            set_source_files_properties(src/field_asm_x64.asm PROPERTIES COMPILE_FLAGS "/c /Zi")
+            set(SECP256K1_HAS_ASM TRUE CACHE INTERNAL "Assembly support enabled")
+
+            if(SECP256K1_USE_FAST_REDUCTION)
+                add_compile_definitions(SECP256K1_USE_FAST_REDUCTION=1)
+                message(STATUS "Secp256k1: Fast modular reduction enabled (x64 BMI2/ADX)")
+            endif()
+        else()
+            message(WARNING "Secp256k1: Unsupported compiler ${CMAKE_CXX_COMPILER_ID} for x64 assembly")
+            set(SECP256K1_HAS_ASM FALSE)
+        endif()
     elseif(UNIX AND CMAKE_SYSTEM_PROCESSOR MATCHES "riscv64|RISCV64")
-        # RISC-V 64-bit with GAS assembler
+        # RISC-V 64-bit Assembly Support
         enable_language(ASM)
-        
-        # Base RISC-V march flag
-        set(RISCV_MARCH_FLAG "rv64gc")
-        set(RISCV_FEATURES "RV64GC")
-        
+
         # Check for Vector Extension support
         if(SECP256K1_RISCV_USE_VECTOR)
             # Try to detect if CPU supports RVV
+            # Check both /proc/cpuinfo (Linux) and manually enable if user requested
             execute_process(
-                COMMAND sh -c "cat /proc/cpuinfo | grep -i 'isa' | head -1"
-                OUTPUT_VARIABLE RISCV_ISA_STRING
+                COMMAND cat /proc/cpuinfo
+                OUTPUT_VARIABLE RISCV_CPUINFO
                 ERROR_QUIET
             )
-            if(RISCV_ISA_STRING MATCHES "v")
-                set(RISCV_MARCH_FLAG "rv64gcv")
-                set(RISCV_FEATURES "${RISCV_FEATURES}+Vector")
+
+            # Look for 'v' in ISA extensions (format: "isa : rv64imafdcv...")
+            if(RISCV_CPUINFO MATCHES "isa[^:]*:[^v]*v")
+                set(RISCV_HAS_VECTOR TRUE)
+            else()
+                set(RISCV_HAS_VECTOR FALSE)
+            endif()
+
+            # Also try compile test as fallback
+            if(NOT RISCV_HAS_VECTOR)
+                include(CheckCXXSourceCompiles)
+                set(CMAKE_REQUIRED_FLAGS "-march=rv64gcv")
+                check_cxx_source_compiles("
+                    #include <riscv_vector.h>
+                    int main() {
+                        vint64m1_t v = __riscv_vmv_v_x_i64m1(0, 4);
+                        return 0;
+                    }" RISCV_COMPILER_SUPPORTS_VECTOR)
+                if(RISCV_COMPILER_SUPPORTS_VECTOR)
+                    set(RISCV_HAS_VECTOR TRUE)
+                endif()
+            endif()
+
+            if(RISCV_HAS_VECTOR)
+                set(RISCV_MARCH_FLAG "rv64gcv_zba_zbb")
+                set(RISCV_FEATURES "+Vector")
                 add_compile_definitions(SECP256K1_HAS_RISCV_VECTOR=1)
+                add_compile_definitions(SECP256K1_RISCV_USE_VECTOR=1)
                 message(STATUS "Secp256k1: RISC-V Vector Extension (RVV) detected and enabled")
             else()
+                set(RISCV_MARCH_FLAG "rv64gc_zba_zbb")
                 message(STATUS "Secp256k1: RISC-V Vector Extension not detected, using scalar only")
             endif()
+        else()
+            set(RISCV_MARCH_FLAG "rv64gc_zba_zbb")
         endif()
         
         # Fast reduction option
-        if(SECP256K1_RISCV_FAST_REDUCTION)
-            add_compile_definitions(SECP256K1_RISCV_FAST_REDUCTION=1)
+        if(SECP256K1_USE_FAST_REDUCTION)
+            add_compile_definitions(SECP256K1_USE_FAST_REDUCTION=1)
             message(STATUS "Secp256k1: Fast modular reduction enabled")
         endif()
         
@@ -89,8 +133,8 @@ if(SECP256K1_USE_ASM)
         add_compile_definitions(SECP256K1_HAS_RISCV_ASM=1)
         set(SECP256K1_HAS_ASM TRUE CACHE INTERNAL "Assembly support enabled")
     else()
-        message(WARNING "Secp256k1: Inline assembly requested but not available for ${CMAKE_SYSTEM_PROCESSOR}")
-        message(WARNING "  Assembly is x64/RISC-V only. Will use BMI2 intrinsics (runtime) + portable C++ fallback.")
+        message(WARNING "Secp256k1: Inline assembly requested but not available for ${CMAKE_SYSTEM_PROCESSOR} on ${CMAKE_SYSTEM_NAME}")
+        message(WARNING "  Assembly is enabled only on: Linux x86_64 (GAS), Windows x64 (MSVC+MASM), Linux RISC-V (GAS). Falling back.")
         set(SECP256K1_HAS_ASM FALSE)
     endif()
 else()
@@ -103,7 +147,8 @@ if(NOT TARGET ${SECP256K1_LIB_NAME})
 
     # Enable IPO/LTO for this CPU library in Release on native (non-Windows) builds.
     # This is intentionally per-target to avoid leaking LTO flags into CUDA device-link steps.
-    if(NOT CMAKE_SYSTEM_NAME MATCHES "Windows")
+    # DISABLED: Causing link errors with GNU ld on Linux when LLD is missing.
+    if(FALSE AND NOT CMAKE_SYSTEM_NAME MATCHES "Windows")
         set_property(TARGET ${SECP256K1_LIB_NAME} PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE)
     endif()
 
@@ -118,10 +163,10 @@ if(NOT TARGET ${SECP256K1_LIB_NAME})
 target_compile_features(${SECP256K1_LIB_NAME} PUBLIC cxx_std_20)
 
 target_compile_definitions(${SECP256K1_LIB_NAME}
-    PUBLIC 
+    PUBLIC
         SECP256K1_FAST_NO_SECURITY_CHECKS=1
         SECP256K1_ULTRA_SPEED=1        # Maximum speed mode
-        NDEBUG                          # Remove all assertions
+        $<$<CONFIG:Release>:NDEBUG>    # Remove assertions only in Release
 )
 
 # Optional inline assembly support (x64 only)
@@ -135,6 +180,14 @@ if(SECP256K1_HAS_ASM)
     message(STATUS "  -> Expected K*Q: ~18-24 μs (vs 66 μs current)")
 endif()
 
+# Enable fast modular reduction on x86_64 (even without ASM, uses BMI2 intrinsics)
+if(SECP256K1_USE_FAST_REDUCTION AND CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64|X64")
+    target_compile_definitions(${SECP256K1_LIB_NAME} PUBLIC SECP256K1_USE_FAST_REDUCTION=1)
+    if(NOT SECP256K1_HAS_ASM)
+        message(STATUS "Secp256k1: Fast modular reduction enabled (x64 BMI2 intrinsics)")
+    endif()
+endif()
+
 # ============================================================================
 # Compiler Optimizations: Clang/GCC Primary (MSVC deprecated)
 # ============================================================================
@@ -143,12 +196,14 @@ endif()
 # Note: MSVC support removed - use Clang-cl if needed on Windows
 
 # Platform-specific architecture flags
-if(CMAKE_SYSTEM_PROCESSOR MATCHES "riscv64")
-    set(ARCH_FLAGS "-march=rv64gc")
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "riscv64|RISCV64")
+    set(ARCH_FLAGS "-march=rv64gc_zba_zbb")
 elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|ARM64")
     set(ARCH_FLAGS "-march=armv8-a+crypto")
-else()
+elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64|X64")
     set(ARCH_FLAGS "-march=native")
+else()
+    set(ARCH_FLAGS "")
 endif()
 
 target_compile_options(${SECP256K1_LIB_NAME} PRIVATE 
@@ -163,6 +218,7 @@ target_compile_options(${SECP256K1_LIB_NAME} PRIVATE
     -fno-stack-protector     # Disable stack canaries (no security)
     -fno-plt                 # No PLT indirection (faster calls)
     -ftree-vectorize         # Auto-vectorization (AVX2/SSE)
+    -fno-lto                 # Explicitly disable LTO to avoid linker format errors
 )
 
 # GCC-specific aggressive optimizations (not supported by Clang)
@@ -243,6 +299,14 @@ if(BUILD_TESTING)
     # Atomic operations micro-benchmark (Point Add/Double, Field ops, Inverse)
     add_executable(bench_atomic_operations bench/bench_atomic_operations.cpp)
     target_link_libraries(bench_atomic_operations PRIVATE ${SECP256K1_LIB_NAME})
+
+    # Comprehensive cross-platform benchmark (all operations for README performance table)
+    add_executable(bench_comprehensive bench/bench_comprehensive_riscv.cpp)
+    target_link_libraries(bench_comprehensive PRIVATE ${SECP256K1_LIB_NAME})
+
+    # Legacy alias for compatibility
+    add_executable(bench_comprehensive_riscv bench/bench_comprehensive_riscv.cpp)
+    target_link_libraries(bench_comprehensive_riscv PRIVATE ${SECP256K1_LIB_NAME})
 
     # NOTE: Benchmarks use default optimization (-O3 from CMAKE_CXX_FLAGS_RELEASE)
     # Over-optimizing benchmark code can distort measurements (aggressive inlining, etc.)

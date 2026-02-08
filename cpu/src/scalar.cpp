@@ -6,9 +6,6 @@
 #include <stdexcept>
 #include <vector>
 
-#if defined(_MSC_VER) && !defined(__clang__)
-#include "rdtsc.h"
-#endif
 
 namespace secp256k1::fast {
 namespace {
