@@ -338,37 +338,39 @@ RISC-V results were collected on **Milk-V Mars** (RV64 + RVV).
 | Batch Inverse (n=100) | 145 ns |
 | Batch Inverse (n=1000) | 98 ns |
 
-### x86_64 / Linux (Clang 19.1.7, Release)
+### x86_64 / Linux (i5, Clang 19.1.7, AVX2, Release)
 
 | Operation | Time |
 |-----------|------:|
 | Field Mul | 33 ns |
-| Field Square | 31 ns |
+| Field Square | 32 ns |
 | Field Add | 11 ns |
-| Field Sub | 13 ns |
-| Field Inverse | 4 us |
-| Point Add | 466 ns |
-| Point Double | 280 ns |
-| Point Scalar Mul | 101 us |
-| Generator Mul | 6 us |
-| Batch Inverse (n=100) | 141 ns |
-| Batch Inverse (n=1000) | 81 ns |
+| Field Sub | 12 ns |
+| Field Inverse | 5 μs |
+| Point Add | 521 ns |
+| Point Double | 278 ns |
+| Point Scalar Mul | 110 μs |
+| Generator Mul | 5 μs |
+| Batch Inverse (n=100) | 140 ns |
+| Batch Inverse (n=1000) | 92 ns |
 
-### RISC-V 64-bit / Linux (Milk-V Mars, RVV, Clang 19.1.7, Release)
+### RISC-V 64-bit / Linux (Milk-V Mars, RVV, Clang 21.1.8, Release)
 
 | Operation | Time |
 |-----------|------:|
-| Field Mul | 194 ns |
-| Field Square | 178 ns |
-| Field Add | 36 ns |
-| Field Sub | 33 ns |
-| Field Inverse | 19 us |
-| Point Add | 3 us |
-| Point Double | 1 us |
-| Point Scalar Mul | 649 us |
-| Generator Mul | 43 us |
-| Batch Inverse (n=100) | 757 ns |
-| Batch Inverse (n=1000) | 595 ns |
+| Field Mul | 197 ns |
+| Field Square | 177 ns |
+| Field Add | 35 ns |
+| Field Sub | 31 ns |
+| Field Inverse | 18 μs |
+| Point Add | 3 μs |
+| Point Double | 1 μs |
+| Point Scalar Mul | 672 μs |
+| Generator Mul | 40 μs |
+| Batch Inverse (n=100) | 765 ns |
+| Batch Inverse (n=1000) | 615 ns |
+
+*See [RISCV_OPTIMIZATIONS.md](RISCV_OPTIMIZATIONS.md) for optimization details.*
 
 ### CUDA (RTX 4090)
 

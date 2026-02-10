@@ -59,7 +59,7 @@ constexpr int table_size = 16; // [1P, 3P, 5P, ..., 31P]
 **Result:**
 | Metric | Before | After | Improvement |
 |--------|--------|-------|-------------|
-| Scalar Mul | 678 μs | 670 μs | **1.2%** |
+| Scalar Mul | 678 μs | 672 μs | **1%** |
 
 ---
 
@@ -67,16 +67,7 @@ constexpr int table_size = 16; // [1P, 3P, 5P, ..., 31P]
 
 **Files:** `cpu/CMakeLists.txt`, `CMakePresets.json`
 
-**Problem:** CMake's `CheckIPOSupported` fails with RISC-V because it doesn't use our `-fuse-ld=lld` flag.
-
-**Solution:** Direct `-flto=thin` flags for Clang without using CheckIPOSupported.
-
-**Result:**
-| Metric | Without LTO | With LTO | Improvement |
-|--------|-------------|----------|-------------|
-| Field Mul | 206 ns | 198 ns | **4%** |
-| Field Add | 40 ns | 34 ns | **15%** |
-| Field Sub | 37 ns | 31 ns | **16%** |
+**Status:** LTO enabled via `-flto=thin` flags for Clang.
 
 ---
 
@@ -84,25 +75,83 @@ constexpr int table_size = 16; // [1P, 3P, 5P, ..., 31P]
 
 | Operation | Time | Notes |
 |-----------|------|-------|
-| Field Mul | 198 ns | Assembly + LTO |
+| Field Mul | 197 ns | Assembly + LTO |
 | Field Square | 177 ns | **Optimized (10 mul)** |
-| Field Add | 34 ns | Inline C++ (faster than ASM wrapper) |
+| Field Add | 35 ns | Inline C++ (faster than ASM wrapper) |
 | Field Sub | 31 ns | Inline C++ (faster than ASM wrapper) |
-| Field Inverse | 18 μs | Binary GCD |
+| Field Inverse | 18 μs | Binary GCD (hybrid_eea) |
 | Point Add | 3 μs | Jacobian |
 | Point Double | 1 μs | Jacobian |
 | Point Scalar Mul | 672 μs | **wNAF w=5** |
-| Generator Mul | 40 μs | Precomputed |
-| Batch Inverse (n=100) | 765 ns | Montgomery trick |
-| Batch Inverse (n=1000) | 615 ns | Montgomery trick |
+| Generator Mul | 40 μs | Precomputed + GLV |
+| Batch Inverse (n=100) | 765 ns/elem | Montgomery trick |
+| Batch Inverse (n=1000) | 615 ns/elem | Montgomery trick |
 
-### Key Learnings
+---
+
+## Key Learnings
 
 1. **Assembly wrapper overhead matters**: For simple operations like add/sub (~30ns), the cost of converting between `limbs4` and `FieldElement` via wrappers exceeds the operation itself. Inline C++ is faster.
 
 2. **Assembly wins for complex operations**: For mul (~200ns) and square (~180ns), the assembly overhead is negligible compared to the computation, so assembly optimization pays off.
 
 3. **Window width trade-off**: wNAF w=5 provides ~1% improvement over w=4 for scalar multiplication, with acceptable precomputation cost (16 vs 8 points).
+
+4. **Binary GCD vs Fermat**: Binary GCD (hybrid_eea) is 3x faster than addition chain methods for field inverse on RISC-V (18μs vs 60μs).
+
+---
+
+## Optimizations Attempted But Not Used
+
+| Optimization | Result | Reason |
+|--------------|--------|--------|
+| Add/Sub ASM wrapper | 88/96ns vs 34/31ns | Wrapper overhead exceeds operation |
+| Addition chain inverse | 60μs vs 18μs | Binary GCD much faster |
+
+---
+
+## Portability to Other Platforms
+
+### x86-64 Applicability
+
+| Optimization | Portable? | Notes |
+|--------------|-----------|-------|
+| Field Square (10 mul) | ✅ YES | Algorithm is platform-independent |
+| wNAF w=5 | ✅ YES | Already in portable C++ code |
+| LTO | ✅ YES | Standard compiler feature |
+
+### CUDA Applicability
+
+| Optimization | Portable? | Notes |
+|--------------|-----------|-------|
+| Field Square (10 mul) | ✅ YES | Same algorithm in PTX/CUDA |
+| wNAF w=5 | ⚠️ PARTIAL | May need tuning for GPU occupancy |
+| LTO | ✅ YES | CUDA supports LTO since 11.0 |
+
+---
+
+## Files Changed
+
+1. **cpu/src/field_asm_riscv64.S** - Optimized `field_square_asm_riscv64`
+2. **cpu/src/point.cpp** - Changed `window_width` from 4 to 5
+3. **cpu/src/field.cpp** - Kept add/sub as inline C++ (no ASM wrapper)
+
+---
+
+## Build & Test
+
+```bash
+# Configure
+cmake -S . -B build_rel -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+# Build
+cmake --build build_rel -j
+
+# Test
+./build_rel/libs/UltrafastSecp256k1/cpu/bench_comprehensive_riscv
+```
+
+All 29 tests pass ✅
 
 ---
 
