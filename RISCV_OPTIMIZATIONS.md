@@ -85,16 +85,24 @@ constexpr int table_size = 16; // [1P, 3P, 5P, ..., 31P]
 | Operation | Time | Notes |
 |-----------|------|-------|
 | Field Mul | 198 ns | Assembly + LTO |
-| Field Square | 177 ns | Optimized (10 mul) |
-| Field Add | 34 ns | Assembly |
-| Field Sub | 31 ns | Assembly |
-| Field Inverse | 17 μs | Binary GCD |
+| Field Square | 177 ns | **Optimized (10 mul)** |
+| Field Add | 34 ns | Inline C++ (faster than ASM wrapper) |
+| Field Sub | 31 ns | Inline C++ (faster than ASM wrapper) |
+| Field Inverse | 18 μs | Binary GCD |
 | Point Add | 3 μs | Jacobian |
 | Point Double | 1 μs | Jacobian |
-| Point Scalar Mul | 670 μs | wNAF w=5 |
+| Point Scalar Mul | 672 μs | **wNAF w=5** |
 | Generator Mul | 40 μs | Precomputed |
-| Batch Inverse (n=100) | 772 ns | Montgomery trick |
-| Batch Inverse (n=1000) | 626 ns | Montgomery trick |
+| Batch Inverse (n=100) | 765 ns | Montgomery trick |
+| Batch Inverse (n=1000) | 615 ns | Montgomery trick |
+
+### Key Learnings
+
+1. **Assembly wrapper overhead matters**: For simple operations like add/sub (~30ns), the cost of converting between `limbs4` and `FieldElement` via wrappers exceeds the operation itself. Inline C++ is faster.
+
+2. **Assembly wins for complex operations**: For mul (~200ns) and square (~180ns), the assembly overhead is negligible compared to the computation, so assembly optimization pays off.
+
+3. **Window width trade-off**: wNAF w=5 provides ~1% improvement over w=4 for scalar multiplication, with acceptable precomputation cost (16 vs 8 points).
 
 ---
 
