@@ -4,18 +4,36 @@
 
 #include "secp256k1/point.hpp"
 #include "secp256k1/scalar.hpp"
+#if !defined(SECP256K1_PLATFORM_ESP32) && !defined(ESP_PLATFORM) && !defined(IDF_VER)
 #include "secp256k1/precompute.hpp"
+#endif
 #include "secp256k1/glv.hpp"
-#include <iostream>
 #include <cstring>
-#include <fstream>
-#include <sstream>
 #include <vector>
 #include <array>
 #include <cstdlib>
-#include <iomanip>
+#include <cstdio>
+
+// ESP32 platform: use printf instead of iostream
+#if defined(SECP256K1_PLATFORM_ESP32) || defined(ESP_PLATFORM) || defined(IDF_VER)
+    #define SELFTEST_PRINT(...) printf(__VA_ARGS__)
+#else
+    #include <iostream>
+    #include <fstream>
+    #include <sstream>
+    #include <iomanip>
+    #define SELFTEST_PRINT(...) printf(__VA_ARGS__)
+#endif
 
 namespace secp256k1::fast {
+
+// ESP32: local scalar_mul_generator that uses Point::scalar_mul
+// Desktop: use precomputed tables from precompute.hpp
+#if defined(SECP256K1_PLATFORM_ESP32) || defined(ESP_PLATFORM) || defined(IDF_VER)
+static inline Point scalar_mul_generator(const Scalar& k) {
+    return Point::generator().scalar_mul(k);
+}
+#endif
 
 // Test vector structure
 struct TestVector {
@@ -124,7 +142,7 @@ static bool hex_to_bytes32(const std::string& hex, std::array<std::uint8_t, 32>&
 // Test one scalar multiplication vector
 static bool test_scalar_mul(const TestVector& vec, bool verbose) {
     if (verbose) {
-        std::cout << "  Testing: " << vec.description << "\n";
+        SELFTEST_PRINT("  Testing: %s\n", vec.description);
     }
     
     // Parse and compute k * G
@@ -133,7 +151,7 @@ static bool test_scalar_mul(const TestVector& vec, bool verbose) {
     
     if (result.is_infinity()) {
         if (verbose) {
-            std::cout << "    FAILED: Result is infinity!\n";
+            SELFTEST_PRINT("    FAILED: Result is infinity!\n");
         }
         return false;
     }
@@ -147,19 +165,19 @@ static bool test_scalar_mul(const TestVector& vec, bool verbose) {
     
     if (x_match && y_match) {
         if (verbose) {
-            std::cout << "    PASS\n";
+            SELFTEST_PRINT("    PASS\n");
         }
         return true;
     } else {
         if (verbose) {
-            std::cout << "    FAIL\n";
+            SELFTEST_PRINT("    FAIL\n");
             if (!x_match) {
-                std::cout << "      Expected X: " << vec.expected_x << "\n";
-                std::cout << "      Got      X: " << result_x << "\n";
+                SELFTEST_PRINT("      Expected X: %s\n", vec.expected_x);
+                SELFTEST_PRINT("      Got      X: %s\n", result_x.c_str());
             }
             if (!y_match) {
-                std::cout << "      Expected Y: " << vec.expected_y << "\n";
-                std::cout << "      Got      Y: " << result_y << "\n";
+                SELFTEST_PRINT("      Expected Y: %s\n", vec.expected_y);
+                SELFTEST_PRINT("      Got      Y: %s\n", result_y.c_str());
             }
         }
         return false;
@@ -169,7 +187,7 @@ static bool test_scalar_mul(const TestVector& vec, bool verbose) {
 // Test point addition: (k1*G) + (k2*G) = (k1+k2)*G
 static bool test_addition(bool verbose) {
     if (verbose) {
-        std::cout << "  Testing: 2*G + 3*G = 5*G\n";
+        SELFTEST_PRINT("  Testing: 2*G + 3*G = 5*G\n");
     }
     
     Point P1 = scalar_mul_generator(Scalar::from_hex(
@@ -190,13 +208,13 @@ static bool test_addition(bool verbose) {
     
     if (verbose) {
         if (match) {
-            std::cout << "    PASS\n";
+            SELFTEST_PRINT("    PASS\n");
         } else {
-            std::cout << "    FAIL\n";
-            std::cout << "      Expected X: " << expected_x << "\n";
-            std::cout << "      Got      X: " << result_x << "\n";
-            std::cout << "      Expected Y: " << expected_y << "\n";
-            std::cout << "      Got      Y: " << result_y << "\n";
+            SELFTEST_PRINT("    FAIL\n");
+            SELFTEST_PRINT("      Expected X: %s\n", expected_x.c_str());
+            SELFTEST_PRINT("      Got      X: %s\n", result_x.c_str());
+            SELFTEST_PRINT("      Expected Y: %s\n", expected_y.c_str());
+            SELFTEST_PRINT("      Got      Y: %s\n", result_y.c_str());
         }
     }
     
@@ -206,7 +224,7 @@ static bool test_addition(bool verbose) {
 // Test point subtraction: (k1*G) - (k2*G) = (k1-k2)*G
 static bool test_subtraction(bool verbose) {
     if (verbose) {
-        std::cout << "  Testing: 5*G - 2*G = 3*G\n";
+        SELFTEST_PRINT("  Testing: 5*G - 2*G = 3*G\n");
     }
     
     Point P1 = scalar_mul_generator(Scalar::from_hex(
@@ -228,13 +246,13 @@ static bool test_subtraction(bool verbose) {
     
     if (verbose) {
         if (match) {
-            std::cout << "    PASS\n";
+            SELFTEST_PRINT("    PASS\n");
         } else {
-            std::cout << "    FAIL\n";
-            std::cout << "      Expected X: " << expected_x << "\n";
-            std::cout << "      Got      X: " << result_x << "\n";
-            std::cout << "      Expected Y: " << expected_y << "\n";
-            std::cout << "      Got      Y: " << result_y << "\n";
+            SELFTEST_PRINT("    FAIL\n");
+            SELFTEST_PRINT("      Expected X: %s\n", expected_x.c_str());
+            SELFTEST_PRINT("      Got      X: %s\n", result_x.c_str());
+            SELFTEST_PRINT("      Expected Y: %s\n", expected_y.c_str());
+            SELFTEST_PRINT("      Got      Y: %s\n", result_y.c_str());
         }
     }
     
@@ -244,7 +262,7 @@ static bool test_subtraction(bool verbose) {
 // Basic field arithmetic identities (deterministic sanity)
 static bool test_field_arithmetic(bool verbose) {
     if (verbose) {
-        std::cout << "\nField Arithmetic Test:\n";
+        SELFTEST_PRINT("\nField Arithmetic Test:\n");
     }
 
     bool ok = true;
@@ -263,7 +281,7 @@ static bool test_field_arithmetic(bool verbose) {
     if (!(b == FieldElement::zero() || (b.inverse() * b) == FieldElement::one())) ok = false;
 
     if (verbose) {
-        std::cout << (ok ? "    PASS\n" : "    FAIL\n");
+        SELFTEST_PRINT(ok ? "    PASS\n" : "    FAIL\n");
     }
     return ok;
 }
@@ -271,7 +289,7 @@ static bool test_field_arithmetic(bool verbose) {
 // Basic scalar group identities (without inverse API)
 static bool test_scalar_arithmetic(bool verbose) {
     if (verbose) {
-        std::cout << "\nScalar Arithmetic Test:\n";
+        SELFTEST_PRINT("\nScalar Arithmetic Test:\n");
     }
     bool ok = true;
     Scalar z = Scalar::zero();
@@ -280,7 +298,7 @@ static bool test_scalar_arithmetic(bool verbose) {
     if (!((o + z) == o)) ok = false;
     if (!(((o + o) - o) == o)) ok = false;
     if (verbose) {
-        std::cout << (ok ? "    PASS\n" : "    FAIL\n");
+        SELFTEST_PRINT(ok ? "    PASS\n" : "    FAIL\n");
     }
     return ok;
 }
@@ -288,7 +306,7 @@ static bool test_scalar_arithmetic(bool verbose) {
 // Point group identities (O neutral, negation)
 static bool test_point_identities(bool verbose) {
     if (verbose) {
-        std::cout << "\nPoint Group Identities:\n";
+        SELFTEST_PRINT("\nPoint Group Identities:\n");
     }
     bool ok = true;
     Point O = Point::infinity();
@@ -297,7 +315,7 @@ static bool test_point_identities(bool verbose) {
     Point negG = G.negate();
     if (!G.add(negG).is_infinity()) ok = false;
     if (verbose) {
-        std::cout << (ok ? "    PASS\n" : "    FAIL\n");
+        SELFTEST_PRINT(ok ? "    PASS\n" : "    FAIL\n");
     }
     return ok;
 }
@@ -312,7 +330,7 @@ static bool points_equal(const Point& a, const Point& b) {
 // Addition with constant expected: G + 2G = 3G (compare to known constants)
 static bool test_addition_constants(bool verbose) {
     if (verbose) {
-        std::cout << "\nPoint Addition (constants): G + 2G = 3G\n";
+        SELFTEST_PRINT("\nPoint Addition (constants): G + 2G = 3G\n");
     }
     Point G = Point::generator();
     Point twoG = scalar_mul_generator(Scalar::from_uint64(2));
@@ -321,14 +339,14 @@ static bool test_addition_constants(bool verbose) {
     // TEST_VECTORS[7] is 3*G
     const auto& exp = TEST_VECTORS[7];
     bool ok = hex_equal(sum.x().to_hex(), exp.expected_x) && hex_equal(sum.y().to_hex(), exp.expected_y);
-    if (verbose) std::cout << (ok ? "    PASS\n" : "    FAIL\n");
+    if (verbose) SELFTEST_PRINT(ok ? "    PASS\n" : "    FAIL\n");
     return ok;
 }
 
 // Subtraction with constant expected: 3G - 2G = 1G
 static bool test_subtraction_constants(bool verbose) {
     if (verbose) {
-        std::cout << "\nPoint Subtraction (constants): 3G - 2G = 1G\n";
+        SELFTEST_PRINT("\nPoint Subtraction (constants): 3G - 2G = 1G\n");
     }
     Point threeG = scalar_mul_generator(Scalar::from_uint64(3));
     Point twoG = scalar_mul_generator(Scalar::from_uint64(2));
@@ -337,14 +355,14 @@ static bool test_subtraction_constants(bool verbose) {
     // TEST_VECTORS[5] is 1*G
     const auto& exp = TEST_VECTORS[5];
     bool ok = hex_equal(diff.x().to_hex(), exp.expected_x) && hex_equal(diff.y().to_hex(), exp.expected_y);
-    if (verbose) std::cout << (ok ? "    PASS\n" : "    FAIL\n");
+    if (verbose) SELFTEST_PRINT(ok ? "    PASS\n" : "    FAIL\n");
     return ok;
 }
 
 // Doubling with constant expected: (5G).dbl() = 10G
 static bool test_doubling_constants(bool verbose) {
     if (verbose) {
-        std::cout << "\nPoint Doubling (constants): 2*(5G) = 10G\n";
+        SELFTEST_PRINT("\nPoint Doubling (constants): 2*(5G) = 10G\n");
     }
     Point fiveG = scalar_mul_generator(Scalar::from_uint64(5));
     Point tenG = fiveG.dbl();
@@ -352,27 +370,27 @@ static bool test_doubling_constants(bool verbose) {
     // TEST_VECTORS[8] is 10*G
     const auto& exp = TEST_VECTORS[8];
     bool ok = hex_equal(tenG.x().to_hex(), exp.expected_x) && hex_equal(tenG.y().to_hex(), exp.expected_y);
-    if (verbose) std::cout << (ok ? "    PASS\n" : "    FAIL\n");
+    if (verbose) SELFTEST_PRINT(ok ? "    PASS\n" : "    FAIL\n");
     return ok;
 }
 
 // Negation with constant expected: -G equals (n-1)*G vector
 static bool test_negation_constants(bool verbose) {
     if (verbose) {
-        std::cout << "\nPoint Negation (constants): -G = (n-1)*G\n";
+        SELFTEST_PRINT("\nPoint Negation (constants): -G = (n-1)*G\n");
     }
     Point negG = Point::generator().negate();
     // TEST_VECTORS[9] is (n-1)*G = -G
     const auto& exp = TEST_VECTORS[9];
     bool ok = hex_equal(negG.x().to_hex(), exp.expected_x) && hex_equal(negG.y().to_hex(), exp.expected_y);
-    if (verbose) std::cout << (ok ? "    PASS\n" : "    FAIL\n");
+    if (verbose) SELFTEST_PRINT(ok ? "    PASS\n" : "    FAIL\n");
     return ok;
 }
 
 // Point (de)serialization: compressed/uncompressed encodings sanity
 static bool test_point_serialization(bool verbose) {
     if (verbose) {
-        std::cout << "\nPoint Serialization:\n";
+        SELFTEST_PRINT("\nPoint Serialization:\n");
     }
     auto check_point = [&](const Scalar& k) -> bool {
         Point P = scalar_mul_generator(k);
@@ -401,7 +419,7 @@ static bool test_point_serialization(bool verbose) {
     all &= check_point(Scalar::from_hex("0000000000000000000000000000000000000000000000000000000000000003"));
     all &= check_point(Scalar::from_hex("000000000000000000000000000000000000000000000000000000000000000a"));
     if (verbose) {
-        std::cout << (all ? "    PASS\n" : "    FAIL\n");
+        SELFTEST_PRINT(all ? "    PASS\n" : "    FAIL\n");
     }
     return all;
 }
@@ -409,7 +427,7 @@ static bool test_point_serialization(bool verbose) {
 // Batch inversion vs individual inversion
 static bool test_batch_inverse(bool verbose) {
     if (verbose) {
-        std::cout << "\nBatch Inversion:\n";
+        SELFTEST_PRINT("\nBatch Inversion:\n");
     }
     FieldElement elems[4] = {
         FieldElement::from_uint64(3),
@@ -425,7 +443,7 @@ static bool test_batch_inverse(bool verbose) {
         if (!(inv == elems[i])) { ok = false; break; }
     }
     if (verbose) {
-        std::cout << (ok ? "    PASS\n" : "    FAIL\n");
+        SELFTEST_PRINT(ok ? "    PASS\n" : "    FAIL\n");
     }
     return ok;
 }
@@ -433,7 +451,7 @@ static bool test_batch_inverse(bool verbose) {
 // Expanded batch inversion with a larger, deterministic set
 static bool test_batch_inverse_expanded(bool verbose) {
     if (verbose) {
-        std::cout << "\nBatch Inversion (expanded 32 elems):\n";
+        SELFTEST_PRINT("\nBatch Inversion (expanded 32 elems):\n");
     }
     constexpr size_t N = 32;
     FieldElement elems[N];
@@ -451,7 +469,7 @@ static bool test_batch_inverse_expanded(bool verbose) {
         if (!(inv == elems[i])) { ok = false; break; }
     }
     if (verbose) {
-        std::cout << (ok ? "    PASS\n" : "    FAIL\n");
+        SELFTEST_PRINT(ok ? "    PASS\n" : "    FAIL\n");
     }
     return ok;
 }
@@ -460,7 +478,7 @@ static bool test_batch_inverse_expanded(bool verbose) {
 // Tests: (Q+G)*K == Q*K + G*K, (Q-G)*K == Q*K - G*K
 static bool test_bilinearity_K_times_Q(bool verbose) {
     if (verbose) {
-        std::cout << "\nBilinearity: K*(Q±G) vs K*Q ± K*G\n";
+        SELFTEST_PRINT("\nBilinearity: K*(Q±G) vs K*Q ± K*G\n");
     }
     bool ok = true;
     const char* KHEX[] = {
@@ -491,14 +509,14 @@ static bool test_bilinearity_K_times_Q(bool verbose) {
         }
         if (!ok) break;
     }
-    if (verbose) std::cout << (ok ? "    PASS\n" : "    FAIL\n");
+    if (verbose) SELFTEST_PRINT(ok ? "    PASS\n" : "    FAIL\n");
     return ok;
 }
 
 // Fixed-K plan consistency: scalar_mul_with_plan vs scalar_mul
 static bool test_fixedK_plan(bool verbose) {
     if (verbose) {
-        std::cout << "\nFixed-K plan: with_plan vs direct scalar_mul\n";
+        SELFTEST_PRINT("\nFixed-K plan: with_plan vs direct scalar_mul\n");
     }
     bool ok = true;
     const char* KHEX[] = {
@@ -523,16 +541,17 @@ static bool test_fixedK_plan(bool verbose) {
                 if (verbose) {
                     auto aC = A.to_compressed();
                     auto bC = B.to_compressed();
-                    std::cout << "    Mismatch!\n";
-                    std::cout << "      K: 0x" << kh << "  (neg1=" << (plan.neg1?"1":"0")
-                              << ", neg2=" << (plan.neg2?"1":"0") << ")\n";
-                    std::cout << "      q: 0x" << qh << "\n";
-                    std::cout << "      A: ";
-                    for (auto b : aC) std::cout << std::hex << std::setw(2) << std::setfill('0') << (int)b;
-                    std::cout << std::dec << "\n";
-                    std::cout << "      B: ";
-                    for (auto b : bC) std::cout << std::hex << std::setw(2) << std::setfill('0') << (int)b;
-                    std::cout << std::dec << "\n";
+                    SELFTEST_PRINT("    Mismatch!\n");
+                    SELFTEST_PRINT("      K: 0x%s  (neg1=%s, neg2=%s)\n",
+                        kh, plan.neg1?"1":"0", plan.neg2?"1":"0");
+                    SELFTEST_PRINT("      q: 0x%s\n", qh);
+                    // Print hex bytes
+                    SELFTEST_PRINT("      A: ");
+                    for (auto b : aC) SELFTEST_PRINT("%02x", (int)b);
+                    SELFTEST_PRINT("\n");
+                    SELFTEST_PRINT("      B: ");
+                    for (auto b : bC) SELFTEST_PRINT("%02x", (int)b);
+                    SELFTEST_PRINT("\n");
                     // Also compute explicit slow GLV sum for debugging
                     Point phiQ = apply_endomorphism(Q);
                     Point t1 = Q.scalar_mul(plan.k1);
@@ -541,23 +560,23 @@ static bool test_fixedK_plan(bool verbose) {
                     if (plan.neg2) t2 = t2.negate();
                     Point C = t1.add(t2);
                     auto cC = C.to_compressed();
-                    std::cout << "      C(slow): ";
-                    for (auto b : cC) std::cout << std::hex << std::setw(2) << std::setfill('0') << (int)b;
-                    std::cout << std::dec << "\n";
+                    SELFTEST_PRINT("      C(slow): ");
+                    for (auto b : cC) SELFTEST_PRINT("%02x", (int)b);
+                    SELFTEST_PRINT("\n");
                 }
                 ok = false; break;
             }
         }
         if (!ok) break;
     }
-    if (verbose) std::cout << (ok ? "    PASS\n" : "    FAIL\n");
+    if (verbose) SELFTEST_PRINT(ok ? "    PASS\n" : "    FAIL\n");
     return ok;
 }
 
 // Sequential Q increment property: (Q + i*G)*K = (Q*K) + i*(G*K)
 static bool test_sequential_increment_property(bool verbose) {
     if (verbose) {
-        std::cout << "\nSequential increment: (Q+i*G)*K vs (Q*K)+i*(G*K)\n";
+        SELFTEST_PRINT("\nSequential increment: (Q+i*G)*K vs (Q*K)+i*(G*K)\n");
     }
     bool ok = true;
     // Choose a fixed K and base Q
@@ -575,7 +594,7 @@ static bool test_sequential_increment_property(bool verbose) {
         right = right.add(KG);
         if (!points_equal(left, right)) { ok = false; break; }
     }
-    if (verbose) std::cout << (ok ? "    PASS\n" : "    FAIL\n");
+    if (verbose) SELFTEST_PRINT(ok ? "    PASS\n" : "    FAIL\n");
     return ok;
 }
 
@@ -584,6 +603,11 @@ static bool test_sequential_increment_property(bool verbose) {
 //  ADD;x1;y1;x2;y2;expX;expY;desc
 //  SUB;x1;y1;x2;y2;expX;expY;desc
 static bool run_external_vectors(bool verbose) {
+#if defined(SECP256K1_PLATFORM_ESP32) || defined(ESP_PLATFORM) || defined(IDF_VER)
+    // Skip external vectors on ESP32 - no filesystem
+    (void)verbose;
+    return true;
+#else
 #ifdef _WIN32
     char* path = nullptr;
     size_t len = 0;
@@ -601,12 +625,12 @@ static bool run_external_vectors(bool verbose) {
     std::ifstream in(path);
     if (!in) {
         if (verbose) {
-            std::cout << "\n[Selftest] Vector file not found: " << path << " (skipping)\n";
+            SELFTEST_PRINT("\n[Selftest] Vector file not found: %s (skipping)\n", path);
         }
         return true; // Non-fatal
     }
     if (verbose) {
-        std::cout << "\nExternal Vector Tests (" << path << "):\n";
+        SELFTEST_PRINT("\nExternal Vector Tests (%s):\n", path);
     }
     bool all_ok = true;
     std::string line;
@@ -623,7 +647,7 @@ static bool run_external_vectors(bool verbose) {
         auto fail_line = [&]() {
             all_ok = false;
             if (verbose) {
-                std::cout << "    FAIL (line " << ln << ")\n";
+                SELFTEST_PRINT("    FAIL (line %zu)\n", ln);
             }
         };
         if (kind == "SCALARMUL") {
@@ -656,21 +680,25 @@ static bool run_external_vectors(bool verbose) {
         }
     }
     if (verbose) {
-        std::cout << (all_ok ? "    PASS\n" : "    FAIL\n");
+        SELFTEST_PRINT(all_ok ? "    PASS\n" : "    FAIL\n");
     }
     return all_ok;
+#endif // ESP32 platform check
 }
 
 // Main self-test function
 bool Selftest(bool verbose) {
     if (verbose) {
-        std::cout << "\n==============================================\n";
-        std::cout << "  SECP256K1 Library Self-Test\n";
-        std::cout << "==============================================\n";
+        SELFTEST_PRINT("\n==============================================\n");
+        SELFTEST_PRINT("  SECP256K1 Library Self-Test\n");
+        SELFTEST_PRINT("==============================================\n");
     }
     
+#if !defined(SECP256K1_PLATFORM_ESP32) && !defined(ESP_PLATFORM) && !defined(IDF_VER)
     // Initialize precomputed tables (allow env overrides for quick toggles)
+    // Only on desktop platforms - ESP32 uses simple scalar_mul
     FixedBaseConfig cfg{};
+    // Environment variable overrides only on desktop platforms
     if (const char* w = std::getenv("SECP256K1_WINDOW_BITS")) {
         unsigned v = static_cast<unsigned>(std::strtoul(w, nullptr, 10));
         if (v >= 2U && v <= 30U) cfg.window_bits = v;
@@ -686,13 +714,14 @@ bool Selftest(bool verbose) {
     }
     configure_fixed_base(cfg);
     ensure_fixed_base_ready();
-    
+#endif
+
     int passed = 0;
     int total = 0;
     
     // Test scalar multiplication
     if (verbose) {
-        std::cout << "\nScalar Multiplication Tests:\n";
+        SELFTEST_PRINT("\nScalar Multiplication Tests:\n");
     }
     
     for (const auto& vec : TEST_VECTORS) {
@@ -704,7 +733,7 @@ bool Selftest(bool verbose) {
     
     // Test point addition
     if (verbose) {
-        std::cout << "\nPoint Addition Test:\n";
+        SELFTEST_PRINT("\nPoint Addition Test:\n");
     }
     total++;
     if (test_addition(verbose)) {
@@ -713,7 +742,7 @@ bool Selftest(bool verbose) {
     
     // Test point subtraction
     if (verbose) {
-        std::cout << "\nPoint Subtraction Test:\n";
+        SELFTEST_PRINT("\nPoint Subtraction Test:\n");
     }
         // Field arithmetic
         total++;
@@ -749,7 +778,7 @@ bool Selftest(bool verbose) {
     // Additional high-coverage checks
     // 1) Doubling chain vs scalar multiples: for i=1..20, (2^i)G via dbl() equals scalar_mul
     auto test_pow2_chain = [&](){
-        if (verbose) std::cout << "\nDoubling chain vs scalar multiples (2^i * G):\n";
+        if (verbose) SELFTEST_PRINT("\nDoubling chain vs scalar multiples (2^i * G):\n");
         bool ok = true;
         Point cur = Point::generator(); // 1*G
         for (int i = 1; i <= 20; ++i) {
@@ -758,14 +787,14 @@ bool Selftest(bool verbose) {
             Point exp = scalar_mul_generator(k);
             if (!points_equal(cur, exp)) { ok = false; break; }
         }
-        if (verbose) std::cout << (ok ? "    PASS\n" : "    FAIL\n");
+        if (verbose) SELFTEST_PRINT(ok ? "    PASS\n" : "    FAIL\n");
         return ok;
     };
     total++; if (test_pow2_chain()) passed++;
 
     // 2) Large scalar cross-checks (fast vs affine fallback)
     auto test_large_scalars = [&](){
-        if (verbose) std::cout << "\nLarge scalar cross-checks (fast vs affine):\n";
+        if (verbose) SELFTEST_PRINT("\nLarge scalar cross-checks (fast vs affine):\n");
         bool ok = true;
         // representative large scalars (hex, reduced mod n by Scalar::from_hex)
         const char* L[] = {
@@ -782,14 +811,14 @@ bool Selftest(bool verbose) {
             Point ref  = G_aff.scalar_mul(k);
             if (!points_equal(fast, ref)) { ok = false; break; }
         }
-        if (verbose) std::cout << (ok ? "    PASS\n" : "    FAIL\n");
+        if (verbose) SELFTEST_PRINT(ok ? "    PASS\n" : "    FAIL\n");
         return ok;
     };
     total++; if (test_large_scalars()) passed++;
 
     // 3) Squared scalar cases: k^2 * G (to mitigate high-bit corner mistakes)
     auto test_squared_scalars = [&](){
-        if (verbose) std::cout << "\nSquared scalars k^2 * G (fast vs affine):\n";
+        if (verbose) SELFTEST_PRINT("\nSquared scalars k^2 * G (fast vs affine):\n");
         bool ok = true;
         // take a mix of known and random-looking scalars
         const char* K[] = {
@@ -810,7 +839,7 @@ bool Selftest(bool verbose) {
             Point ref  = G_aff.scalar_mul(k2);
             if (!points_equal(fast, ref)) { ok = false; break; }
         }
-        if (verbose) std::cout << (ok ? "    PASS\n" : "    FAIL\n");
+        if (verbose) SELFTEST_PRINT(ok ? "    PASS\n" : "    FAIL\n");
         return ok;
     };
     total++; if (test_squared_scalars()) passed++;
@@ -819,8 +848,12 @@ bool Selftest(bool verbose) {
     total++; if (test_batch_inverse_expanded(verbose)) passed++;
     // Bilinearity for K*Q with ±G
     total++; if (test_bilinearity_K_times_Q(verbose)) passed++;
-    // Fixed-K plan equivalence
+
+#if !defined(SECP256K1_PLATFORM_ESP32) && !defined(ESP_PLATFORM) && !defined(IDF_VER)
+    // Fixed-K plan equivalence (GLV-based, not available on ESP32)
     total++; if (test_fixedK_plan(verbose)) passed++;
+#endif
+
     // Sequential increment property
     total++; if (test_sequential_increment_property(verbose)) passed++;
     total++;
@@ -830,14 +863,14 @@ bool Selftest(bool verbose) {
     
     // Summary
     if (verbose) {
-        std::cout << "\n==============================================\n";
-        std::cout << "  Results: " << passed << "/" << total << " tests passed\n";
+        SELFTEST_PRINT("\n==============================================\n");
+        SELFTEST_PRINT("  Results: %d/%d tests passed\n", passed, total);
         if (passed == total) {
-            std::cout << "  [OK] ALL TESTS PASSED\n";
+            SELFTEST_PRINT("  [OK] ALL TESTS PASSED\n");
         } else {
-            std::cout << "  [FAIL] SOME TESTS FAILED\n";
+            SELFTEST_PRINT("  [FAIL] SOME TESTS FAILED\n");
         }
-        std::cout << "==============================================\n\n";
+        SELFTEST_PRINT("==============================================\n\n");
     }
     
     return (passed == total);

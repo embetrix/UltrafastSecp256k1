@@ -37,11 +37,30 @@ inline std::uint64_t sub64(std::uint64_t a, std::uint64_t b, unsigned char& borr
 
 #else
 
+// 32-bit safe implementation (no __int128)
+#ifdef SECP256K1_NO_INT128
+
+inline std::uint64_t add64(std::uint64_t a, std::uint64_t b, unsigned char& carry) {
+    std::uint64_t result = a + b;
+    unsigned char new_carry = (result < a) ? 1 : 0;
+    if (carry) {
+        std::uint64_t temp = result + 1;
+        new_carry |= (temp < result) ? 1 : 0;
+        result = temp;
+    }
+    carry = new_carry;
+    return result;
+}
+
+#else
+
 inline std::uint64_t add64(std::uint64_t a, std::uint64_t b, unsigned char& carry) {
     unsigned __int128 sum = static_cast<unsigned __int128>(a) + b + carry;
     carry = static_cast<unsigned char>(sum >> 64);
     return static_cast<std::uint64_t>(sum);
 }
+
+#endif // SECP256K1_NO_INT128
 
 inline std::uint64_t sub64(std::uint64_t a, std::uint64_t b, unsigned char& borrow) {
     uint64_t temp = a - borrow;
@@ -181,7 +200,11 @@ std::string Scalar::to_hex() const {
 
 Scalar Scalar::from_hex(const std::string& hex) {
     if (hex.length() != 64) {
-        throw std::invalid_argument("Hex string must be exactly 64 characters (32 bytes)");
+        #if defined(SECP256K1_ESP32) || defined(SECP256K1_PLATFORM_ESP32) || defined(__XTENSA__)
+            return Scalar::zero(); // ESP32: no exceptions, return zero
+        #else
+            throw std::invalid_argument("Hex string must be exactly 64 characters (32 bytes)");
+        #endif
     }
     
     std::array<std::uint8_t, 32> bytes{};
@@ -193,7 +216,11 @@ Scalar Scalar::from_hex(const std::string& hex) {
             if (c >= '0' && c <= '9') return c - '0';
             if (c >= 'a' && c <= 'f') return c - 'a' + 10;
             if (c >= 'A' && c <= 'F') return c - 'A' + 10;
-            throw std::invalid_argument("Invalid hex character");
+            #if defined(SECP256K1_ESP32) || defined(SECP256K1_PLATFORM_ESP32) || defined(__XTENSA__)
+                return 0; // ESP32: no exceptions, return 0
+            #else
+                throw std::invalid_argument("Invalid hex character");
+            #endif
         };
         
         bytes[i] = (hex_to_nibble(c1) << 4) | hex_to_nibble(c2);
@@ -317,7 +344,11 @@ std::vector<int8_t> Scalar::to_naf() const {
 // This reduces precompute table size by ~50% (only odd multiples needed)
 std::vector<int8_t> Scalar::to_wnaf(unsigned width) const {
     if (width < 2 || width > 8) {
-        throw std::invalid_argument("wNAF width must be between 2 and 8");
+        #if defined(SECP256K1_ESP32) || defined(SECP256K1_PLATFORM_ESP32) || defined(__XTENSA__)
+            return std::vector<int8_t>(); // ESP32: no exceptions, return empty
+        #else
+            throw std::invalid_argument("wNAF width must be between 2 and 8");
+        #endif
     }
     
     std::vector<int8_t> wnaf;
