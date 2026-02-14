@@ -4,10 +4,10 @@ This example demonstrates the UltrafastSecp256k1 library running on ESP32-S3.
 
 ## ✅ Test Status
 
-**All 28 tests pass on real hardware!**
+**All 35 tests pass on real hardware!**
 
 ```
-Results: 28/28 tests passed
+Results: 35/35 tests passed
 [OK] ALL TESTS PASSED
 ```
 

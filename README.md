@@ -10,12 +10,13 @@ Ultra high-performance secp256k1 elliptic curve cryptography library with multi-
 [![OpenCL](https://img.shields.io/badge/OpenCL-3.0-green.svg)](https://www.khronos.org/opencl/)
 [![RISC-V](https://img.shields.io/badge/RISC--V-RV64GC-orange.svg)](https://riscv.org/)
 [![ESP32-S3](https://img.shields.io/badge/ESP32--S3-Xtensa%20LX7-orange.svg)](https://www.espressif.com/en/products/socs/esp32-s3)
+[![STM32](https://img.shields.io/badge/STM32-Cortex--M3-orange.svg)](https://www.st.com/en/microcontrollers-microprocessors/stm32f103ze.html)
 
 ## 🚀 Features
 
 - **Multi-Platform Architecture**
   - CPU: Optimized for x86-64 (BMI2/ADX) and RISC-V (RV64GC)
-  - Embedded: ESP32-S3 support (Xtensa LX7, portable C++)
+  - Embedded: ESP32-S3 (Xtensa LX7) + STM32F103 (ARM Cortex-M3) support
   - GPU/CUDA: Batch operations with 4.63M kG/s throughput
   - GPU/OpenCL: PTX inline asm, 3.39M kG/s
 
@@ -441,16 +442,41 @@ RISC-V results were collected on **Milk-V Mars** (RV64 + RVV).
 
 *See [RISCV_OPTIMIZATIONS.md](RISCV_OPTIMIZATIONS.md) for optimization details.*
 
-### ESP32-S3 / Embedded (Xtensa LX7, ESP-IDF v5.5.1, -O3)
+### ESP32-S3 / Embedded (Xtensa LX7 @ 240 MHz, ESP-IDF v5.5.1, -O3)
 
 | Operation | Time |
 |-----------|------:|
 | Field Mul | 7,458 ns |
 | Field Square | 7,592 ns |
 | Field Add | 636 ns |
+| Field Inv | 844 μs |
 | Scalar × G (Generator Mul) | 2,483 μs |
 
-*Note: ESP32-S3 uses portable C++ (no `__int128`, no assembly). Running at 240 MHz. All 28 library tests pass. See [benchmarks/cpu/esp32/](benchmarks/cpu/esp32/embedded/) for details.*
+*Portable C++ (no `__int128`, no assembly). All 35 library tests pass. See [examples/esp32_test/](examples/esp32_test/) for details.*
+
+### STM32F103ZET6 / Embedded (ARM Cortex-M3 @ 72 MHz, GCC 13.3.1, -O3)
+
+| Operation | Time |
+|-----------|------:|
+| Field Mul | 15,331 ns |
+| Field Square | 12,083 ns |
+| Field Add | 4,139 ns |
+| Field Inv | 1,645 μs |
+| Scalar × G (Generator Mul) | 37,982 μs |
+
+*ARM Cortex-M3 inline assembly (UMULL/ADDS/ADCS) for multiply/squaring/reduction. Portable C++ for field add/sub. All 35 library tests pass. See [examples/stm32_test/](examples/stm32_test/) for details.*
+
+### Embedded Cross-Platform Comparison
+
+| Operation | ESP32-S3 (240 MHz) | STM32F103 (72 MHz) | Ratio (STM32/ESP32) | Clock-Normalized |
+|-----------|-------------------:|-------------------:|--------------------:|------------------:|
+| Field Mul | 7,458 ns | 15,331 ns | 2.06× | 0.62× |
+| Field Square | 7,592 ns | 12,083 ns | 1.59× | 0.48× |
+| Field Add | 636 ns | 4,139 ns | 6.51× | 1.95× |
+| Field Inv | 844 μs | 1,645 μs | 1.95× | 0.58× |
+| Scalar × G | 2,483 μs | 37,982 μs | 15.30× | 4.59× |
+
+*Clock-Normalized = (STM32 time × 72) / (ESP32 time × 240). Values < 1.0 mean STM32 is faster per-clock.*
 
 ### CUDA (NVIDIA RTX 5060 Ti) — Kernel-Only
 
@@ -513,11 +539,14 @@ secp256k1-fast/
 │   ├── include/        # CUDA headers
 │   ├── src/           # CUDA kernels
 │   └── tests/         # CUDA tests
-└── opencl/            # OpenCL GPU acceleration
-    ├── kernels/       # OpenCL kernel sources (.cl)
-    ├── include/       # OpenCL headers
-    ├── src/           # Host-side OpenCL code
-    └── tests/         # OpenCL tests
+├── opencl/            # OpenCL GPU acceleration
+│   ├── kernels/       # OpenCL kernel sources (.cl)
+│   ├── include/       # OpenCL headers
+│   ├── src/           # Host-side OpenCL code
+│   └── tests/         # OpenCL tests
+└── examples/
+    ├── esp32_test/    # ESP32-S3 Xtensa LX7 port
+    └── stm32_test/    # STM32F103ZET6 ARM Cortex-M3 port
 ```
 
 ## 🔬 Research Statement
