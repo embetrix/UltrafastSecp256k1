@@ -79,3 +79,14 @@ ehthumbs.db
 # Documentation build
 docs/_build/
 docs/.buildinfo
+
+# Build/test output logs
+*_output.txt
+*_out.txt
+stm32_output.txt
+
+# Binary cache
+cache_w*.bin
+
+# ESP32 SDK config (machine-specific)
+examples/esp32_test/sdkconfig
