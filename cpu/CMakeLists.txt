@@ -225,6 +225,7 @@ if(NOT TARGET ${SECP256K1_LIB_NAME})
     target_include_directories(${SECP256K1_LIB_NAME}
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../include>
         $<INSTALL_INTERFACE:include>
     PRIVATE
         ${CMAKE_SOURCE_DIR}  # For rdtsc.h and intrinsics.h
@@ -403,4 +404,9 @@ if(BUILD_TESTING)
     add_executable(test_mul tests/test_mul.cpp)
     target_link_libraries(test_mul PRIVATE ${SECP256K1_LIB_NAME})
     add_test(NAME test_mul COMMAND test_mul)
+
+    # Test: Comprehensive arithmetic correctness (K*G, P+Q, K*Q, distributive)
+    add_executable(test_arithmetic_correctness tests/test_arithmetic_correctness.cpp)
+    target_link_libraries(test_arithmetic_correctness PRIVATE ${SECP256K1_LIB_NAME})
+    add_test(NAME test_arithmetic_correctness COMMAND test_arithmetic_correctness)
 endif()

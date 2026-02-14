@@ -3,7 +3,21 @@
 
 // Platform compatibility layer for Windows types and intrinsics on Linux/Unix
 
-#ifndef _WIN32
+// ESP32 platform detection
+#if defined(ESP_PLATFORM) || defined(SECP256K1_PLATFORM_ESP32)
+#define SECP256K1_ESP32_BUILD 1
+#endif
+
+#if defined(SECP256K1_ESP32_BUILD)
+// ESP32 platform - minimal definitions, no POSIX mmap or Windows APIs
+#include <cstdint>
+#include <cstring>
+
+// Stub types for compatibility (not used on ESP32)
+typedef int HANDLE;
+#define INVALID_HANDLE_VALUE (-1)
+
+#elif !defined(_WIN32)
 // Linux/Unix platform - define Windows types and map to POSIX equivalents
 
 #include <sys/types.h>
@@ -43,7 +57,7 @@ inline bool UnmapViewOfFile(const void*) { return true; }
 inline bool CloseHandle(HANDLE) { return true; }
 inline uint32_t GetLastError() { return 0; }
 
-#endif // !_WIN32
+#endif // !_WIN32 && !ESP32
 
 // Cross-platform intrinsics compatibility
 #if defined(__x86_64__) || defined(_M_X64)

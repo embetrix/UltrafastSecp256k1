@@ -2,8 +2,18 @@
 
 #define SECP256K1_DEBUG_SPLIT 0
 #define SECP256K1_DEBUG_GLV 0
-#define SECP256K1_PROFILE_DECOMP 1  // Enable profiling (temporary for bench)
+#define SECP256K1_PROFILE_DECOMP 0  // Disable profiling for embedded
 #define SECP256K1_PROFILE_PRECOMPUTED 0  // Profile scalar_mul_arbitrary_precomputed
+
+// ESP32 platform: minimal includes and no exceptions
+#if defined(SECP256K1_ESP32) || defined(SECP256K1_PLATFORM_ESP32) || defined(__XTENSA__)
+    #define SECP256K1_ESP32_BUILD 1
+    #define SECP256K1_THROW_ERROR(msg) do { /* no-op on ESP32 */ } while(0)
+#else
+    #define SECP256K1_ESP32_BUILD 0
+    #define SECP256K1_THROW_ERROR(msg) throw std::runtime_error(msg)
+#endif
+
 /* GLV Optimization Progress:
  * 
  * Performance Evolution (@ 3.5 GHz, w=20 fixed-base):
@@ -44,27 +54,31 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+#include <cctype>
+#include <limits>
+#include <memory>
+#include <stdexcept>
+#include <string>
+#include <utility>
+#include <vector>
+
+#if !SECP256K1_ESP32_BUILD
+// Desktop-only includes
 #include <fstream>
 #include <chrono>
 #include <filesystem>
 #include <unordered_map>
-#include <cctype>
-#include <limits>
 #include <iostream>
 #include <iomanip>
 #include <ctime>
-#include <memory>
 #include <mutex>
-#include <stdexcept>
-#include <string>
 #include <thread>
-#include <utility>
-#include <vector>
 #include <queue>
 #include <condition_variable>
 #include <sstream>
-#include <algorithm>
-#if SECP256K1_DEBUG_SPLIT || SECP256K1_DEBUG_GLV || SECP256K1_PROFILE_DECOMP
+#endif
+
+#if (SECP256K1_DEBUG_SPLIT || SECP256K1_DEBUG_GLV || SECP256K1_PROFILE_DECOMP) && !SECP256K1_ESP32_BUILD
 #include <iostream>
 #include <sstream>
 #include <iomanip>
@@ -88,11 +102,35 @@
 
 // GCC/Clang intrinsics wrappers (not needed for MSVC/ClangCL)
 #ifndef _MSC_VER
+
+#if defined(SECP256K1_NO_INT128) || defined(SECP256K1_PLATFORM_ESP32)
+// Portable 64x64->128 multiplication for 32-bit platforms
+static inline uint64_t _umul128(uint64_t a, uint64_t b, uint64_t* hi) {
+    uint32_t a_lo = (uint32_t)a;
+    uint32_t a_hi = (uint32_t)(a >> 32);
+    uint32_t b_lo = (uint32_t)b;
+    uint32_t b_hi = (uint32_t)(b >> 32);
+
+    uint64_t p0 = (uint64_t)a_lo * b_lo;
+    uint64_t p1 = (uint64_t)a_lo * b_hi;
+    uint64_t p2 = (uint64_t)a_hi * b_lo;
+    uint64_t p3 = (uint64_t)a_hi * b_hi;
+
+    uint64_t mid = p1 + (p0 >> 32);
+    mid += p2;
+    if (mid < p2) p3 += 0x100000000ULL; // carry
+
+    *hi = p3 + (mid >> 32);
+    return (mid << 32) | (uint32_t)p0;
+}
+#else
 static inline uint64_t _umul128(uint64_t a, uint64_t b, uint64_t* hi) {
     unsigned __int128 r = (unsigned __int128)a * b;
     *hi = r >> 64;
     return (uint64_t)r;
 }
+#endif
+
 static inline unsigned char _BitScanReverse64(unsigned long* index, uint64_t mask) {
     if (mask == 0) return 0;
     *index = 63 - __builtin_clzll(mask);
@@ -169,9 +207,7 @@ FieldElement negate_fe(const FieldElement& v);
 [[nodiscard]] SECP256K1_INLINE JacobianPoint jacobian_double(const JacobianPoint& p) {
     if (SECP256K1_UNLIKELY(p.infinity)) return p;
     
-    const FieldElement& two = FE_TWO;
     const FieldElement& three = FE_THREE;
-    const FieldElement& eight = FE_EIGHT;
     FieldElement yy = p.y;         // Copy for in-place
     yy.square_inplace();            // yy = y^2 in-place!
     FieldElement yyyy = yy;         // Copy for in-place
@@ -180,13 +216,19 @@ FieldElement negate_fe(const FieldElement& v);
     xx.square_inplace();            // xx = x^2 in-place!
     FieldElement temp = p.x + yy;   // x + y^2
     temp.square_inplace();          // (x + y^2)^2 in-place!
-    FieldElement s = (temp - xx - yyyy) * two;  // s = 2*((x+y^2)^2 - x^2 - y^4)
+    FieldElement s = temp - xx - yyyy;
+    s += s;                         // s = 2*((x+y^2)^2 - x^2 - y^4) via add
     FieldElement m = xx * three;
     FieldElement x3 = m;            // Copy for in-place
     x3.square_inplace();            // m^2 in-place!
-    x3 -= s * two;
-    FieldElement y3 = m * (s - x3) - yyyy * eight;
-    FieldElement z3 = (p.y * p.z) * two;
+    FieldElement s2 = s + s;        // 2*s via add
+    x3 -= s2;
+    FieldElement yyyy2 = yyyy + yyyy;   // 2*yyyy
+    FieldElement yyyy4 = yyyy2 + yyyy2; // 4*yyyy
+    FieldElement yyyy8 = yyyy4 + yyyy4; // 8*yyyy via additions
+    FieldElement y3 = m * (s - x3) - yyyy8;
+    FieldElement z3 = p.y * p.z;
+    z3 += z3;                       // 2*(y*z) via add
     return {x3, y3, z3, false};
 }
 
@@ -212,16 +254,17 @@ FieldElement negate_fe(const FieldElement& v);
     }
     
     FieldElement h = u2 - u1;
-    const FieldElement& two = FE_TWO;
-    FieldElement i = h * two;       // 2*h
+    FieldElement i = h + h;         // 2*h via add
     i.square_inplace();             // i = (2*h)^2 in-place!
     FieldElement j = h * i;
-    FieldElement r = (s2 - s1) * two;
+    FieldElement r = s2 - s1;
+    r += r;                         // 2*(s2-s1) via add
     FieldElement v = u1 * i;
     FieldElement x3 = r;            // Copy for in-place
     x3.square_inplace();            // r^2 in-place!
-    x3 -= j + v * two;              // x3 = r^2 - j - 2*v
-    FieldElement y3 = r * (v - x3) - s1 * j * two;
+    x3 -= j + v + v;               // x3 = r^2 - j - 2*v via add
+    FieldElement s1j = s1 * j;
+    FieldElement y3 = r * (v - x3) - (s1j + s1j); // 2*s1*j via add
     FieldElement temp_z = p.z + q.z; // z1 + z2
     temp_z.square_inplace();        // (z1 + z2)^2 in-place!
     FieldElement z3 = (temp_z - z1z1 - z2z2) * h;
@@ -367,6 +410,11 @@ static void mul64x64(std::uint64_t a, std::uint64_t b, std::uint64_t& lo, std::u
     unsigned __int64 hi = 0ULL;
     const unsigned __int64 lo = _umul128(a, b, &hi);
     return make_uint128(lo, hi);
+#elif defined(SECP256K1_NO_INT128) || defined(SECP256K1_PLATFORM_ESP32)
+    // Portable 64x64->128 for 32-bit platforms
+    uint64_t hi = 0;
+    uint64_t lo = _umul128(a, b, &hi);
+    return make_uint128(lo, hi);
 #else
     const unsigned __int128 product = static_cast<unsigned __int128>(a) * static_cast<unsigned __int128>(b);
     return make_uint128(static_cast<std::uint64_t>(product), static_cast<std::uint64_t>(product >> 64));
@@ -475,7 +523,9 @@ constexpr Limbs4 kGroupOrder{{
     0xFFFFFFFFFFFFFFFFULL
 }};
 
+#if !SECP256K1_ESP32_BUILD
 std::mutex g_mutex;
+#endif
 FixedBaseConfig g_config{};
 std::unique_ptr<PrecomputeContext> g_context;
 
@@ -746,6 +796,31 @@ static Limbs3 div_384_by_256(const Limbs6& num, const Limbs4& den) {
         std::uint64_t rhat;
 #if defined(_MSC_VER) && !defined(__clang__)
         std::uint64_t qhat = _udiv128(u_hi, u_lo, v_hi, &rhat);
+#elif defined(SECP256K1_NO_INT128) || defined(SECP256K1_PLATFORM_ESP32)
+        // Portable division approximation for 32-bit platforms
+        // This is an approximation - for exact division we do iterative refinement
+        std::uint64_t qhat;
+        if (u_hi >= v_hi) {
+            qhat = 0xFFFFFFFFFFFFFFFFULL;
+        } else if (u_hi == 0) {
+            qhat = u_lo / v_hi;
+        } else {
+            // Approximate: divide (u_hi * 2^32 + u_lo_high) by v_hi
+            uint64_t u_approx = (u_hi << 32) | (u_lo >> 32);
+            qhat = u_approx / (v_hi >> 32);
+            if (qhat > 0xFFFFFFFFFFFFFFFFULL) qhat = 0xFFFFFFFFFFFFFFFFULL;
+        }
+        // Compute remainder approximation
+        uint64_t qv_hi, qv_lo;
+        mul64x64(qhat, v_hi, qv_lo, qv_hi);
+        // Adjust qhat down if needed
+        while (qv_hi > u_hi || (qv_hi == u_hi && qv_lo > u_lo)) {
+            --qhat;
+            mul64x64(qhat, v_hi, qv_lo, qv_hi);
+        }
+        // rhat = u - qhat * v_hi (approximate)
+        rhat = u_lo - qv_lo;
+        if (qv_lo > u_lo) rhat = 0; // underflow protection
 #else
         unsigned __int128 dividend = (static_cast<unsigned __int128>(u_hi) << 64) | u_lo;
         std::uint64_t qhat = static_cast<std::uint64_t>(dividend / v_hi);
@@ -850,7 +925,11 @@ static Scalar mul_scalar_u128(const Scalar& a, std::uint64_t u_lo, std::uint64_t
 // We still extract standard signed windows, but tables store only odd multiples
 std::vector<int32_t> compute_window_digits(const Scalar& scalar, unsigned window_bits, std::size_t window_count) {
     if (window_bits == 0U || window_bits > 30U) {
+        #if SECP256K1_ESP32_BUILD
+        return std::vector<int32_t>(); // Return empty on error
+        #else
         throw std::runtime_error("Unsupported window size for digit extraction");
+        #endif
     }
     const std::uint32_t mask = (1U << window_bits) - 1U;
     std::array<std::uint64_t, 5> working{};
@@ -913,6 +992,8 @@ void fill_tables_for_window(const Point& base_point,
     }
 }
 
+#if !SECP256K1_ESP32_BUILD
+// Desktop-only: Cache and streaming functions require filesystem and threading
 // Forward declarations for cache structures and functions
 struct CacheHeader {
     std::uint32_t magic;
@@ -1214,6 +1295,37 @@ std::unique_ptr<PrecomputeContext> build_context(const FixedBaseConfig& config) 
 
     return ctx;
 }
+#endif // !SECP256K1_ESP32_BUILD
+
+// ESP32-compatible simple build_context (single-threaded, no caching)
+#if SECP256K1_ESP32_BUILD
+std::unique_ptr<PrecomputeContext> build_context(const FixedBaseConfig& config) {
+    auto ctx = std::make_unique<PrecomputeContext>();
+    ctx->config = config;
+    ctx->window_bits = config.window_bits;
+    ctx->window_count = (256U + config.window_bits - 1U) / config.window_bits;
+    ctx->digit_count = static_cast<std::size_t>(1ULL << config.window_bits);
+    ctx->beta = FieldElement::from_bytes(kBetaBytes);
+    ctx->base_tables.resize(ctx->window_count);
+    if (config.enable_glv) {
+        ctx->psi_tables.resize(ctx->window_count);
+    }
+
+    Point base = Point::generator();
+    for (std::size_t window = 0; window < ctx->window_count; ++window) {
+        std::vector<AffinePointPacked>* psi_ptr = config.enable_glv ? &ctx->psi_tables[window] : nullptr;
+        fill_tables_for_window(base, ctx->digit_count, ctx->beta, ctx->base_tables[window], psi_ptr);
+
+        if (window + 1 < ctx->window_count) {
+            for (unsigned rep = 0; rep < ctx->window_bits; ++rep) {
+                base = base.dbl();
+            }
+        }
+    }
+
+    return ctx;
+}
+#endif
 
 Scalar const_minus_b1() {
     static const Scalar value = make_scalar(kMinusB1Bytes);
@@ -1291,6 +1403,8 @@ static Scalar mul_scalar_small(const Scalar& small, const Scalar& large) {
 // Multiply two 64-bit numbers to get 128-bit result
 static void mul64x64(std::uint64_t a, std::uint64_t b, std::uint64_t& lo, std::uint64_t& hi) {
 #if defined(_MSC_VER) && !defined(__clang__)
+    lo = _umul128(a, b, &hi);
+#elif defined(SECP256K1_NO_INT128) || defined(SECP256K1_PLATFORM_ESP32)
     lo = _umul128(a, b, &hi);
 #else
     unsigned __int128 product = static_cast<unsigned __int128>(a) * b;
@@ -1742,7 +1856,11 @@ static JSF_Result compute_jsf(const Scalar& k1, const Scalar& k2) {
 
         ++steps;
         if (steps > 260) {
+            #if !SECP256K1_ESP32_BUILD
             throw std::runtime_error("compute_jsf exceeded expected length");
+            #else
+            break; // ESP32: break on error
+            #endif
         }
     }
 
@@ -1847,6 +1965,8 @@ ScalarDecomposition split_scalar_internal(const Scalar& scalar) {
             for(int j=0;j<4;++j){
                 uint64_t hi=0;
 #if defined(_MSC_VER) && !defined(__clang__)
+                uint64_t lo = _umul128(a[i], b[j], &hi);
+#elif defined(SECP256K1_NO_INT128) || defined(SECP256K1_PLATFORM_ESP32)
                 uint64_t lo = _umul128(a[i], b[j], &hi);
 #else
                 unsigned __int128 prod = (unsigned __int128)a[i] * (unsigned __int128)b[j];
@@ -2858,11 +2978,37 @@ void compute_wnaf_into(const Scalar& scalar,
 
         ++bit_pos;
         if (bit_pos > max_length) {
+            #if !SECP256K1_ESP32_BUILD
             throw std::runtime_error("wNAF computation exceeded maximum length");
+            #else
+            break;
+            #endif
         }
     }
 }
 
+#if SECP256K1_ESP32_BUILD
+// ESP32 simplified version - no mutex, no environment variables, minimal features
+void configure_fixed_base(const FixedBaseConfig& config) {
+    g_config = config;
+    // Adaptive GLV override
+    if (g_config.adaptive_glv && g_config.enable_glv && g_config.window_bits < g_config.glv_min_window_bits) {
+        g_config.enable_glv = false;
+    }
+    g_context.reset();
+}
+
+void ensure_fixed_base_ready() {
+    if (!g_context) {
+        g_context = build_context(g_config);
+    }
+}
+
+bool fixed_base_ready() {
+    return static_cast<bool>(g_context);
+}
+#else
+// Desktop version with full features
 void configure_fixed_base(const FixedBaseConfig& config) {
     std::lock_guard<std::mutex> lock(g_mutex);
     g_config = config;
@@ -2904,6 +3050,7 @@ bool fixed_base_ready() {
     std::lock_guard<std::mutex> lock(g_mutex);
     return static_cast<bool>(g_context);
 }
+#endif // !SECP256K1_ESP32_BUILD
 
 ScalarDecomposition split_scalar_glv(const Scalar& scalar) {
     return split_scalar_internal(scalar);

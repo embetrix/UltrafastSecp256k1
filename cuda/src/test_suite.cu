@@ -1086,6 +1086,216 @@ static bool test_sequential_increment_property(bool verbose) {
     return ok;
 }
 
+// ============================================================
+// EDGE CASE TESTS
+// ============================================================
+
+static bool test_zero_scalar(bool verbose) {
+    if (verbose) std::cout << "\nZero scalar (0*G = infinity):\n";
+    HostScalar zero = HostScalar::zero();
+    HostPoint result = scalar_mul_generator(zero);
+    bool ok = result.is_infinity();
+    if (verbose) std::cout << (ok ? "    PASS\n" : "    FAIL\n");
+    return ok;
+}
+
+static bool test_order_scalar(bool verbose) {
+    if (verbose) std::cout << "\nOrder scalar (n*G = infinity):\n";
+    // n = fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141
+    HostScalar n = HostScalar::from_hex("fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141");
+    HostPoint result = scalar_mul_generator(n);
+    bool ok = result.is_infinity();
+    if (verbose) std::cout << (ok ? "    PASS\n" : "    FAIL\n");
+    return ok;
+}
+
+static bool test_point_cancellation(bool verbose) {
+    if (verbose) std::cout << "\nPoint cancellation (P + (-P) = O):\n";
+    bool ok = true;
+    // Test with several different points
+    const uint64_t scalars[] = {1, 2, 5, 100, 9999};
+    for (uint64_t k : scalars) {
+        HostPoint P = scalar_mul_generator(HostScalar::from_uint64(k));
+        HostPoint negP = P.negate();
+        HostPoint sum = P.add(negP);
+        if (!sum.is_infinity()) { ok = false; break; }
+    }
+    if (verbose) std::cout << (ok ? "    PASS\n" : "    FAIL\n");
+    return ok;
+}
+
+static bool test_infinity_operand(bool verbose) {
+    if (verbose) std::cout << "\nInfinity as operand (O+P=P, P+O=P, O+O=O):\n";
+    bool ok = true;
+    HostPoint O = HostPoint::infinity_point();
+    HostPoint G = HostPoint::generator();
+
+    // O + G = G
+    HostPoint r1 = O.add(G);
+    if (!points_equal(r1, G)) { if (verbose) std::cout << "    FAIL: O+G != G\n"; ok = false; }
+
+    // G + O = G
+    HostPoint r2 = G.add(O);
+    if (!points_equal(r2, G)) { if (verbose) std::cout << "    FAIL: G+O != G\n"; ok = false; }
+
+    // O + O = O
+    HostPoint r3 = O.add(O);
+    if (!r3.is_infinity()) { if (verbose) std::cout << "    FAIL: O+O != O\n"; ok = false; }
+
+    // 2*O (doubling infinity)
+    HostPoint r4 = O.dbl();
+    if (!r4.is_infinity()) { if (verbose) std::cout << "    FAIL: 2*O != O\n"; ok = false; }
+
+    if (verbose) std::cout << (ok ? "    PASS\n" : "    FAIL\n");
+    return ok;
+}
+
+static bool test_add_vs_dbl_consistency(bool verbose) {
+    if (verbose) std::cout << "\nP+P via add() vs dbl() consistency:\n";
+    bool ok = true;
+    for (uint64_t k = 1; k <= 10; ++k) {
+        HostPoint P = scalar_mul_generator(HostScalar::from_uint64(k));
+        HostPoint sum = P.add(P);
+        HostPoint dbl = P.dbl();
+        if (!points_equal(sum, dbl)) { ok = false; break; }
+    }
+    if (verbose) std::cout << (ok ? "    PASS\n" : "    FAIL\n");
+    return ok;
+}
+
+static bool test_commutativity(bool verbose) {
+    if (verbose) std::cout << "\nCommutativity (P+Q = Q+P):\n";
+    bool ok = true;
+    HostPoint P2 = scalar_mul_generator(HostScalar::from_uint64(2));
+    HostPoint P5 = scalar_mul_generator(HostScalar::from_uint64(5));
+    HostPoint P7 = scalar_mul_generator(HostScalar::from_uint64(7));
+    HostPoint P13 = scalar_mul_generator(HostScalar::from_uint64(13));
+
+    if (!points_equal(P2.add(P5), P5.add(P2))) { ok = false; }
+    if (!points_equal(P7.add(P13), P13.add(P7))) { ok = false; }
+    if (!points_equal(P2.add(P13), P13.add(P2))) { ok = false; }
+
+    if (verbose) std::cout << (ok ? "    PASS\n" : "    FAIL\n");
+    return ok;
+}
+
+static bool test_associativity(bool verbose) {
+    if (verbose) std::cout << "\nAssociativity ((P+Q)+R = P+(Q+R)):\n";
+    bool ok = true;
+    HostPoint P = scalar_mul_generator(HostScalar::from_uint64(3));
+    HostPoint Q = scalar_mul_generator(HostScalar::from_uint64(7));
+    HostPoint R = scalar_mul_generator(HostScalar::from_uint64(11));
+
+    HostPoint lhs = (P.add(Q)).add(R);
+    HostPoint rhs = P.add(Q.add(R));
+    if (!points_equal(lhs, rhs)) ok = false;
+
+    // Second triple
+    HostPoint P2 = scalar_mul_generator(HostScalar::from_uint64(17));
+    HostPoint Q2 = scalar_mul_generator(HostScalar::from_uint64(23));
+    HostPoint R2 = scalar_mul_generator(HostScalar::from_uint64(31));
+    lhs = (P2.add(Q2)).add(R2);
+    rhs = P2.add(Q2.add(R2));
+    if (!points_equal(lhs, rhs)) ok = false;
+
+    if (verbose) std::cout << (ok ? "    PASS\n" : "    FAIL\n");
+    return ok;
+}
+
+static bool test_field_inv_edge(bool verbose) {
+    if (verbose) std::cout << "\nField inverse edge cases:\n";
+    bool ok = true;
+
+    // inv(1) = 1
+    HostFieldElement one = HostFieldElement::one();
+    HostFieldElement inv1 = one.inverse();
+    if (!(inv1 == one)) {
+        if (verbose) std::cout << "    FAIL: inv(1) != 1, got " << inv1.to_hex() << "\n";
+        ok = false;
+    }
+
+    // inv(inv(a)) = a (idempotent)
+    HostFieldElement a = HostFieldElement::from_uint64(12345);
+    HostFieldElement inv_a = a.inverse();
+    HostFieldElement inv_inv_a = inv_a.inverse();
+    if (!(inv_inv_a == a)) {
+        if (verbose) std::cout << "    FAIL: inv(inv(a)) != a\n";
+        ok = false;
+    }
+
+    // inv(p-1) = p-1 (because (p-1)^2 = 1 mod p)
+    HostFieldElement pm1;
+    // p-1 = fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2e
+    pm1.limbs[0] = 0xFFFFFFFEFFFFFC2EULL;
+    pm1.limbs[1] = 0xFFFFFFFFFFFFFFFFULL;
+    pm1.limbs[2] = 0xFFFFFFFFFFFFFFFFULL;
+    pm1.limbs[3] = 0xFFFFFFFFFFFFFFFFULL;
+    HostFieldElement inv_pm1 = pm1.inverse();
+    if (!(inv_pm1 == pm1)) {
+        if (verbose) std::cout << "    FAIL: inv(p-1) != p-1, got " << inv_pm1.to_hex() << "\n";
+        ok = false;
+    }
+
+    // a * inv(a) = 1 for several values
+    for (uint64_t v : {2ULL, 7ULL, 42ULL, 1000000007ULL}) {
+        HostFieldElement val = HostFieldElement::from_uint64(v);
+        HostFieldElement inv_val = val.inverse();
+        HostFieldElement prod = val * inv_val;
+        if (!(prod == HostFieldElement::one())) {
+            if (verbose) std::cout << "    FAIL: " << v << " * inv(" << v << ") != 1\n";
+            ok = false;
+        }
+    }
+
+    if (verbose) std::cout << (ok ? "    PASS\n" : "    FAIL\n");
+    return ok;
+}
+
+static bool test_scalar_mul_cross_check(bool verbose) {
+    if (verbose) std::cout << "\nScalar mul cross-check (k2*(k1*G) = (k1*k2)*G):\n";
+    bool ok = true;
+
+    struct Pair { const char* k1; const char* k2; };
+    Pair pairs[] = {
+        {"deadbeefcafebabef00dfeedfacefeed1234567890abcdef1122334455667788",
+         "1111111111111111111111111111111111111111111111111111111111111111"},
+        {"fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd036413f",
+         "0000000000000000000000000000000000000000000000000000000000000002"},
+        {"700a25ca2ae4eb40dfa74c9eda069be7e2fc9bfceabb13953ddedd33e1f03f2c",
+         "489206bbfff1b2370619ba0e6a51b74251267e06d3abafb055464bb623d5057a"},
+    };
+
+    for (const auto& [k1h, k2h] : pairs) {
+        HostScalar k1 = HostScalar::from_hex(k1h);
+        HostScalar k2 = HostScalar::from_hex(k2h);
+        HostPoint Q = scalar_mul_generator(k1);
+        HostPoint left = Q.scalar_mul(k2);
+        HostScalar k1k2 = k1 * k2;
+        HostPoint right = scalar_mul_generator(k1k2);
+        if (!points_equal(left, right)) { ok = false; break; }
+    }
+
+    if (verbose) std::cout << (ok ? "    PASS\n" : "    FAIL\n");
+    return ok;
+}
+
+static bool test_distributive(bool verbose) {
+    if (verbose) std::cout << "\nDistributive k*(P+Q) = k*P + k*Q:\n";
+    bool ok = true;
+    HostPoint P = scalar_mul_generator(HostScalar::from_uint64(3));
+    HostPoint Q = scalar_mul_generator(HostScalar::from_uint64(7));
+    
+    for (uint64_t k = 2; k <= 6; ++k) {
+        HostScalar K = HostScalar::from_uint64(k);
+        HostPoint lhs = P.add(Q).scalar_mul(K);
+        HostPoint rhs = P.scalar_mul(K).add(Q.scalar_mul(K));
+        if (!points_equal(lhs, rhs)) { ok = false; break; }
+    }
+
+    if (verbose) std::cout << (ok ? "    PASS\n" : "    FAIL\n");
+    return ok;
+}
+
 static bool test_bloom_filter(bool verbose) {
     if (verbose) std::cout << "\nBloom Filter (GPU):\n";
     
@@ -1251,6 +1461,37 @@ bool Selftest(bool verbose) {
 
     total++;
     if (test_bloom_filter(verbose)) passed++;
+
+    // Edge case tests
+    total++;
+    if (test_zero_scalar(verbose)) passed++;
+
+    total++;
+    if (test_order_scalar(verbose)) passed++;
+
+    total++;
+    if (test_point_cancellation(verbose)) passed++;
+
+    total++;
+    if (test_infinity_operand(verbose)) passed++;
+
+    total++;
+    if (test_add_vs_dbl_consistency(verbose)) passed++;
+
+    total++;
+    if (test_commutativity(verbose)) passed++;
+
+    total++;
+    if (test_associativity(verbose)) passed++;
+
+    total++;
+    if (test_field_inv_edge(verbose)) passed++;
+
+    total++;
+    if (test_scalar_mul_cross_check(verbose)) passed++;
+
+    total++;
+    if (test_distributive(verbose)) passed++;
     
     if (verbose) {
         std::cout << "\n==============================================\n";

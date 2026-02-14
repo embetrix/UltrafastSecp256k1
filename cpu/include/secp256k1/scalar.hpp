@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <string>
 #include <vector>
+#include "secp256k1/types.hpp"
 
 namespace secp256k1::fast {
 
@@ -40,6 +41,17 @@ public:
     bool operator==(const Scalar& rhs) const noexcept;
     bool operator!=(const Scalar& rhs) const noexcept { return !(*this == rhs); }
 
+    // Zero-cost conversion to/from shared data type (for cross-backend interop)
+    const ::secp256k1::ScalarData& data() const noexcept {
+        return *reinterpret_cast<const ::secp256k1::ScalarData*>(&limbs_);
+    }
+    ::secp256k1::ScalarData& data() noexcept {
+        return *reinterpret_cast<::secp256k1::ScalarData*>(&limbs_);
+    }
+    static Scalar from_data(const ::secp256k1::ScalarData& d) {
+        return from_limbs({d.limbs[0], d.limbs[1], d.limbs[2], d.limbs[3]});
+    }
+
     std::uint8_t bit(std::size_t index) const;
 
     // Phase 5.6: NAF (Non-Adjacent Form) encoding
@@ -60,6 +72,11 @@ private:
 
     limbs_type limbs_{};
 };
+
+// Cross-backend layout compatibility (shared types contract)
+static_assert(sizeof(Scalar) == sizeof(::secp256k1::ScalarData),
+              "CPU Scalar must match shared data layout size");
+static_assert(sizeof(Scalar) == 32, "Scalar must be 256 bits");
 
 } // namespace secp256k1::fast
 

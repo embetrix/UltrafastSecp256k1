@@ -73,7 +73,7 @@ cmake --build build -j
 |--------|---------|-------------|
 | `SECP256K1_USE_ASM` | ON | Assembly optimizations (x64/RISC-V) |
 | `SECP256K1_BUILD_CUDA` | OFF | Build CUDA GPU library |
-| `SECP256K1_BUILD_OPENCL` | OFF | Build OpenCL (future) |
+| `SECP256K1_BUILD_OPENCL` | OFF | Build OpenCL GPU support |
 | `SECP256K1_BUILD_TESTS` | ON | Build test suite |
 | `SECP256K1_BUILD_BENCH` | ON | Build benchmarks |
 | `SECP256K1_BUILD_EXAMPLES` | OFF | Build example programs |

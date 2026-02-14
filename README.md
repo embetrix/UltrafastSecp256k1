@@ -7,13 +7,17 @@ Ultra high-performance secp256k1 elliptic curve cryptography library with multi-
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 [![C++20](https://img.shields.io/badge/C%2B%2B-20-blue.svg)](https://en.cppreference.com/w/cpp/20)
 [![CUDA](https://img.shields.io/badge/CUDA-12.0+-green.svg)](https://developer.nvidia.com/cuda-toolkit)
+[![OpenCL](https://img.shields.io/badge/OpenCL-3.0-green.svg)](https://www.khronos.org/opencl/)
+[![RISC-V](https://img.shields.io/badge/RISC--V-RV64GC-orange.svg)](https://riscv.org/)
+[![ESP32-S3](https://img.shields.io/badge/ESP32--S3-Xtensa%20LX7-orange.svg)](https://www.espressif.com/en/products/socs/esp32-s3)
 
 ## 🚀 Features
 
 - **Multi-Platform Architecture**
   - CPU: Optimized for x86-64 (BMI2/ADX) and RISC-V (RV64GC)
-  - GPU: CUDA acceleration for batch operations
-  - Future: OpenCL support planned
+  - Embedded: ESP32-S3 support (Xtensa LX7, portable C++)
+  - GPU/CUDA: Batch operations with 4.63M kG/s throughput
+  - GPU/OpenCL: PTX inline asm, 3.39M kG/s
 
 - **Performance**
   - x86-64: 3-5× speedup with BMI2/ADX assembly
@@ -113,7 +117,7 @@ cmake --build build -j
 |--------|---------|-------------|
 | `SECP256K1_USE_ASM` | ON | Enable assembly optimizations (x64/RISC-V) |
 | `SECP256K1_BUILD_CUDA` | OFF | Build CUDA GPU support |
-| `SECP256K1_BUILD_OPENCL` | OFF | Build OpenCL support (future) |
+| `SECP256K1_BUILD_OPENCL` | OFF | Build OpenCL GPU support |
 | `SECP256K1_BUILD_TESTS` | ON | Build test suite |
 | `SECP256K1_BUILD_BENCH` | ON | Build benchmarks |
 | `SECP256K1_RISCV_FAST_REDUCTION` | ON | Fast modular reduction (RISC-V) |
@@ -437,14 +441,59 @@ RISC-V results were collected on **Milk-V Mars** (RV64 + RVV).
 
 *See [RISCV_OPTIMIZATIONS.md](RISCV_OPTIMIZATIONS.md) for optimization details.*
 
-### CUDA (NVIDIA RTX 5060 Ti)
+### ESP32-S3 / Embedded (Xtensa LX7, ESP-IDF v5.5.1, -O3)
 
-| Operation | Throughput |
-|-----------|------------|
-| Scalar Mul (G×k batch) | ~1.86M ops/s |
-| Field Multiplication | ~4.1 Gops/s |
+| Operation | Time |
+|-----------|------:|
+| Field Mul | 7,458 ns |
+| Field Square | 7,592 ns |
+| Field Add | 636 ns |
+| Scalar × G (Generator Mul) | 2,483 μs |
 
-*Note: CUDA performance depends heavily on batch size and GPU occupancy. Results from batch processing millions of operations.*
+*Note: ESP32-S3 uses portable C++ (no `__int128`, no assembly). Running at 240 MHz. All 28 library tests pass. See [benchmarks/cpu/esp32/](benchmarks/cpu/esp32/embedded/) for details.*
+
+### CUDA (NVIDIA RTX 5060 Ti) — Kernel-Only
+
+| Operation | Time/Op | Throughput |
+|-----------|---------|------------|
+| Field Mul | 0.2 ns | 4,139 M/s |
+| Field Add | 0.2 ns | 4,122 M/s |
+| Field Inv | 12.1 ns | 82.65 M/s |
+| Point Add | 1.1 ns | 916 M/s |
+| Point Double | 0.7 ns | 1,352 M/s |
+| Scalar Mul (P×k) | 266.5 ns | 3.75 M/s |
+| Generator Mul (G×k) | 216.1 ns | 4.63 M/s |
+
+*CUDA 12.0, sm_86;sm_89, batch=1M, RTX 5060 Ti (36 SMs, 2602 MHz)*
+
+### OpenCL (NVIDIA RTX 5060 Ti) — Kernel-Only
+
+| Operation | Time/Op | Throughput |
+|-----------|---------|------------|
+| Field Mul | 0.2 ns | 4,137 M/s |
+| Field Add | 0.2 ns | 4,124 M/s |
+| Field Sqr | 0.2 ns | 5,985 M/s |
+| Field Inv | 14.3 ns | 69.97 M/s |
+| Point Add | 1.6 ns | 630.6 M/s |
+| Point Double | 0.9 ns | 1,139 M/s |
+| kG (Generator Mul) | 295.1 ns | 3.39 M/s |
+
+*OpenCL 3.0 CUDA, Driver 580.126.09, PTX inline asm, batch=256K–1M*
+
+### CUDA vs OpenCL — Kernel-Only Comparison (RTX 5060 Ti)
+
+| Operation | CUDA | OpenCL | Faster |
+|-----------|------|--------|--------|
+| Field Mul | 0.2 ns | 0.2 ns | Tie |
+| Field Add | 0.2 ns | 0.2 ns | Tie |
+| Field Inv | 12.1 ns | 14.3 ns | CUDA 1.18× |
+| Point Double | 0.7 ns | 0.9 ns | **CUDA 1.29×** |
+| Point Add | 1.1 ns | 1.6 ns | **CUDA 1.45×** |
+| kG (Generator Mul) | 216.1 ns | 295.1 ns | **CUDA 1.37×** |
+
+> **Note:** Both measurements are kernel-only (no buffer allocation/copy overhead). CUDA uses local-variable optimization for zero pointer-aliasing overhead.
+
+*Benchmarks: 2026-02-14, Linux x86_64, NVIDIA Driver 580.126.09*
 
 ## 🏗️ Architecture
 
@@ -464,7 +513,11 @@ secp256k1-fast/
 │   ├── include/        # CUDA headers
 │   ├── src/           # CUDA kernels
 │   └── tests/         # CUDA tests
-└── opencl/            # OpenCL support (future)
+└── opencl/            # OpenCL GPU acceleration
+    ├── kernels/       # OpenCL kernel sources (.cl)
+    ├── include/       # OpenCL headers
+    ├── src/           # Host-side OpenCL code
+    └── tests/         # OpenCL tests
 ```
 
 ## 🔬 Research Statement

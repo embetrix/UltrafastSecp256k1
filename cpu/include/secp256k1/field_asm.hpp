@@ -86,15 +86,51 @@ inline void mulx64(uint64_t a, uint64_t b, uint64_t& lo, uint64_t& hi) {
             lo = _mulx_u64(a, b, (unsigned long long*)&hi);
         #else
             // GCC/Clang fallback
-            __uint128_t result = static_cast<__uint128_t>(a) * b;
-            lo = static_cast<uint64_t>(result);
-            hi = static_cast<uint64_t>(result >> 64);
+            #ifdef SECP256K1_NO_INT128
+                // 32-bit safe implementation
+                uint64_t a_lo = a & 0xFFFFFFFFULL;
+                uint64_t a_hi = a >> 32;
+                uint64_t b_lo = b & 0xFFFFFFFFULL;
+                uint64_t b_hi = b >> 32;
+
+                uint64_t p0 = a_lo * b_lo;
+                uint64_t p1 = a_lo * b_hi;
+                uint64_t p2 = a_hi * b_lo;
+                uint64_t p3 = a_hi * b_hi;
+
+                uint64_t carry = ((p0 >> 32) + (p1 & 0xFFFFFFFFULL) + (p2 & 0xFFFFFFFFULL)) >> 32;
+
+                lo = p0 + (p1 << 32) + (p2 << 32);
+                hi = p3 + (p1 >> 32) + (p2 >> 32) + carry;
+            #else
+                __uint128_t result = static_cast<__uint128_t>(a) * b;
+                lo = static_cast<uint64_t>(result);
+                hi = static_cast<uint64_t>(result >> 64);
+            #endif
         #endif
     #else
         // Fallback
-        __uint128_t result = static_cast<__uint128_t>(a) * b;
-        lo = static_cast<uint64_t>(result);
-        hi = static_cast<uint64_t>(result >> 64);
+        // #ifdef SECP256K1_NO_INT128
+        //     // 32-bit safe implementation
+        //     uint64_t a_lo = a & 0xFFFFFFFFULL;
+        //     uint64_t a_hi = a >> 32;
+        //     uint64_t b_lo = b & 0xFFFFFFFFULL;
+        //     uint64_t b_hi = b >> 32;
+        //
+        //     uint64_t p0 = a_lo * b_lo;
+        //     uint64_t p1 = a_lo * b_hi;
+        //     uint64_t p2 = a_hi * b_lo;
+        //     uint64_t p3 = a_hi * b_hi;
+        //
+        //     uint64_t carry = ((p0 >> 32) + (p1 & 0xFFFFFFFFULL) + (p2 & 0xFFFFFFFFULL)) >> 32;
+        //
+        //     lo = p0 + (p1 << 32) + (p2 << 32);
+        //     hi = p3 + (p1 >> 32) + (p2 >> 32) + carry;
+        // #else
+        //     __uint128_t result = static_cast<__uint128_t>(a) * b;
+        //     lo = static_cast<uint64_t>(result);
+        //     hi = static_cast<uint64_t>(result >> 64);
+        // #endif
     #endif
 }
 
@@ -111,13 +147,25 @@ inline uint8_t adcx64(uint64_t a, uint64_t b, uint8_t carry, uint64_t& result) {
     #endif
 }
 #else
-// Portable fallback for non-x86 (RISC-V, ARM, etc.)
+// Portable fallback for non-x86 (RISC-V, ARM, ESP32, etc.)
 inline uint8_t adcx64(uint64_t a, uint64_t b, uint8_t carry, uint64_t& result) {
-    unsigned __int128 sum = static_cast<unsigned __int128>(a) + 
-                            static_cast<unsigned __int128>(b) + 
-                            static_cast<unsigned __int128>(carry);
-    result = static_cast<uint64_t>(sum);
-    return static_cast<uint8_t>(sum >> 64);
+    #ifdef SECP256K1_NO_INT128
+        // 32-bit safe implementation
+        result = a + b;
+        uint8_t new_carry = (result < a) ? 1 : 0;
+        if (carry) {
+            uint64_t temp = result + 1;
+            new_carry |= (temp < result) ? 1 : 0;
+            result = temp;
+        }
+        return new_carry;
+    #else
+        unsigned __int128 sum = static_cast<unsigned __int128>(a) +
+                                static_cast<unsigned __int128>(b) +
+                                static_cast<unsigned __int128>(carry);
+        result = static_cast<uint64_t>(sum);
+        return static_cast<uint8_t>(sum >> 64);
+    #endif
 }
 #endif
 

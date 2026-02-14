@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 #include "config.hpp"
+#include "secp256k1/types.hpp"
 
 namespace secp256k1::fast {
 
@@ -80,6 +81,17 @@ public:
     bool operator==(const FieldElement& rhs) const noexcept;
     bool operator!=(const FieldElement& rhs) const noexcept { return !(*this == rhs); }
 
+    // Zero-cost conversion to/from shared data type (for cross-backend interop)
+    const ::secp256k1::FieldElementData& data() const noexcept {
+        return *reinterpret_cast<const ::secp256k1::FieldElementData*>(&limbs_);
+    }
+    ::secp256k1::FieldElementData& data() noexcept {
+        return *reinterpret_cast<::secp256k1::FieldElementData*>(&limbs_);
+    }
+    static FieldElement from_data(const ::secp256k1::FieldElementData& d) {
+        return from_limbs({d.limbs[0], d.limbs[1], d.limbs[2], d.limbs[3]});
+    }
+
 private:
     explicit FieldElement(const limbs_type& limbs, bool normalized);
 
@@ -98,6 +110,13 @@ inline const MidFieldElement* toMid(const FieldElement* fe) noexcept {
 // Compile-time verification
 static_assert(sizeof(FieldElement) == sizeof(MidFieldElement), 
               "FieldElement and MidFieldElement must be same size");
+static_assert(sizeof(FieldElement) == 32, "Must be 256 bits");
+
+// Cross-backend layout compatibility (shared types contract)
+static_assert(sizeof(FieldElement) == sizeof(::secp256k1::FieldElementData),
+              "CPU FieldElement must match shared data layout size");
+static_assert(sizeof(MidFieldElement) == sizeof(::secp256k1::MidFieldElementData),
+              "CPU MidFieldElement must match shared data layout size");
 static_assert(sizeof(FieldElement) == 32, "Must be 256 bits");
 
 // ============================================================================

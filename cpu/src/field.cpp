@@ -31,6 +31,51 @@ inline void mul64(std::uint64_t a, std::uint64_t b, std::uint64_t& lo, std::uint
     lo = _umul128(a, b, &hi);
 }
 #else
+
+// 32-bit safe implementations (no __int128)
+#ifdef SECP256K1_NO_INT128
+
+inline std::uint64_t add64(std::uint64_t a, std::uint64_t b, unsigned char& carry) {
+    std::uint64_t result = a + b;
+    unsigned char new_carry = (result < a) ? 1 : 0;
+    if (carry) {
+        std::uint64_t temp = result + 1;
+        new_carry |= (temp < result) ? 1 : 0;
+        result = temp;
+    }
+    carry = new_carry;
+    return result;
+}
+
+inline std::uint64_t sub64(std::uint64_t a, std::uint64_t b, unsigned char& borrow) {
+    std::uint64_t temp = a - borrow;
+    unsigned char borrow1 = (a < borrow);
+    std::uint64_t result = temp - b;
+    unsigned char borrow2 = (temp < b);
+    borrow = borrow1 | borrow2;
+    return result;
+}
+
+inline void mul64(std::uint64_t a, std::uint64_t b, std::uint64_t& lo, std::uint64_t& hi) {
+    // Split into 32-bit parts
+    std::uint64_t a_lo = a & 0xFFFFFFFFULL;
+    std::uint64_t a_hi = a >> 32;
+    std::uint64_t b_lo = b & 0xFFFFFFFFULL;
+    std::uint64_t b_hi = b >> 32;
+
+    std::uint64_t p0 = a_lo * b_lo;
+    std::uint64_t p1 = a_lo * b_hi;
+    std::uint64_t p2 = a_hi * b_lo;
+    std::uint64_t p3 = a_hi * b_hi;
+
+    std::uint64_t carry = ((p0 >> 32) + (p1 & 0xFFFFFFFFULL) + (p2 & 0xFFFFFFFFULL)) >> 32;
+
+    lo = p0 + (p1 << 32) + (p2 << 32);
+    hi = p3 + (p1 >> 32) + (p2 >> 32) + carry;
+}
+
+#else
+// __int128 available
 inline std::uint64_t add64(std::uint64_t a, std::uint64_t b, unsigned char& carry) {
     unsigned __int128 sum = static_cast<unsigned __int128>(a) + b + carry;
     carry = static_cast<unsigned char>(sum >> 64);
@@ -51,7 +96,10 @@ inline void mul64(std::uint64_t a, std::uint64_t b, std::uint64_t& lo, std::uint
     lo = static_cast<std::uint64_t>(product);
     hi = static_cast<std::uint64_t>(product >> 64);
 }
-#endif
+
+#endif // SECP256K1_NO_INT128
+
+#endif // _MSC_VER
 
 constexpr std::uint64_t MOD_ADJUST = 0x1000003D1ULL;
 
@@ -377,6 +425,10 @@ limbs4 mul_impl(const limbs4& a, const limbs4& b) {
         FieldElement::from_limbs(b)
     );
     return result.limbs();
+#elif defined(SECP256K1_PLATFORM_ESP32) || defined(__XTENSA__) || defined(SECP256K1_NO_ASM)
+    // ESP32 / Xtensa / No-ASM: Pure portable C++ implementation
+    auto result = reduce(mul_wide(a, b));
+    return result;
 #else
     // x86/x64: Use BMI2 if available for better performance
     static bool bmi2_available = has_bmi2_support();
@@ -400,6 +452,9 @@ limbs4 square_impl(const limbs4& a) {
         FieldElement::from_limbs(a)
     );
     return result.limbs();
+#elif defined(SECP256K1_PLATFORM_ESP32) || defined(__XTENSA__) || defined(SECP256K1_NO_ASM)
+    // ESP32 / Xtensa / No-ASM: Pure portable C++ implementation
+    return reduce(mul_wide(a, a));
 #else
     // x86/x64: Use BMI2 if available for better performance
     static bool bmi2_available = has_bmi2_support();
@@ -1634,7 +1689,11 @@ std::string FieldElement::to_hex() const {
 
 FieldElement FieldElement::from_hex(const std::string& hex) {
     if (hex.length() != 64) {
-        throw std::invalid_argument("Hex string must be exactly 64 characters (32 bytes)");
+        #if defined(SECP256K1_ESP32) || defined(SECP256K1_PLATFORM_ESP32) || defined(__XTENSA__)
+            return FieldElement::zero(); // ESP32: no exceptions, return zero
+        #else
+            throw std::invalid_argument("Hex string must be exactly 64 characters (32 bytes)");
+        #endif
     }
     
     std::array<std::uint8_t, 32> bytes{};
@@ -1646,7 +1705,11 @@ FieldElement FieldElement::from_hex(const std::string& hex) {
             if (c >= '0' && c <= '9') return c - '0';
             if (c >= 'a' && c <= 'f') return c - 'a' + 10;
             if (c >= 'A' && c <= 'F') return c - 'A' + 10;
-            throw std::invalid_argument("Invalid hex character");
+            #if defined(SECP256K1_ESP32) || defined(SECP256K1_PLATFORM_ESP32) || defined(__XTENSA__)
+                return 0; // ESP32: no exceptions, return 0
+            #else
+                throw std::invalid_argument("Invalid hex character");
+            #endif
         };
         
         bytes[i] = (hex_to_nibble(c1) << 4) | hex_to_nibble(c2);
@@ -1674,7 +1737,11 @@ FieldElement FieldElement::square() const {
 
 FieldElement FieldElement::inverse() const {
     if (*this == zero()) {
-        throw std::runtime_error("Inverse of zero not defined");
+        #if defined(SECP256K1_ESP32) || defined(SECP256K1_PLATFORM_ESP32) || defined(__XTENSA__)
+            return zero(); // ESP32: no exceptions, return zero
+        #else
+            throw std::runtime_error("Inverse of zero not defined");
+        #endif
     }
     return pow_p_minus_2_hybrid_eea(*this);
 }
@@ -1701,7 +1768,12 @@ void FieldElement::square_inplace() {
 
 void FieldElement::inverse_inplace() {
     if (*this == zero()) {
-        throw std::runtime_error("Inverse of zero not defined");
+        #if defined(SECP256K1_ESP32) || defined(SECP256K1_PLATFORM_ESP32) || defined(__XTENSA__)
+            *this = zero(); // ESP32: no exceptions, set to zero
+            return;
+        #else
+            throw std::runtime_error("Inverse of zero not defined");
+        #endif
     }
     *this = pow_p_minus_2_eea(*this);
 }

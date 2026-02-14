@@ -13,13 +13,16 @@ if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES OR CMAKE_CUDA_ARCHITECTURES STREQUAL "" 
   set(CMAKE_CUDA_ARCHITECTURES 89)
 endif()
 
-include_directories(include)
+include_directories(include ${CMAKE_CURRENT_SOURCE_DIR}/../include)
 
 # Library target
 add_library(secp256k1_cuda_lib STATIC
     src/secp256k1.cu
 )
-target_include_directories(secp256k1_cuda_lib PUBLIC include)
+target_include_directories(secp256k1_cuda_lib PUBLIC
+    include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../include
+)
 
 if(SECP256K1_CUDA_USE_MONTGOMERY)
     target_compile_definitions(secp256k1_cuda_lib PUBLIC SECP256K1_CUDA_USE_MONTGOMERY=1)
@@ -54,4 +57,8 @@ target_compile_options(secp256k1_cuda_bench PRIVATE
     $<$<COMPILE_LANGUAGE:CUDA>:--use_fast_math>
     $<$<COMPILE_LANGUAGE:CUDA>:-Xptxas=-O3>
 )
+
+# CTest integration
+enable_testing()
+add_test(NAME cuda_selftest COMMAND secp256k1_cuda_test)
 

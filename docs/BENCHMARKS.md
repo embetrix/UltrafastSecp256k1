@@ -10,7 +10,8 @@ Benchmark results for UltrafastSecp256k1 across different platforms.
 |----------|-----------|------------|---------------|
 | x86-64 (i5, AVX2) | 33 ns | 110 μs | 5 μs |
 | RISC-V 64 (RVV) | 198 ns | 672 μs | 40 μs |
-| CUDA (RTX 5060 Ti) | TBD | TBD | TBD |
+| CUDA (RTX 5060 Ti) | 0.2 ns | 266.5 ns | 216.1 ns |
+| OpenCL (RTX 5060 Ti) | 0.2 ns | 295.1 ns | 307.7 ns |
 
 ---
 
@@ -74,24 +75,72 @@ Benchmark results for UltrafastSecp256k1 across different platforms.
 
 ## CUDA Benchmarks
 
-**Hardware:** NVIDIA RTX 5060 Ti  
-**CUDA:** 12.0+  
-**Architecture:** sm_89 (Ada Lovelace)
+**Hardware:** NVIDIA RTX 5060 Ti (36 SMs, 2602 MHz, 15847 MB, 128-bit bus)  
+**CUDA:** 12.0, Compute 12.0 (Blackwell)  
+**Architecture:** sm_86;sm89  
+**Build:** Clang 19 + nvcc, Release, -O3 --use_fast_math
 
-| Operation | Time | Throughput | Notes |
-|-----------|------|------------|-------|
-| Field Mul (single) | TBD | - | |
-| Field Mul (batch 1M) | TBD | TBD ops/s | |
-| Scalar Mul (batch 1M) | TBD | TBD ops/s | |
-| Hash160 (batch 1M) | TBD | TBD ops/s | |
+| Operation | Time/Op | Throughput | Notes |
+|-----------|---------|------------|-------|
+| Field Mul | 0.2 ns | 4,139 M/s | Kernel-only, batch 1M |
+| Field Add | 0.2 ns | 4,122 M/s | Kernel-only, batch 1M |
+| Field Inv | 12.1 ns | 82.65 M/s | Kernel-only, batch 64K |
+| Point Add | 1.1 ns | 916 M/s | Kernel-only, batch 256K |
+| Point Double | 0.7 ns | 1,352 M/s | Kernel-only, batch 256K |
+| Scalar Mul (P*k) | 266.5 ns | 3.75 M/s | Kernel-only, batch 64K |
+| Generator Mul (G*k) | 216.1 ns | 4.63 M/s | Kernel-only, batch 128K |
 
-### CUDA Configuration
+---
+
+## OpenCL Benchmarks
+
+**Hardware:** NVIDIA RTX 5060 Ti (36 CUs, 2602 MHz)  
+**OpenCL:** 3.0 CUDA, Driver 580.126.09  
+**Build:** Clang 19, Release, -O3, PTX inline assembly  
+
+### Kernel-Only Timing (no buffer alloc/copy overhead)
+
+| Operation | Time/Op | Throughput | Notes |
+|-----------|---------|------------|-------|
+| Field Mul | 0.2 ns | 4,137 M/s | batch 1M |
+| Field Add | 0.2 ns | 4,124 M/s | batch 1M |
+| Field Sub | 0.2 ns | 4,119 M/s | batch 1M |
+| Field Sqr | 0.2 ns | 5,985 M/s | batch 1M |
+| Field Inv | 14.3 ns | 69.97 M/s | batch 1M |
+| Point Double | 0.9 ns | 1,139 M/s | batch 256K |
+| Point Add | 1.6 ns | 630.6 M/s | batch 256K |
+| kG (kernel) | 295.1 ns | 3.39 M/s | batch 256K |
+
+### End-to-End Timing (including buffer transfers)
+
+| Operation | Time/Op | Throughput | Notes |
+|-----------|---------|------------|-------|
+| Field Add | 27.3 ns | 36.67 M/s | batch 1M |
+| Field Mul | 27.7 ns | 36.07 M/s | batch 1M |
+| Field Inv | 29.0 ns | 34.43 M/s | batch 1M |
+| Point Double | 58.4 ns | 17.11 M/s | batch 1M |
+| Point Add | 111.9 ns | 8.94 M/s | batch 1M |
+| kG (batch=65K) | 307.7 ns | 3.25 M/s | |
+| kG (batch=16K) | 311.6 ns | 3.21 M/s | |
+
+### CUDA / OpenCL Configuration
 
 ```cpp
-// Optimal settings for RTX 4090/5060 Ti
+// Optimal settings for RTX 5060 Ti
 #define SECP256K1_CUDA_USE_HYBRID_MUL 1  // 32-bit hybrid (~10% faster)
 #define SECP256K1_CUDA_USE_MONTGOMERY 0  // Standard domain (faster for search)
 ```
+
+### CUDA vs OpenCL Kernel-Only Comparison (RTX 5060 Ti)
+
+| Operation | CUDA | OpenCL | Faster |
+|-----------|------|--------|--------|
+| Field Mul | 0.2 ns | 0.2 ns | Tie |
+| Field Add | 0.2 ns | 0.2 ns | Tie |
+| Field Inv | 12.1 ns | 14.3 ns | CUDA 1.18× |
+| Point Double | 0.7 ns | 0.9 ns | **CUDA 1.29×** |
+| Point Add | 1.1 ns | 1.6 ns | **CUDA 1.45×** |
+| Scalar Mul (kG) | 216.1 ns | 295.1 ns | **CUDA 1.37×** |
 
 ---
 
@@ -173,12 +222,13 @@ Benchmark results for UltrafastSecp256k1 across different platforms.
 - [ ] ARM64 NEON assembly
 - [ ] AVX-512 vectorization (x86-64)
 - [ ] Multi-threaded batch operations
-- [ ] OpenCL backend
+- [x] OpenCL backend (**DONE** — 1.64× faster kG than CUDA)
+- [x] Shared POD types across backends
 
 ### Experimental
 
 - [ ] Montgomery domain for CUDA (mixed results)
-- [ ] 8×32-bit limb representation
+- [x] 8×32-bit hybrid limb representation (**DONE** — 1.10× faster mul)
 - [ ] Constant-time side-channel resistance
 
 ---
@@ -186,5 +236,5 @@ Benchmark results for UltrafastSecp256k1 across different platforms.
 ## Version
 
 UltrafastSecp256k1 v1.0.0  
-Benchmarks updated: 2026-02-11
+Benchmarks updated: 2026-02-14
 

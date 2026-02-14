@@ -1,5 +1,7 @@
 #include "secp256k1/point.hpp"
+#if !defined(SECP256K1_PLATFORM_ESP32) && !defined(ESP_PLATFORM)
 #include "secp256k1/precompute.hpp"
+#endif
 #include "secp256k1/glv.hpp"
 
 #include <algorithm>
@@ -9,6 +11,86 @@
 
 namespace secp256k1::fast {
 namespace {
+
+// ESP32 local wNAF helpers (when precompute.hpp not included)
+#if defined(SECP256K1_PLATFORM_ESP32) || defined(ESP_PLATFORM)
+// Simple wNAF computation for ESP32 (inline, no heap allocation)
+static void compute_wnaf_into(const Scalar& scalar, unsigned window_width,
+                               int32_t* out, std::size_t out_capacity,
+                               std::size_t& out_len) {
+    // Get scalar as bytes (big-endian)
+    auto bytes = scalar.to_bytes();
+
+    // Convert to limbs (little-endian)
+    uint64_t limbs[4] = {0};
+    for (int i = 0; i < 4; i++) {
+        for (int j = 0; j < 8; j++) {
+            limbs[i] |= static_cast<uint64_t>(bytes[31 - i*8 - j]) << (j*8);
+        }
+    }
+
+    const int64_t width = 1 << window_width;     // 2^w
+    const int64_t half_width = width >> 1;       // 2^(w-1)
+    const uint64_t mask = static_cast<uint64_t>(width - 1);  // 2^w - 1
+
+    out_len = 0;
+
+    // Process until all bits consumed
+    int bit_pos = 0;
+    while (bit_pos < 256 || (limbs[0] | limbs[1] | limbs[2] | limbs[3]) != 0) {
+        if (limbs[0] & 1) {
+            // Current bit is set - compute wNAF digit
+            int64_t digit = static_cast<int64_t>(limbs[0] & mask);
+            if (digit >= half_width) {
+                digit -= width;
+            }
+            out[out_len++] = static_cast<int32_t>(digit);
+
+            // Subtract digit from scalar (handling negative digits as addition)
+            if (digit > 0) {
+                // Subtract positive digit
+                uint64_t borrow = static_cast<uint64_t>(digit);
+                for (int i = 0; i < 4 && borrow; i++) {
+                    if (limbs[i] >= borrow) {
+                        limbs[i] -= borrow;
+                        borrow = 0;
+                    } else {
+                        uint64_t old = limbs[i];
+                        limbs[i] -= borrow;  // wraps
+                        borrow = 1;
+                    }
+                }
+            } else if (digit < 0) {
+                // Add absolute value of negative digit
+                uint64_t carry = static_cast<uint64_t>(-digit);
+                for (int i = 0; i < 4 && carry; i++) {
+                    uint64_t sum = limbs[i] + carry;
+                    carry = (sum < limbs[i]) ? 1 : 0;
+                    limbs[i] = sum;
+                }
+            }
+        } else {
+            out[out_len++] = 0;
+        }
+
+        // Right-shift scalar by 1
+        limbs[0] = (limbs[0] >> 1) | (limbs[1] << 63);
+        limbs[1] = (limbs[1] >> 1) | (limbs[2] << 63);
+        limbs[2] = (limbs[2] >> 1) | (limbs[3] << 63);
+        limbs[3] >>= 1;
+
+        bit_pos++;
+        if (out_len >= out_capacity - 1) break;
+    }
+}
+
+static std::vector<int32_t> compute_wnaf(const Scalar& scalar, unsigned window_bits) {
+    std::array<int32_t, 260> buf{};
+    std::size_t len = 0;
+    compute_wnaf_into(scalar, window_bits, buf.data(), buf.size(), len);
+    return std::vector<int32_t>(buf.begin(), buf.begin() + len);
+}
+#endif // ESP32
 
 inline FieldElement fe_from_uint(std::uint64_t v) {
     return FieldElement::from_uint64(v);
@@ -166,12 +248,12 @@ JacobianPoint jacobian_double(const JacobianPoint& p) {
     FieldElement j = h * i;
     FieldElement r = (s2 - s1) + (s2 - s1);
     FieldElement v = u1 * i;
-    FieldElement two = fe_from_uint(2);
 
     FieldElement x3 = r;                        // Copy for in-place
     x3.square_inplace();                        // r^2 in-place!
     x3 -= j + v + v;                           // x3 = r^2 - j - 2*v
-    FieldElement y3 = r * (v - x3) - (s1 * j * two);
+    FieldElement s1j = s1 * j;
+    FieldElement y3 = r * (v - x3) - (s1j + s1j);
     FieldElement temp_z = p.z + q.z;           // z1 + z2
     temp_z.square_inplace();                   // (z1 + z2)^2 in-place!
     FieldElement z3 = (temp_z - z1z1 - z2z2) * h;
@@ -313,6 +395,7 @@ static void batch_to_affine_into(const JacobianPoint* jacobian_points,
 } // namespace
 
 // KPlan implementation: Cache all K-dependent work for Fixed K × Variable Q
+#if !defined(SECP256K1_PLATFORM_ESP32) && !defined(ESP_PLATFORM)
 KPlan KPlan::from_scalar(const Scalar& k, uint8_t w) {
     // Step 1: GLV decomposition (K → k1, k2, signs)
     auto decomp = split_scalar_glv(k);
@@ -332,6 +415,17 @@ KPlan KPlan::from_scalar(const Scalar& k, uint8_t w) {
     plan.neg2 = decomp.neg2;
     return plan;
 }
+#else
+// ESP32: simplified implementation (no GLV, just store scalar for fallback)
+KPlan KPlan::from_scalar(const Scalar& k, uint8_t w) {
+    KPlan plan;
+    plan.window_width = w;
+    plan.k1 = k;  // Store original scalar for fallback scalar_mul
+    plan.neg1 = false;
+    plan.neg2 = false;
+    return plan;
+}
+#endif
 
 Point::Point() : x_(FieldElement::zero()), y_(FieldElement::one()), z_(FieldElement::zero()), 
                  infinity_(true), is_generator_(false) {}
@@ -704,10 +798,12 @@ void Point::add_affine_constant_inplace(const FieldElement& ax, const FieldEleme
 }
 
 Point Point::scalar_mul(const Scalar& scalar) const {
+#if !defined(SECP256K1_PLATFORM_ESP32) && !defined(ESP_PLATFORM)
     if (is_generator_) {
         return scalar_mul_generator(scalar);
     }
-    
+#endif
+
     // wNAF with w=5: better balance of precomputation vs operations
     // w=5 means 16 precomputed points, ~51 additions for 256-bit scalar
     constexpr unsigned window_width = 5;
@@ -756,6 +852,7 @@ Point Point::scalar_mul(const Scalar& scalar) const {
 
 // Step 1: Use existing GLV decomposition from K*G implementation
 // Q * k = Q * k1 + φ(Q) * k2
+#if !defined(SECP256K1_PLATFORM_ESP32) && !defined(ESP_PLATFORM)
 Point Point::scalar_mul_precomputed_k(const Scalar& k) const {
     // Use the proven GLV decomposition from scalar_mul_generator
     auto decomp = split_scalar_glv(k);
@@ -763,11 +860,18 @@ Point Point::scalar_mul_precomputed_k(const Scalar& k) const {
     // Delegate to predecomposed version
     return scalar_mul_predecomposed(decomp.k1, decomp.k2, decomp.neg1, decomp.neg2);
 }
+#else
+// ESP32: fall back to basic scalar_mul (no GLV optimization)
+Point Point::scalar_mul_precomputed_k(const Scalar& k) const {
+    return this->scalar_mul(k);
+}
+#endif
 
 // Step 2: Runtime-only version - no decomposition overhead
 // K decomposition is done once at startup, not per operation
 Point Point::scalar_mul_predecomposed(const Scalar& k1, const Scalar& k2, 
                                        bool neg1, bool neg2) const {
+#if !defined(SECP256K1_PLATFORM_ESP32) && !defined(ESP_PLATFORM)
     // If both signs are positive, use fast Shamir's trick
     // Otherwise, fall back to separate computation (sign handling is complex)
     if (!neg1 && !neg2) {
@@ -777,7 +881,8 @@ Point Point::scalar_mul_predecomposed(const Scalar& k1, const Scalar& k2,
         auto wnaf2 = compute_wnaf(k2, window_width);
         return scalar_mul_precomputed_wnaf(wnaf1, wnaf2, false, false);
     }
-    
+#endif
+
     // Restore original variant: compute both, negate individually, then add
     Point phi_Q = apply_endomorphism(*this);
     Point term1 = this->scalar_mul(k1);
@@ -896,8 +1001,14 @@ Point Point::scalar_mul_precomputed_wnaf(const std::vector<int32_t>& wnaf1,
 // All K-dependent work is cached in KPlan (GLV decomposition + wNAF computation)
 // Runtime: φ(Q), tables, Shamir's trick (if signs allow) or separate computation
 Point Point::scalar_mul_with_plan(const KPlan& plan) const {
+#if defined(SECP256K1_PLATFORM_ESP32) || defined(ESP_PLATFORM)
+    // ESP32: GLV not supported, fallback to regular scalar_mul using stored k1
+    // Note: This is slower but works without locks
+    return scalar_mul(plan.k1);
+#else
     // Fast path: Interleaved Shamir using precomputed wNAF digits from plan
     return scalar_mul_precomputed_wnaf(plan.wnaf1, plan.wnaf2, plan.neg1, plan.neg2);
+#endif
 }
 
 std::array<std::uint8_t, 33> Point::to_compressed() const {

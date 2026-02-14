@@ -2,6 +2,7 @@
 #include <cuda_runtime.h>
 #include <cstdint>
 #include "hash160.cuh"
+#include "secp256k1/types.hpp"
 
 namespace secp256k1 {
 namespace cuda {
@@ -26,16 +27,15 @@ namespace cuda {
 
 // Field element representation (4 x 64-bit limbs)
 // Little-endian: limbs[0] is least significant
-struct FieldElement {
-    uint64_t limbs[4];
-};
+// Uses shared POD type from secp256k1/types.hpp
+using FieldElement = ::secp256k1::FieldElementData;
 
 // Scalar (256-bit integer)
-struct Scalar {
-    uint64_t limbs[4];
-};
+// Uses shared POD type from secp256k1/types.hpp
+using Scalar = ::secp256k1::ScalarData;
 
 // Jacobian Point (X, Y, Z) where affine (x, y) = (X/Z^2, Y/Z^3)
+// Backend-specific: uses bool infinity for CUDA compatibility
 struct JacobianPoint {
     FieldElement x;
     FieldElement y;
@@ -44,53 +44,19 @@ struct JacobianPoint {
 };
 
 // Affine Point (x, y)
-struct AffinePoint {
-    FieldElement x;
-    FieldElement y;
-};
-
-// ============================================================================
-// HYBRID 32/64-bit support: Zero-cost view for optimized operations
-// ============================================================================
-// MidFieldElement provides 32-bit limb view of FieldElement for operations
-// where 32-bit multiplication is faster (benchmarked 1.10x faster than 64-bit)
-// Memory layout is IDENTICAL - just different interpretation!
-
-struct MidFieldElement {
-    uint32_t limbs[8];  // Same 256 bits, different view
-    
-    // Zero-cost conversion back to 64-bit representation
-    __device__ __forceinline__ FieldElement* ToFieldElement() {
-        return reinterpret_cast<FieldElement*>(this);
-    }
-    
-    __device__ __forceinline__ const FieldElement* ToFieldElement() const {
-        return reinterpret_cast<const FieldElement*>(this);
-    }
-    
-    // Legacy lowercase (compatibility)
-    __device__ __forceinline__ FieldElement* toFieldElement() {
-        return reinterpret_cast<FieldElement*>(this);
-    }
-    
-    __device__ __forceinline__ const FieldElement* toFieldElement() const {
-        return reinterpret_cast<const FieldElement*>(this);
-    }
-};
-
-// Zero-cost conversions for FieldElement -> MidFieldElement
-__device__ __forceinline__ MidFieldElement* toMid(FieldElement* fe) {
-    return reinterpret_cast<MidFieldElement*>(fe);
-}
-
-__device__ __forceinline__ const MidFieldElement* toMid(const FieldElement* fe) {
-    return reinterpret_cast<const MidFieldElement*>(fe);
-}
+// Uses shared POD type from secp256k1/types.hpp
+using AffinePoint = ::secp256k1::AffinePointData;
 
 // Compile-time verification
-static_assert(sizeof(FieldElement) == sizeof(MidFieldElement), 
-              "FieldElement and MidFieldElement must be same size");
 static_assert(sizeof(FieldElement) == 32, "Must be 256 bits");
+
+// Cross-backend layout compatibility (shared types contract)
+static_assert(sizeof(FieldElement) == sizeof(::secp256k1::FieldElementData),
+              "CUDA FieldElement must match shared data layout");
+static_assert(sizeof(Scalar) == sizeof(::secp256k1::ScalarData),
+              "CUDA Scalar must match shared data layout");
+static_assert(sizeof(AffinePoint) == sizeof(::secp256k1::AffinePointData),
+              "CUDA AffinePoint must match shared data layout");
 
 // Constants
 __constant__ static const uint64_t MODULUS[4] = {
@@ -505,7 +471,7 @@ __device__ inline uint8_t scalar_bit(const Scalar* s, int index) {
 // ============================================================================
 
 // Field Addition (PTX Optimized)
-__device__ inline void field_add(const FieldElement* a, const FieldElement* b, FieldElement* r) {
+__device__ __forceinline__ void field_add(const FieldElement* a, const FieldElement* b, FieldElement* r) {
     uint64_t r0, r1, r2, r3, carry;
     
     asm volatile(
@@ -539,7 +505,7 @@ __device__ inline void field_add(const FieldElement* a, const FieldElement* b, F
 }
 
 // Field Subtraction (PTX Optimized)
-__device__ inline void field_sub(const FieldElement* a, const FieldElement* b, FieldElement* r) {
+__device__ __forceinline__ void field_sub(const FieldElement* a, const FieldElement* b, FieldElement* r) {
     uint64_t r0, r1, r2, r3, borrow;
     
     asm volatile(
@@ -641,112 +607,82 @@ __device__ inline void field_mul_small(const FieldElement* a, uint32_t small, Fi
 }
 
 // Full 256x256 -> 512 multiplication
-__device__ inline void mul_256_512(const FieldElement* a, const FieldElement* b, uint64_t r[8]) {
+__device__ __forceinline__ void mul_256_512(const FieldElement* a, const FieldElement* b, uint64_t r[8]) {
     mul_256_512_ptx(a->limbs, b->limbs, r);
 }
 
 // Full 256 -> 512 squaring
-__device__ inline void sqr_256_512(const FieldElement* a, uint64_t r[8]) {
+__device__ __forceinline__ void sqr_256_512(const FieldElement* a, uint64_t r[8]) {
     sqr_256_512_ptx(a->limbs, r);
 }
 
-__device__ inline void reduce_512_to_256(uint64_t t[8], FieldElement* r) {
-    // P = 2^256 - K
-    // T = T_hi * 2^256 + T_lo
-    // T = T_hi * K + T_lo (mod P)
-    // K = 2^32 + 977
+__device__ __forceinline__ void reduce_512_to_256(uint64_t t[8], FieldElement* r) {
+    // P = 2^256 - K_MOD, where K_MOD = 2^32 + 977 = 0x1000003D1
+    // T = T_hi * 2^256 + T_lo ≡ T_hi * K_MOD + T_lo (mod P)
+    //
+    // OPTIMIZATION: Multiply T_hi by K_MOD directly in one MAD chain,
+    // instead of splitting into T_hi*977 + T_hi<<32 (two separate passes).
+    // Saves ~26 instructions and 7 registers per call.
     
     uint64_t t0 = t[0], t1 = t[1], t2 = t[2], t3 = t[3];
     uint64_t t4 = t[4], t5 = t[5], t6 = t[6], t7 = t[7];
     
-    // 1. Calculate A = T_hi * 977
+    // 1. Compute A = T_hi * K_MOD (5 limbs: a0..a4)
+    //    Single MAD chain — replaces separate *977 + <<32 two-pass approach
     uint64_t a0, a1, a2, a3, a4;
     
     asm volatile(
-        // i=0
-        "mul.lo.u64 %0, %5, 977; \n\t"
-        "mul.hi.u64 %1, %5, 977; \n\t"
+        "mul.lo.u64 %0, %5, %9; \n\t"
+        "mul.hi.u64 %1, %5, %9; \n\t"
         
-        // i=1
-        "mad.lo.cc.u64 %1, %6, 977, %1; \n\t"
-        "madc.hi.u64 %2, %6, 977, 0; \n\t"
+        "mad.lo.cc.u64 %1, %6, %9, %1; \n\t"
+        "madc.hi.u64 %2, %6, %9, 0; \n\t"
         
-        // i=2
-        "mad.lo.cc.u64 %2, %7, 977, %2; \n\t"
-        "madc.hi.u64 %3, %7, 977, 0; \n\t"
+        "mad.lo.cc.u64 %2, %7, %9, %2; \n\t"
+        "madc.hi.u64 %3, %7, %9, 0; \n\t"
         
-        // i=3
-        "mad.lo.cc.u64 %3, %8, 977, %3; \n\t"
-        "madc.hi.u64 %4, %8, 977, 0; \n\t"
+        "mad.lo.cc.u64 %3, %8, %9, %3; \n\t"
+        "madc.hi.u64 %4, %8, %9, 0; \n\t"
         
         : "=l"(a0), "=l"(a1), "=l"(a2), "=l"(a3), "=l"(a4)
-        : "l"(t4), "l"(t5), "l"(t6), "l"(t7)
+        : "l"(t4), "l"(t5), "l"(t6), "l"(t7), "l"(K_MOD)
     );
     
-    // 2. Add A to T_lo
-    uint64_t carry_a;
+    // 2. Add A[0..3] to T_lo
+    uint64_t carry;
     asm volatile(
         "add.cc.u64 %0, %0, %5; \n\t"
         "addc.cc.u64 %1, %1, %6; \n\t"
         "addc.cc.u64 %2, %2, %7; \n\t"
         "addc.cc.u64 %3, %3, %8; \n\t"
         "addc.u64 %4, 0, 0; \n\t"
-        : "+l"(t0), "+l"(t1), "+l"(t2), "+l"(t3), "=l"(carry_a)
+        : "+l"(t0), "+l"(t1), "+l"(t2), "+l"(t3), "=l"(carry)
         : "l"(a0), "l"(a1), "l"(a2), "l"(a3)
     );
     
-    // 3. Add (T_hi << 32) to T_lo
-    uint64_t s0 = (t4 << 32);
-    uint64_t s1 = (t4 >> 32) | (t5 << 32);
-    uint64_t s2 = (t5 >> 32) | (t6 << 32);
-    uint64_t s3 = (t6 >> 32) | (t7 << 32);
-    
-    uint64_t carry_s;
+    // 3. Reduce overflow: extra = a4 + carry (≤ 2^33 + 1)
+    //    extra * K_MOD fits in 2 limbs (≤ 2^66)
+    uint64_t extra = a4 + carry;
+    uint64_t ek_lo, ek_hi;
     asm volatile(
-        "add.cc.u64 %0, %0, %5; \n\t"
-        "addc.cc.u64 %1, %1, %6; \n\t"
-        "addc.cc.u64 %2, %2, %7; \n\t"
-        "addc.cc.u64 %3, %3, %8; \n\t"
-        "addc.u64 %4, 0, 0; \n\t"
-        : "+l"(t0), "+l"(t1), "+l"(t2), "+l"(t3), "=l"(carry_s)
-        : "l"(s0), "l"(s1), "l"(s2), "l"(s3)
+        "mul.lo.u64 %0, %2, %3; \n\t"
+        "mul.hi.u64 %1, %2, %3; \n\t"
+        : "=l"(ek_lo), "=l"(ek_hi)
+        : "l"(extra), "l"(K_MOD)
     );
     
-    // Extra limb
-    uint64_t extra = a4 + (t7 >> 32) + carry_a + carry_s;
-    
-    // Reduce extra: extra * K
-    uint64_t e_lo = extra * 977;
-    uint64_t e_shift = extra << 32;
-    uint64_t e_shift_hi = extra >> 32;
-    
-    uint64_t c = 0;
-    uint64_t c_temp = 0;
-
-    // 1. Add e_lo to t0..t3
-    asm volatile(
-        "add.cc.u64 %0, %0, %5; \n\t"
-        "addc.cc.u64 %1, %1, 0; \n\t"
-        "addc.cc.u64 %2, %2, 0; \n\t"
-        "addc.cc.u64 %3, %3, 0; \n\t"
-        "addc.u64 %4, 0, 0; \n\t"
-        : "+l"(t0), "+l"(t1), "+l"(t2), "+l"(t3), "=l"(c_temp)
-        : "l"(e_lo)
-    );
-    c += c_temp;
-
-    // 2. Add extra * 2^32 (e_shift to t0, e_shift_hi to t1)
+    uint64_t c;
     asm volatile(
         "add.cc.u64 %0, %0, %5; \n\t"
         "addc.cc.u64 %1, %1, %6; \n\t"
         "addc.cc.u64 %2, %2, 0; \n\t"
         "addc.cc.u64 %3, %3, 0; \n\t"
         "addc.u64 %4, 0, 0; \n\t"
-        : "+l"(t0), "+l"(t1), "+l"(t2), "+l"(t3), "=l"(c_temp)
-        : "l"(e_shift), "l"(e_shift_hi)
+        : "+l"(t0), "+l"(t1), "+l"(t2), "+l"(t3), "=l"(c)
+        : "l"(ek_lo), "l"(ek_hi)
     );
-    c += c_temp;
     
+    // 4. Rare carry overflow (probability ≈ 2^{-190})
     if (c) {
         asm volatile(
             "add.cc.u64 %0, %0, %4; \n\t"
@@ -758,7 +694,7 @@ __device__ inline void reduce_512_to_256(uint64_t t[8], FieldElement* r) {
         );
     }
     
-    // Conditional subtraction
+    // 5. Conditional subtraction of P
     uint64_t r0, r1, r2, r3, borrow;
     asm volatile(
         "sub.cc.u64 %0, %5, %9; \n\t"
@@ -842,80 +778,9 @@ __device__ inline void jacobian_add_mixed(const JacobianPoint* p, const AffinePo
 #endif // SECP256K1_CUDA_LIMBS_32
 
 #ifndef SECP256K1_CUDA_LIMBS_32
-// CIOS Montgomery Multiplication
-__device__ inline void field_mul_mont_cios(const FieldElement* a, const FieldElement* b, FieldElement* r) {
-    uint64_t t[6] = {0};
-    
-    #pragma unroll
-    for (int i = 0; i < 4; ++i) {
-        uint64_t u = a->limbs[i];
-        uint64_t carry = 0;
-        
-        // T += a[i] * b
-        #pragma unroll
-        for (int j = 0; j < 4; ++j) {
-            unsigned __int128 prod = (unsigned __int128)u * b->limbs[j] + t[j] + carry;
-            t[j] = (uint64_t)prod;
-            carry = (uint64_t)(prod >> 64);
-        }
-        uint64_t carry_add = 0;
-        t[4] = add_cc(t[4], carry, carry_add);
-        t[5] += carry_add;
-        
-        // Reduce
-        uint64_t m = t[0] * 0xD838091DD2253531ULL;
-        
-        // Subtract m*977
-        uint64_t borrow = 0;
-        unsigned __int128 mk = (unsigned __int128)m * 977;
-        t[0] = sub_cc(t[0], (uint64_t)mk, borrow);
-        t[1] = sub_cc(t[1], (uint64_t)(mk >> 64), borrow);
-        t[2] = sub_cc(t[2], 0, borrow);
-        t[3] = sub_cc(t[3], 0, borrow);
-        t[4] = sub_cc(t[4], 0, borrow);
-        t[5] = sub_cc(t[5], 0, borrow);
-        
-        // Subtract m*2^32
-        borrow = 0;
-        uint64_t m_lo = m << 32;
-        uint64_t m_hi = m >> 32;
-        t[0] = sub_cc(t[0], m_lo, borrow);
-        t[1] = sub_cc(t[1], m_hi, borrow);
-        t[2] = sub_cc(t[2], 0, borrow);
-        t[3] = sub_cc(t[3], 0, borrow);
-        t[4] = sub_cc(t[4], 0, borrow);
-        t[5] = sub_cc(t[5], 0, borrow);
-        
-        // Add m*2^256 (to t[4])
-        uint64_t carry_add2 = 0;
-        t[4] = add_cc(t[4], m, carry_add2);
-        t[5] += carry_add2;
-        
-        // Shift
-        t[0] = t[1]; t[1] = t[2]; t[2] = t[3]; t[3] = t[4]; t[4] = t[5]; t[5] = 0;
-    }
-    
-    uint64_t k = 0x1000003D1ULL;
-    uint64_t r0, r1, r2, r3, c;
-    
-    // Final conditional subtraction
-    uint64_t carry = 0;
-    r0 = add_cc(t[0], k, carry);
-    r1 = add_cc(t[1], 0, carry);
-    r2 = add_cc(t[2], 0, carry);
-    r3 = add_cc(t[3], 0, carry);
-    c = carry;
-    
-    if (t[4] || c) {
-        r->limbs[0] = r0; r->limbs[1] = r1; r->limbs[2] = r2; r->limbs[3] = r3;
-    } else {
-        r->limbs[0] = t[0]; r->limbs[1] = t[1]; r->limbs[2] = t[2]; r->limbs[3] = t[3];
-    }
-}
-
 // Field Multiplication with Reduction
 // Uses smart hybrid: proven 32-bit mul + proven 64-bit reduce
-__device__ inline void field_mul(const FieldElement* a, const FieldElement* b, FieldElement* r) {
+__device__ __forceinline__ void field_mul(const FieldElement* a, const FieldElement* b, FieldElement* r) {
 #if SECP256K1_CUDA_USE_MONTGOMERY
     field_mul_mont(a, b, r);
 #elif SECP256K1_CUDA_USE_HYBRID_MUL
@@ -929,7 +794,7 @@ __device__ inline void field_mul(const FieldElement* a, const FieldElement* b, F
 }
 
 // Field Squaring - uses proven hybrid
-__device__ inline void field_sqr(const FieldElement* a, FieldElement* r) {
+__device__ __forceinline__ void field_sqr(const FieldElement* a, FieldElement* r) {
 #if SECP256K1_CUDA_USE_MONTGOMERY
     field_sqr_mont(a, r);
 #elif SECP256K1_CUDA_USE_HYBRID_MUL
@@ -944,8 +809,9 @@ __device__ inline void field_sqr(const FieldElement* a, FieldElement* r) {
 
 #endif // !SECP256K1_CUDA_LIMBS_32
 
-// Point doubling - dbl-2007-a formula for a=0 curves (secp256k1)
-// Optimized for minimal stack usage (3 temporaries instead of 9)
+// Point doubling - dbl-2001-b formula for a=0 curves (secp256k1)
+// Optimized: all computation in local registers, write output once at end
+// 3M + 4S + 7add/sub (matches OpenCL kernel throughput)
 __device__ inline void jacobian_double(const JacobianPoint* p, JacobianPoint* r) {
     if (p->infinity) {
         r->infinity = true;
@@ -958,58 +824,50 @@ __device__ inline void jacobian_double(const JacobianPoint* p, JacobianPoint* r)
         return;
     }
 
-    FieldElement t1, t2, t3;
+    FieldElement S, M, X3, Y3, Z3, YY, YYYY, t1;
 
-    // r->z = 2 * Y * Z
-    field_mul(&p->y, &p->z, &r->z);
-    field_add(&r->z, &r->z, &r->z);
+    // YY = Y^2  [1S]
+    field_sqr(&p->y, &YY);
 
-    // t1 = X^2
-    field_sqr(&p->x, &t1);
+    // S = 4*X*Y^2  [1M + 2add]
+    field_mul(&p->x, &YY, &S);
+    field_add(&S, &S, &S);
+    field_add(&S, &S, &S);
 
-    // t2 = Y^2
-    field_sqr(&p->y, &t2);
+    // M = 3*X^2  [2S + 2add]
+    field_sqr(&p->x, &M);
+    field_add(&M, &M, &t1);     // t1 = 2*X^2
+    field_add(&M, &t1, &M);     // M = 3*X^2
 
-    // t3 = B^2 = Y^4
-    field_sqr(&t2, &t3);
+    // X3 = M^2 - 2*S  [3S + 1add + 1sub]
+    field_sqr(&M, &X3);
+    field_add(&S, &S, &t1);     // t1 = 2*S
+    field_sub(&X3, &t1, &X3);
 
-    // D = 2*((X+B)^2 - A - C)
-    // Store D in r->x temporarily
-    field_add(&p->x, &t2, &r->x); // X+B
-    field_sqr(&r->x, &r->x);      // (X+B)^2
-    field_sub(&r->x, &t1, &r->x); // ... - A
-    field_sub(&r->x, &t3, &r->x); // ... - C
-    field_add(&r->x, &r->x, &r->x); // D
+    // YYYY = Y^4  [4S]
+    field_sqr(&YY, &YYYY);
 
-    // E = 3*A. Store in t1.
-    field_add(&t1, &t1, &t2); // 2*A (use t2 as temp)
-    field_add(&t2, &t1, &t1); // E = 3*A
+    // Y3 = M*(S - X3) - 8*Y^4  [1sub + 2M + 3add + 1sub]
+    field_add(&YYYY, &YYYY, &t1);   // 2*Y^4
+    field_add(&t1, &t1, &t1);       // 4*Y^4
+    field_add(&t1, &t1, &t1);       // 8*Y^4
+    field_sub(&S, &X3, &S);         // S - X3 (reuse S)
+    field_mul(&M, &S, &Y3);         // M*(S - X3)
+    field_sub(&Y3, &t1, &Y3);       // Y3 final
 
-    // F = E^2. Store in t2.
-    field_sqr(&t1, &t2);
+    // Z3 = 2*Y*Z  [3M + 1add]
+    field_mul(&p->y, &p->z, &Z3);
+    field_add(&Z3, &Z3, &Z3);
 
-    // Save D in r->y for later
-    r->y = r->x;
-
-    // X' = F - 2*D
-    field_add(&r->x, &r->x, &r->x); // 2*D
-    field_sub(&t2, &r->x, &r->x);   // X'
-
-    // Y' = E*(D - X') - 8*C
-    field_sub(&r->y, &r->x, &r->y); // D - X'
-    field_mul(&t1, &r->y, &r->y);   // E*(...)
-    
-    // 8*C in t3
-    field_add(&t3, &t3, &t3); // 2C
-    field_add(&t3, &t3, &t3); // 4C
-    field_add(&t3, &t3, &t3); // 8C
-    
-    field_sub(&r->y, &t3, &r->y); // Y'
-
+    // Write output once
+    r->x = X3;
+    r->y = Y3;
+    r->z = Z3;
     r->infinity = false;
 }
 
 // Mixed addition: P (Jacobian) + Q (Affine) -> Result (Jacobian)
+// All computation in local registers, single output write at end
 __device__ inline void jacobian_add_mixed(const JacobianPoint* p, const AffinePoint* q, JacobianPoint* r) {
     if (p->infinity) {
         r->x = q->x;
@@ -1019,31 +877,27 @@ __device__ inline void jacobian_add_mixed(const JacobianPoint* p, const AffinePo
         return;
     }
     
-    // Z1²
-    FieldElement z1z1;
+    FieldElement z1z1, u2, s2, h, hh, i, j, rr, v;
+    FieldElement X3, Y3, Z3, t1, t2;
+
+    // Z1² [1S]
     field_sqr(&p->z, &z1z1);
     
-    // U2 = X2*Z1²
-    FieldElement u2;
+    // U2 = X2*Z1² [1M]
     field_mul(&q->x, &z1z1, &u2);
     
-    // S2 = Y2*Z1³
-    FieldElement s2, temp;
-    field_mul(&p->z, &z1z1, &temp);  // Z1³
-    field_mul(&q->y, &temp, &s2);
+    // S2 = Y2*Z1³ [2M, 3M]
+    field_mul(&p->z, &z1z1, &t1);
+    field_mul(&q->y, &t1, &s2);
     
-    // Check if same point
-    bool x_eq = true;
-    for (int i = 0; i < 4; ++i) {
-        if (p->x.limbs[i] != u2.limbs[i]) { x_eq = false; break; }
-    }
-    
-    if (x_eq) {
-        bool y_eq = true;
-        for (int i = 0; i < 4; ++i) {
-            if (p->y.limbs[i] != s2.limbs[i]) { y_eq = false; break; }
-        }
-        if (y_eq) {
+    // H = U2 - X1
+    field_sub(&u2, &p->x, &h);
+
+    // Check if same x-coordinate (branchless zero check)
+    if (field_is_zero(&h)) {
+        // rr = S2 - Y1
+        field_sub(&s2, &p->y, &t1);
+        if (field_is_zero(&t1)) {
             jacobian_double(p, r);
             return;
         }
@@ -1051,53 +905,46 @@ __device__ inline void jacobian_add_mixed(const JacobianPoint* p, const AffinePo
         return;
     }
     
-    // H = U2 - X1
-    FieldElement h;
-    field_sub(&u2, &p->x, &h);
-    
-    // HH = H²
-    FieldElement hh;
+    // HH = H² [2S]
     field_sqr(&h, &hh);
     
     // I = 4*HH
-    FieldElement i;
-    field_add(&hh, &hh, &temp);
-    field_add(&temp, &temp, &i);
+    field_add(&hh, &hh, &i);
+    field_add(&i, &i, &i);
     
-    // J = H*I
-    FieldElement j;
+    // J = H*I [4M]
     field_mul(&h, &i, &j);
     
-    // r = 2*(S2 - Y1)
-    FieldElement rr;
-    field_sub(&s2, &p->y, &temp);
-    field_add(&temp, &temp, &rr);
+    // rr = 2*(S2 - Y1)
+    field_sub(&s2, &p->y, &t1);
+    field_add(&t1, &t1, &rr);
     
-    // V = X1*I
-    FieldElement v;
+    // V = X1*I [5M]
     field_mul(&p->x, &i, &v);
     
-    // X3 = r² - J - 2*V
-    FieldElement two_v;
-    field_add(&v, &v, &two_v);
-    field_sqr(&rr, &r->x);
-    field_sub(&r->x, &j, &r->x);
-    field_sub(&r->x, &two_v, &r->x);
+    // X3 = rr² - J - 2*V [3S]
+    field_sqr(&rr, &X3);
+    field_sub(&X3, &j, &X3);
+    field_add(&v, &v, &t1);
+    field_sub(&X3, &t1, &X3);
     
-    // Y3 = r*(V - X3) - 2*Y1*J
-    FieldElement y1j, two_y1j;
-    field_mul(&p->y, &j, &y1j);
-    field_add(&y1j, &y1j, &two_y1j);
-    field_sub(&v, &r->x, &temp);
-    field_mul(&rr, &temp, &r->y);
-    field_sub(&r->y, &two_y1j, &r->y);
+    // Y3 = rr*(V - X3) - 2*Y1*J [6M, 7M]
+    field_sub(&v, &X3, &t1);
+    field_mul(&rr, &t1, &Y3);
+    field_mul(&p->y, &j, &t2);
+    field_add(&t2, &t2, &t2);
+    field_sub(&Y3, &t2, &Y3);
     
-    // Z3 = (Z1+H)² - Z1² - HH
-    field_add(&p->z, &h, &temp);
-    field_sqr(&temp, &r->z);
-    field_sub(&r->z, &z1z1, &r->z);
-    field_sub(&r->z, &hh, &r->z);
-    
+    // Z3 = (Z1+H)² - Z1² - HH [4S]
+    field_add(&p->z, &h, &t1);
+    field_sqr(&t1, &Z3);
+    field_sub(&Z3, &z1z1, &Z3);
+    field_sub(&Z3, &hh, &Z3);
+
+    // Write output once
+    r->x = X3;
+    r->y = Y3;
+    r->z = Z3;
     r->infinity = false;
 }
 
@@ -1163,22 +1010,25 @@ __device__ inline void jacobian_add_mixed_h(const JacobianPoint* p, const Affine
     field_mul(&p->x, &hh, &v);
 
     // X3 = r² - H³ - 2*V [1S]
-    FieldElement two_v;
-    field_add(&v, &v, &two_v);
-    field_sqr(&rr, &r->x);
-    field_sub(&r->x, &hhh, &r->x);
-    field_sub(&r->x, &two_v, &r->x);
+    FieldElement X3, Y3, Z3, t1;
+    field_add(&v, &v, &t1);
+    field_sqr(&rr, &X3);
+    field_sub(&X3, &hhh, &X3);
+    field_sub(&X3, &t1, &X3);
 
     // Y3 = r*(V - X3) - Y1*H³ [2M]
-    FieldElement y1h3;
-    field_mul(&p->y, &hhh, &y1h3);
-    field_sub(&v, &r->x, &temp);
-    field_mul(&rr, &temp, &r->y);
-    field_sub(&r->y, &y1h3, &r->y);
+    field_mul(&p->y, &hhh, &t1);
+    field_sub(&v, &X3, &v);       // reuse v
+    field_mul(&rr, &v, &Y3);
+    field_sub(&Y3, &t1, &Y3);
 
     // Z3 = Z1 * H [1M]
-    field_mul(&p->z, &h, &r->z);
+    field_mul(&p->z, &h, &Z3);
 
+    // Write output once
+    r->x = X3;
+    r->y = Y3;
+    r->z = Z3;
     r->infinity = false;
 }
 
@@ -1249,30 +1099,33 @@ __device__ inline void jacobian_add_mixed_h2(const JacobianPoint* p, const Affin
     field_mul(&p->x, &i_val, &v);
 
     // X3 = r²-J-2*V [1S]
-    FieldElement two_v;
-    field_add(&v, &v, &two_v);
-    field_sqr(&rr, &r->x);
-    field_sub(&r->x, &j, &r->x);
-    field_sub(&r->x, &two_v, &r->x);
+    FieldElement X3, Y3, Z3;
+    field_add(&v, &v, &temp);
+    field_sqr(&rr, &X3);
+    field_sub(&X3, &j, &X3);
+    field_sub(&X3, &temp, &X3);
 
     // Y3 = r*(V-X3) - 2*Y1*J [2M]
-    FieldElement y1j, two_y1j;
+    FieldElement y1j;
     field_mul(&p->y, &j, &y1j);
-    field_add(&y1j, &y1j, &two_y1j);
-    field_sub(&v, &r->x, &temp);
-    field_mul(&rr, &temp, &r->y);
-    field_sub(&r->y, &two_y1j, &r->y);
+    field_add(&y1j, &y1j, &y1j);
+    field_sub(&v, &X3, &temp);
+    field_mul(&rr, &temp, &Y3);
+    field_sub(&Y3, &y1j, &Y3);
 
     // Z3 = (Z1+H)²-Z1Z1-HH = 2*Z1*H [1S instead of 1M!]
-    FieldElement z1_plus_h;
-    field_add(&p->z, &h, &z1_plus_h);
-    field_sqr(&z1_plus_h, &r->z);
-    field_sub(&r->z, &z1z1, &r->z);
-    field_sub(&r->z, &hh, &r->z);
+    field_add(&p->z, &h, &temp);
+    field_sqr(&temp, &Z3);
+    field_sub(&Z3, &z1z1, &Z3);
+    field_sub(&Z3, &hh, &Z3);
 
     // Return 2*H for serial inversion: Z_n = Z_0 * ∏(2*H_i) = Z_0 * 2^N * ∏H_i
     field_add(&h, &h, &h_out);
 
+    // Write output once
+    r->x = X3;
+    r->y = Y3;
+    r->z = Z3;
     r->infinity = false;
 }
 
@@ -1324,22 +1177,23 @@ __device__ inline void jacobian_add_mixed_h_z1(const JacobianPoint* p, const Aff
     field_mul(&p->x, &hh, &v);
 
     // X3 = r² - H³ - 2*V [1S]
-    FieldElement two_v;
-    field_add(&v, &v, &two_v);
-    field_sqr(&rr, &r->x);
-    field_sub(&r->x, &hhh, &r->x);
-    field_sub(&r->x, &two_v, &r->x);
+    FieldElement X3, Y3, t1;
+    field_add(&v, &v, &t1);
+    field_sqr(&rr, &X3);
+    field_sub(&X3, &hhh, &X3);
+    field_sub(&X3, &t1, &X3);
 
     // Y3 = r*(V - X3) - Y1*H³ [2M]
-    FieldElement y1h3, temp;
-    field_mul(&p->y, &hhh, &y1h3);
-    field_sub(&v, &r->x, &temp);
-    field_mul(&rr, &temp, &r->y);
-    field_sub(&r->y, &y1h3, &r->y);
+    field_mul(&p->y, &hhh, &t1);
+    field_sub(&v, &X3, &v);       // reuse v
+    field_mul(&rr, &v, &Y3);
+    field_sub(&Y3, &t1, &Y3);
 
     // Z3 = 1 * H = H [0M saved! just copy]
+    // Write output once
+    r->x = X3;
+    r->y = Y3;
     r->z = h;
-
     r->infinity = false;
 }
 
@@ -1391,22 +1245,25 @@ __device__ inline void jacobian_add_mixed_const(
     field_mul(&p->x, &hh, &v);
 
     // X3 = r² - H³ - 2*V [1S]
-    FieldElement two_v, temp;
-    field_add(&v, &v, &two_v);
-    field_sqr(&rr, &r->x);
-    field_sub(&r->x, &hhh, &r->x);
-    field_sub(&r->x, &two_v, &r->x);
+    FieldElement X3, Y3, Z3, t1;
+    field_add(&v, &v, &t1);
+    field_sqr(&rr, &X3);
+    field_sub(&X3, &hhh, &X3);
+    field_sub(&X3, &t1, &X3);
 
     // Y3 = r*(V - X3) - Y1*H³ [2M]
-    FieldElement y1h3;
-    field_mul(&p->y, &hhh, &y1h3);
-    field_sub(&v, &r->x, &temp);
-    field_mul(&rr, &temp, &r->y);
-    field_sub(&r->y, &y1h3, &r->y);
+    field_mul(&p->y, &hhh, &t1);
+    field_sub(&v, &X3, &v);       // reuse v
+    field_mul(&rr, &v, &Y3);
+    field_sub(&Y3, &t1, &Y3);
 
     // Z3 = Z1 * H [1M]
-    field_mul(&p->z, &h, &r->z);
+    field_mul(&p->z, &h, &Z3);
 
+    // Write output once
+    r->x = X3;
+    r->y = Y3;
+    r->z = Z3;
     r->infinity = false;
 }
 
@@ -1460,30 +1317,33 @@ __device__ inline void jacobian_add_mixed_const_7m4s(
     field_mul(&p->x, &i_val, &v);
 
     // X3 = r²-J-2*V [1S]
-    FieldElement two_v;
-    field_add(&v, &v, &two_v);
-    field_sqr(&rr, &r->x);
-    field_sub(&r->x, &j, &r->x);
-    field_sub(&r->x, &two_v, &r->x);
+    FieldElement X3, Y3, Z3;
+    field_add(&v, &v, &temp);
+    field_sqr(&rr, &X3);
+    field_sub(&X3, &j, &X3);
+    field_sub(&X3, &temp, &X3);
 
     // Y3 = r*(V-X3) - 2*Y1*J [2M]
-    FieldElement y1j, two_y1j;
+    FieldElement y1j;
     field_mul(&p->y, &j, &y1j);
-    field_add(&y1j, &y1j, &two_y1j);
-    field_sub(&v, &r->x, &temp);
-    field_mul(&rr, &temp, &r->y);
-    field_sub(&r->y, &two_y1j, &r->y);
+    field_add(&y1j, &y1j, &y1j);
+    field_sub(&v, &X3, &temp);
+    field_mul(&rr, &temp, &Y3);
+    field_sub(&Y3, &y1j, &Y3);
 
     // Z3 = (Z1+H)²-Z1Z1-HH = 2*Z1*H [1S instead of 1M! KEY OPTIMIZATION]
-    FieldElement z1_plus_h;
-    field_add(&p->z, &h, &z1_plus_h);
-    field_sqr(&z1_plus_h, &r->z);
-    field_sub(&r->z, &z1z1, &r->z);
-    field_sub(&r->z, &hh, &r->z);
+    field_add(&p->z, &h, &temp);
+    field_sqr(&temp, &Z3);
+    field_sub(&Z3, &z1z1, &Z3);
+    field_sub(&Z3, &hh, &Z3);
 
     // Return 2*H for batch inversion
     field_add(&h, &h, &h_out);
 
+    // Write output once
+    r->x = X3;
+    r->y = Y3;
+    r->z = Z3;
     r->infinity = false;
 }
 
@@ -1694,38 +1554,38 @@ __device__ inline void jacobian_add(const JacobianPoint* p1, const JacobianPoint
     if (p1->infinity) { *r = *p2; return; }
     if (p2->infinity) { *r = *p1; return; }
 
-    FieldElement t1, t4, t5;
+    FieldElement Z1Z1, Z2Z2, U1, U2, S1, S2, H, I, J, rr, V;
+    FieldElement X3, Y3, Z3, t1, t2;
 
-    // t1 = Z2^2
-    field_sqr(&p2->z, &t1);
-    
-    // r->x = U1 = X1 * Z2^2
-    // Safe even if p1==r because p1->x is read before write inside field_mul
-    field_mul(&p1->x, &t1, &r->x);
-    
-    // r->y = S1 = Y1 * Z2^3 = Y1 * Z2^2 * Z2
-    // Safe even if p1==r because p1->y is read before write inside field_mul
-    field_mul(&p1->y, &t1, &r->y);
-    field_mul(&r->y, &p2->z, &r->y);
-    
-    // t1 = Z1^2
-    field_sqr(&p1->z, &t1);
-    
-    // t4 = U2 = X2 * Z1^2
-    field_mul(&p2->x, &t1, &t4);
-    
-    // t1 = S2 = Y2 * Z1^3 = Y2 * Z1^2 * Z1
-    field_mul(&p2->y, &t1, &t1);
-    field_mul(&t1, &p1->z, &t1);
-    
-    // H = U2 - U1 = t4 - r->x. Store in t4.
-    field_sub(&t4, &r->x, &t4);
-    
-    // R = S2 - S1 = t1 - r->y. Store in t1.
-    field_sub(&t1, &r->y, &t1);
-    
-    if (field_is_zero(&t4)) {
-        if (field_is_zero(&t1)) {
+    // Z1Z1 = Z1^2  [1S]
+    field_sqr(&p1->z, &Z1Z1);
+
+    // Z2Z2 = Z2^2  [2S]
+    field_sqr(&p2->z, &Z2Z2);
+
+    // U1 = X1*Z2Z2  [1M]
+    field_mul(&p1->x, &Z2Z2, &U1);
+
+    // U2 = X2*Z1Z1  [2M]
+    field_mul(&p2->x, &Z1Z1, &U2);
+
+    // S1 = Y1*Z2*Z2Z2  [3M, 4M]
+    field_mul(&p1->y, &p2->z, &t1);
+    field_mul(&t1, &Z2Z2, &S1);
+
+    // S2 = Y2*Z1*Z1Z1  [5M, 6M]
+    field_mul(&p2->y, &p1->z, &t1);
+    field_mul(&t1, &Z1Z1, &S2);
+
+    // H = U2 - U1
+    field_sub(&U2, &U1, &H);
+
+    // rr = 2*(S2 - S1)
+    field_sub(&S2, &S1, &rr);
+    field_add(&rr, &rr, &rr);
+
+    if (field_is_zero(&H)) {
+        if (field_is_zero(&rr)) {
             jacobian_double(p1, r);
             return;
         } else {
@@ -1733,187 +1593,90 @@ __device__ inline void jacobian_add(const JacobianPoint* p1, const JacobianPoint
             return;
         }
     }
-    
-    // Z3 = H*Z1*Z2
-    // Safe to overwrite r->z (if p1==r) because p1->z is not needed anymore
-    // (p1->z was used for Z1^2 and S2, which are done)
-    field_mul(&t4, &p1->z, &r->z);
-    field_mul(&r->z, &p2->z, &r->z);
-    
-    // X3 = R^2 - H^3 - 2*U1*H^2
-    
-    // t5 = H^2
-    field_sqr(&t4, &t5);
-    
-    // H^3. Store in t4 (overwrite H).
-    field_mul(&t5, &t4, &t4); // t4 = H^3
-    
-    // U1*H^2. U1 is in r->x. H^2 is in t5.
-    // Store in t5.
-    field_mul(&r->x, &t5, &t5); // t5 = U1*H^2
-    
-    // X3 = R^2 - H^3 - 2*U1*H^2
-    // Use r->x for X3 (overwrite U1).
-    field_sqr(&t1, &r->x); // r->x = R^2
-    field_sub(&r->x, &t4, &r->x); // r->x = R^2 - H^3
-    field_sub(&r->x, &t5, &r->x); // r->x = R^2 - H^3 - U1*H^2
-    field_sub(&r->x, &t5, &r->x); // r->x = X3
-    
-    // Y3 = R*(U1*H^2 - X3) - S1*H^3
-    // U1*H^2 is in t5. X3 is in r->x.
-    field_sub(&t5, &r->x, &t5); // t5 = U1*H^2 - X3
-    field_mul(&t1, &t5, &t5);   // t5 = R * (...)
-    
-    // S1*H^3. S1 is in r->y. H^3 is in t4.
-    // Store in t4 (overwrite H^3).
-    field_mul(&r->y, &t4, &t4); // t4 = S1*H^3
-    
-    // Y3 = t5 - t4
-    field_sub(&t5, &t4, &r->y); // r->y = Y3
-    
+
+    // I = (2*H)^2  [3S]
+    field_add(&H, &H, &I);
+    field_sqr(&I, &I);
+
+    // J = H*I  [7M]
+    field_mul(&H, &I, &J);
+
+    // V = U1*I  [8M]
+    field_mul(&U1, &I, &V);
+
+    // X3 = rr^2 - J - 2*V  [4S]
+    field_sqr(&rr, &X3);
+    field_sub(&X3, &J, &X3);
+    field_add(&V, &V, &t1);
+    field_sub(&X3, &t1, &X3);
+
+    // Y3 = rr*(V - X3) - 2*S1*J  [9M, 10M]
+    field_sub(&V, &X3, &t1);
+    field_mul(&rr, &t1, &Y3);
+    field_mul(&S1, &J, &t2);
+    field_add(&t2, &t2, &t2);
+    field_sub(&Y3, &t2, &Y3);
+
+    // Z3 = ((Z1+Z2)^2 - Z1Z1 - Z2Z2) * H  [5S + 11M]
+    field_add(&p1->z, &p2->z, &t1);
+    field_sqr(&t1, &t1);
+    field_sub(&t1, &Z1Z1, &t1);
+    field_sub(&t1, &Z2Z2, &t1);
+    field_mul(&t1, &H, &Z3);
+
+    // Write output once
+    r->x = X3;
+    r->y = Y3;
+    r->z = Z3;
     r->infinity = false;
 }
 
-// Scalar multiplication: P * k using wNAF window-5
+// Scalar multiplication: P * k using simple double-and-add with mixed addition
+// Lower register pressure and higher occupancy than wNAF on GPU
 __device__ inline void scalar_mul(const JacobianPoint* p, const Scalar* k, JacobianPoint* r) {
-    // wNAF with window width 5
-    int8_t wnaf[260];
-    int wnaf_len = scalar_to_wnaf(k, wnaf, 260);
-    
-    // Precompute table: [P, 3P, ..., 15P]
-    JacobianPoint table[8];
-    JacobianPoint double_p;
-    jacobian_double(p, &double_p);
-    
-    table[0] = *p;
-    for (int i = 1; i < 8; i++) {
-        jacobian_add(&table[i-1], &double_p, &table[i]);
+    // Convert base point to affine (assumes Z==1 for generator, or normalizes)
+    AffinePoint base;
+    if (p->z.limbs[0] == 1 && p->z.limbs[1] == 0 && p->z.limbs[2] == 0 && p->z.limbs[3] == 0) {
+        base.x = p->x;
+        base.y = p->y;
+    } else {
+        // General case: compute affine from Jacobian
+        FieldElement z_inv, z_inv2, z_inv3;
+        field_inv(&p->z, &z_inv);
+        field_sqr(&z_inv, &z_inv2);
+        field_mul(&z_inv2, &z_inv, &z_inv3);
+        field_mul(&p->x, &z_inv2, &base.x);
+        field_mul(&p->y, &z_inv3, &base.y);
     }
-    
-    // Initialize result as infinity
+
     r->infinity = true;
     field_set_zero(&r->x);
     field_set_one(&r->y);
     field_set_zero(&r->z);
-    
-    int8_t digit;
-    int idx;
-    JacobianPoint neg_point;
-    FieldElement zero;
-    field_set_zero(&zero);
 
-    // Process wNAF from MSB to LSB
-    for (int i = wnaf_len - 1; i >= 0; --i) {
-        jacobian_double(r, r);
-        
-        digit = wnaf[i];
-        if (digit > 0) {
-            idx = (digit - 1) / 2;
-            // Use general addition because table[idx] is Jacobian (Z!=1)
-            jacobian_add(r, &table[idx], r);
-        } else if (digit < 0) {
-            idx = (-digit - 1) / 2;
-            neg_point = table[idx];
-            // Negate Y
-            field_sub(&zero, &neg_point.y, &neg_point.y);
-            // Use general addition
-            jacobian_add(r, &neg_point, r);
+    bool started = false;
+    #pragma unroll 1
+    for (int limb = 3; limb >= 0; limb--) {
+        uint64_t w = k->limbs[limb];
+        #pragma unroll 1
+        for (int bit = 63; bit >= 0; bit--) {
+            if (started) jacobian_double(r, r);
+            if ((w >> bit) & 1ULL) {
+                if (!started) {
+                    r->x = base.x;
+                    r->y = base.y;
+                    field_set_one(&r->z);
+                    r->infinity = false;
+                    started = true;
+                } else {
+                    jacobian_add_mixed(r, &base, r);
+                }
+            }
         }
     }
 }
 
 #ifndef SECP256K1_CUDA_LIMBS_32
-// Helpers for EEA Inverse
-__device__ inline void field_rshift1(FieldElement* a) {
-    uint64_t carry = 0;
-    #pragma unroll
-    for (int i = 3; i >= 0; i--) {
-        uint64_t next_carry = a->limbs[i] & 1;
-        a->limbs[i] = (a->limbs[i] >> 1) | (carry << 63);
-        carry = next_carry;
-    }
-}
-
-__device__ inline int field_cmp(const FieldElement* a, const FieldElement* b) {
-    #pragma unroll
-    for (int i = 3; i >= 0; i--) {
-        if (a->limbs[i] > b->limbs[i]) return 1;
-        if (a->limbs[i] < b->limbs[i]) return -1;
-    }
-    return 0;
-}
-
-__device__ inline void field_sub_int(FieldElement* a, const FieldElement* b) {
-    uint64_t borrow = 0;
-    a->limbs[0] = sub_cc(a->limbs[0], b->limbs[0], borrow);
-    a->limbs[1] = sub_cc(a->limbs[1], b->limbs[1], borrow);
-    a->limbs[2] = sub_cc(a->limbs[2], b->limbs[2], borrow);
-    a->limbs[3] = sub_cc(a->limbs[3], b->limbs[3], borrow);
-}
-
-__device__ inline void field_add_int(FieldElement* a, const FieldElement* b) {
-    uint64_t carry = 0;
-    a->limbs[0] = add_cc(a->limbs[0], b->limbs[0], carry);
-    a->limbs[1] = add_cc(a->limbs[1], b->limbs[1], carry);
-    a->limbs[2] = add_cc(a->limbs[2], b->limbs[2], carry);
-    a->limbs[3] = add_cc(a->limbs[3], b->limbs[3], carry);
-}
-
-__device__ inline bool field_is_one(const FieldElement* a) {
-#if SECP256K1_CUDA_USE_MONTGOMERY
-    // In Montgomery domain, 1 is represented as R mod p = 0x1000003D1
-    return (a->limbs[0] == 0x1000003D1ULL) && (a->limbs[1] == 0) && (a->limbs[2] == 0) && (a->limbs[3] == 0);
-#else
-    return (a->limbs[0] == 1) && (a->limbs[1] == 0) && (a->limbs[2] == 0) && (a->limbs[3] == 0);
-#endif
-}
-
-__device__ inline bool field_is_even(const FieldElement* a) {
-    return (a->limbs[0] & 1) == 0;
-}
-
-__device__ inline void field_div2_mod(FieldElement* a) {
-    if ((a->limbs[0] & 1) == 0) {
-        field_rshift1(a);
-    } else {
-        // P >> 1
-        const uint64_t p_half[4] = {
-            0xFFFFFFFF7FFFFE17ULL,
-            0xFFFFFFFFFFFFFFFFULL,
-            0xFFFFFFFFFFFFFFFFULL,
-            0x7FFFFFFFFFFFFFFFULL
-        };
-        
-        field_rshift1(a);
-        
-        uint64_t c = 0;
-        a->limbs[0] = add_cc(a->limbs[0], p_half[0], c);
-        a->limbs[1] = add_cc(a->limbs[1], p_half[1], c);
-        a->limbs[2] = add_cc(a->limbs[2], p_half[2], c);
-        a->limbs[3] = add_cc(a->limbs[3], p_half[3], c);
-        
-        c = 0;
-        a->limbs[0] = add_cc(a->limbs[0], 1, c);
-        a->limbs[1] = add_cc(a->limbs[1], 0, c);
-        a->limbs[2] = add_cc(a->limbs[2], 0, c);
-        a->limbs[3] = add_cc(a->limbs[3], 0, c);
-    }
-}
-
-// Standard (non-Montgomery) versions of mul/sqr for use in inversion
-__device__ __forceinline__ void field_mul_std(const FieldElement* a, const FieldElement* b, FieldElement* r) {
-    uint64_t t[8];
-    mul_256_512(a, b, t);
-    reduce_512_to_256(t, r);
-}
-#endif
-
-#ifndef SECP256K1_CUDA_LIMBS_32
-__device__ __forceinline__ void field_sqr_std(const FieldElement* a, FieldElement* r) {
-    uint64_t t[8];
-    sqr_256_512(a, t);
-    reduce_512_to_256(t, r);
-}
 
 // Repeated squaring helper (in-place), keep loops from unrolling to limit reg pressure
 __device__ __forceinline__ void field_sqr_n(FieldElement* a, int n) {
@@ -2019,38 +1782,6 @@ __device__ inline void field_inv(const FieldElement* a, FieldElement* r) {
     // Standard: a^(p-2) = a^-1
     // The "wrong" inversion actually works because of how affine conversion uses it!
     field_inv_fermat_chain_impl(a, r);
-}
-
-// Scalar multiplication with precomputed table (avoids stack allocation)
-__device__ inline void scalar_mul_wNAF_custom_table(const JacobianPoint* table, const int8_t* wnaf, int wnaf_len, JacobianPoint* r) {
-    // Initialize result as infinity
-    r->infinity = true;
-    field_set_zero(&r->x);
-    field_set_one(&r->y);
-    field_set_zero(&r->z);
-    
-    int8_t digit;
-    int idx;
-    JacobianPoint neg_point;
-    FieldElement zero;
-    field_set_zero(&zero);
-
-    // Process wNAF from MSB to LSB
-    for (int i = wnaf_len - 1; i >= 0; --i) {
-        jacobian_double(r, r);
-        
-        digit = wnaf[i];
-        if (digit > 0) {
-            idx = (digit - 1) / 2;
-            jacobian_add(r, &table[idx], r);
-        } else if (digit < 0) {
-            idx = (-digit - 1) / 2;
-            neg_point = table[idx];
-            // Negate Y
-            field_sub(&zero, &neg_point.y, &neg_point.y);
-            jacobian_add(r, &neg_point, r);
-        }
-    }
 }
 
 #endif // SECP256K1_CUDA_LIMBS_32

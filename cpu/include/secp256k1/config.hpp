@@ -3,6 +3,34 @@
 #ifndef SECP256K1_CONFIG_HPP_INCLUDED
 #define SECP256K1_CONFIG_HPP_INCLUDED
 
+// ============================================================================
+// Platform Detection
+// ============================================================================
+
+// ESP32 platform detection
+#if defined(ESP_PLATFORM) || defined(SECP256K1_PLATFORM_ESP32)
+    #define SECP256K1_ESP32 1
+    #define SECP256K1_32BIT 1
+    #define SECP256K1_NO_INT128 1
+    #ifndef SECP256K1_NO_ASM
+        #define SECP256K1_NO_ASM 1  // For now, disable x86 asm on ESP32
+    #endif
+#endif
+
+// 32-bit platform detection
+#if defined(__i386__) || defined(_M_IX86) || defined(__arm__) || defined(__xtensa__) || defined(SECP256K1_32BIT)
+    #ifndef SECP256K1_32BIT
+        #define SECP256K1_32BIT 1
+    #endif
+#endif
+
+// Disable __int128 on 32-bit platforms or when explicitly requested
+#if defined(SECP256K1_32BIT) || defined(SECP256K1_NO_INT128)
+    #ifndef SECP256K1_NO_INT128
+        #define SECP256K1_NO_INT128 1
+    #endif
+#endif
+
 // Performance optimization macros for hot path functions
 
 // Force inline for critical performance paths
