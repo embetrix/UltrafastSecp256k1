@@ -1,6 +1,6 @@
 // Comprehensive Field Arithmetic Test
 // Tests: mul, square, add, sub, normalize, reduce, edge cases, random stress
-// Style: CHECK macro with pass/fail counters, Selftest(true) 29/29 upfront
+// Style: CHECK macro with pass/fail counters, Selftest(true) 36/36 upfront
 
 #include <secp256k1/field.hpp>
 #include <secp256k1/scalar.hpp>

@@ -1,7 +1,7 @@
 // Comprehensive Scalar Multiplication & Point Operations Test
 // Tests: kG (known vectors), kG (fast vs generic), K*Q, point addition,
 //        doubling chains, random K*Q, distributive, edge cases (infinity, n-1, etc.)
-// Style: CHECK macro, pass/fail counters, Selftest(true) 29/29 upfront
+// Style: CHECK macro, pass/fail counters, Selftest(true) 36/36 upfront
 
 #include "secp256k1/fast.hpp"
 #include "secp256k1/selftest.hpp"
