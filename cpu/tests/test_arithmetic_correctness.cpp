@@ -2,6 +2,7 @@
 // Tests K*G, P1+P2, K*Q with different methods and scenarios
 
 #include "secp256k1/fast.hpp"
+#include "secp256k1/selftest.hpp"
 #include <iostream>
 #include <iomanip>
 #include <array>
@@ -423,6 +424,11 @@ bool test_distributive() {
 // MAIN
 // ============================================================
 int main() {
+    if (!secp256k1::fast::Selftest(true)) {
+        std::cerr << "SELFTEST FAILED — aborting test" << std::endl;
+        return 1;
+    }
+
     std::cout << "\n╔══════════════════════════════════════════════════════════╗" << std::endl;
     std::cout << "║                                                          ║" << std::endl;
     std::cout << "║  COMPREHENSIVE ARITHMETIC CORRECTNESS TESTS              ║" << std::endl;

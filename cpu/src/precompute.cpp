@@ -207,9 +207,7 @@ FieldElement negate_fe(const FieldElement& v);
 [[nodiscard]] SECP256K1_INLINE JacobianPoint jacobian_double(const JacobianPoint& p) {
     if (SECP256K1_UNLIKELY(p.infinity)) return p;
     
-    const FieldElement& two = FE_TWO;
     const FieldElement& three = FE_THREE;
-    const FieldElement& eight = FE_EIGHT;
     FieldElement yy = p.y;         // Copy for in-place
     yy.square_inplace();            // yy = y^2 in-place!
     FieldElement yyyy = yy;         // Copy for in-place
@@ -218,13 +216,19 @@ FieldElement negate_fe(const FieldElement& v);
     xx.square_inplace();            // xx = x^2 in-place!
     FieldElement temp = p.x + yy;   // x + y^2
     temp.square_inplace();          // (x + y^2)^2 in-place!
-    FieldElement s = (temp - xx - yyyy) * two;  // s = 2*((x+y^2)^2 - x^2 - y^4)
+    FieldElement s = temp - xx - yyyy;
+    s += s;                         // s = 2*((x+y^2)^2 - x^2 - y^4) via add
     FieldElement m = xx * three;
     FieldElement x3 = m;            // Copy for in-place
     x3.square_inplace();            // m^2 in-place!
-    x3 -= s * two;
-    FieldElement y3 = m * (s - x3) - yyyy * eight;
-    FieldElement z3 = (p.y * p.z) * two;
+    FieldElement s2 = s + s;        // 2*s via add
+    x3 -= s2;
+    FieldElement yyyy2 = yyyy + yyyy;   // 2*yyyy
+    FieldElement yyyy4 = yyyy2 + yyyy2; // 4*yyyy
+    FieldElement yyyy8 = yyyy4 + yyyy4; // 8*yyyy via additions
+    FieldElement y3 = m * (s - x3) - yyyy8;
+    FieldElement z3 = p.y * p.z;
+    z3 += z3;                       // 2*(y*z) via add
     return {x3, y3, z3, false};
 }
 
@@ -250,16 +254,17 @@ FieldElement negate_fe(const FieldElement& v);
     }
     
     FieldElement h = u2 - u1;
-    const FieldElement& two = FE_TWO;
-    FieldElement i = h * two;       // 2*h
+    FieldElement i = h + h;         // 2*h via add
     i.square_inplace();             // i = (2*h)^2 in-place!
     FieldElement j = h * i;
-    FieldElement r = (s2 - s1) * two;
+    FieldElement r = s2 - s1;
+    r += r;                         // 2*(s2-s1) via add
     FieldElement v = u1 * i;
     FieldElement x3 = r;            // Copy for in-place
     x3.square_inplace();            // r^2 in-place!
-    x3 -= j + v * two;              // x3 = r^2 - j - 2*v
-    FieldElement y3 = r * (v - x3) - s1 * j * two;
+    x3 -= j + v + v;               // x3 = r^2 - j - 2*v via add
+    FieldElement s1j = s1 * j;
+    FieldElement y3 = r * (v - x3) - (s1j + s1j); // 2*s1*j via add
     FieldElement temp_z = p.z + q.z; // z1 + z2
     temp_z.square_inplace();        // (z1 + z2)^2 in-place!
     FieldElement z3 = (temp_z - z1z1 - z2z2) * h;

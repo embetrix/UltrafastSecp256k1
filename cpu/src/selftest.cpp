@@ -686,6 +686,256 @@ static bool run_external_vectors(bool verbose) {
 #endif // ESP32 platform check
 }
 
+// ── Deterministic PRNG for stress tests (no <random> dependency) ──
+struct SelftestRng {
+    uint64_t state;
+    explicit SelftestRng(uint64_t seed) : state(seed ^ 0x6a09e667f3bcc908ULL) {}
+    uint64_t next() {
+        state ^= state >> 12;
+        state ^= state << 25;
+        state ^= state >> 27;
+        return state * 0x2545F4914F6CDD1DULL;
+    }
+};
+
+// ── Extended kG known vectors: 4G..9G, 15G, 255G ──
+static bool test_extended_kg_vectors(bool verbose) {
+    if (verbose) SELFTEST_PRINT("\nExtended kG Vectors (4G-9G, 15G, 255G):\n");
+    struct KGVec { const char* k; const char* x; const char* y; const char* desc; };
+    static const KGVec VECS[] = {
+        {"0000000000000000000000000000000000000000000000000000000000000004",
+         "e493dbf1c10d80f3581e4904930b1404cc6c13900ee0758474fa94abe8c4cd13",
+         "51ed993ea0d455b75642e2098ea51448d967ae33bfbdfe40cfe97bdc47739922", "4*G"},
+        {"0000000000000000000000000000000000000000000000000000000000000005",
+         "2f8bde4d1a07209355b4a7250a5c5128e88b84bddc619ab7cba8d569b240efe4",
+         "d8ac222636e5e3d6d4dba9dda6c9c426f788271bab0d6840dca87d3aa6ac62d6", "5*G"},
+        {"0000000000000000000000000000000000000000000000000000000000000006",
+         "fff97bd5755eeea420453a14355235d382f6472f8568a18b2f057a1460297556",
+         "ae12777aacfbb620f3be96017f45c560de80f0f6518fe4a03c870c36b075f297", "6*G"},
+        {"0000000000000000000000000000000000000000000000000000000000000007",
+         "5cbdf0646e5db4eaa398f365f2ea7a0e3d419b7e0330e39ce92bddedcac4f9bc",
+         "6aebca40ba255960a3178d6d861a54dba813d0b813fde7b5a5082628087264da", "7*G"},
+        {"0000000000000000000000000000000000000000000000000000000000000008",
+         "2f01e5e15cca351daff3843fb70f3c2f0a1bdd05e5af888a67784ef3e10a2a01",
+         "5c4da8a741539949293d082a132d13b4c2e213d6ba5b7617b5da2cb76cbde904", "8*G"},
+        {"0000000000000000000000000000000000000000000000000000000000000009",
+         "acd484e2f0c7f65309ad178a9f559abde09796974c57e714c35f110dfc27ccbe",
+         "cc338921b0a7d9fd64380971763b61e9add888a4375f8e0f05cc262ac64f9c37", "9*G"},
+        {"000000000000000000000000000000000000000000000000000000000000000f",
+         "d7924d4f7d43ea965a465ae3095ff41131e5946f3c85f79e44adbcf8e27e080e",
+         "581e2872a86c72a683842ec228cc6defea40af2bd896d3a5c504dc9ff6a26b58", "15*G"},
+        {"00000000000000000000000000000000000000000000000000000000000000ff",
+         "1b38903a43f7f114ed4500b4eac7083fdefece1cf29c63528d563446f972c180",
+         "4036edc931a60ae889353f77fd53de4a2708b26b6f5da72ad3394119daf408f9", "255*G"},
+    };
+    bool ok = true;
+    for (const auto& v : VECS) {
+        Scalar k = Scalar::from_hex(v.k);
+        Point r = scalar_mul_generator(k);
+        if (r.is_infinity() || !hex_equal(r.x().to_hex(), v.x) || !hex_equal(r.y().to_hex(), v.y)) {
+            ok = false;
+            if (verbose) SELFTEST_PRINT("    FAIL: %s\n", v.desc);
+            break;
+        }
+    }
+    if (verbose) SELFTEST_PRINT(ok ? "    PASS\n" : "    FAIL\n");
+    return ok;
+}
+
+// ── Fast kG vs generic kG cross-check ──
+static bool test_fast_vs_generic_kG(bool verbose) {
+    if (verbose) SELFTEST_PRINT("\nFast kG vs Generic kG (small 1-20 + 20 random):\n");
+    bool ok = true;
+    Point G = Point::generator();
+    Point G_aff = Point::from_affine(G.x(), G.y());
+    // Small multiples
+    for (uint64_t k = 1; k <= 20 && ok; ++k) {
+        Scalar sk = Scalar::from_uint64(k);
+        Point fast = scalar_mul_generator(sk);
+        Point slow = G_aff.scalar_mul(sk);
+        if (!points_equal(fast, slow)) ok = false;
+    }
+    // Deterministic pseudo-random large scalars
+    SelftestRng rng(7001);
+    for (int i = 0; i < 20 && ok; ++i) {
+        std::array<uint64_t, 4> ls{rng.next(), rng.next(), rng.next(), rng.next()};
+        Scalar k = Scalar::from_limbs(ls);
+        Point fast = scalar_mul_generator(k);
+        Point slow = G_aff.scalar_mul(k);
+        if (!points_equal(fast, slow)) ok = false;
+    }
+    if (verbose) SELFTEST_PRINT(ok ? "    PASS\n" : "    FAIL\n");
+    return ok;
+}
+
+// ── Repeated addition: k*G = G+G+...+G ──
+static bool test_repeated_addition_consistency(bool verbose) {
+    if (verbose) SELFTEST_PRINT("\nRepeated Addition Consistency (k=2..10):\n");
+    bool ok = true;
+    Point G = Point::generator();
+    for (int k = 2; k <= 10 && ok; ++k) {
+        Scalar sk = Scalar::from_uint64(static_cast<uint64_t>(k));
+        Point by_mul = scalar_mul_generator(sk);
+        Point by_add = G;
+        for (int i = 1; i < k; ++i) by_add = by_add.add(G);
+        if (!points_equal(by_mul, by_add)) ok = false;
+    }
+    if (verbose) SELFTEST_PRINT(ok ? "    PASS\n" : "    FAIL\n");
+    return ok;
+}
+
+// ── Field stress: normalization, commutativity, associativity, distributive ──
+static bool test_field_stress(bool verbose) {
+    if (verbose) SELFTEST_PRINT("\nField Stress (normalization + random algebraic laws):\n");
+    bool ok = true;
+    // p normalizes to 0
+    std::array<uint64_t, 4> p_limbs = {
+        0xFFFFFFFEFFFFFC2FULL, 0xFFFFFFFFFFFFFFFFULL,
+        0xFFFFFFFFFFFFFFFFULL, 0xFFFFFFFFFFFFFFFFULL
+    };
+    if (!(FieldElement::from_limbs(p_limbs) == FieldElement::zero())) ok = false;
+    // p+1 normalizes to 1
+    std::array<uint64_t, 4> pp1 = {
+        0xFFFFFFFEFFFFFC30ULL, 0xFFFFFFFFFFFFFFFFULL,
+        0xFFFFFFFFFFFFFFFFULL, 0xFFFFFFFFFFFFFFFFULL
+    };
+    if (!(FieldElement::from_limbs(pp1) == FieldElement::one())) ok = false;
+    // (p-1)^2 = 1
+    std::array<uint64_t, 4> pm1_limbs = {
+        0xFFFFFFFEFFFFFC2EULL, 0xFFFFFFFFFFFFFFFFULL,
+        0xFFFFFFFFFFFFFFFFULL, 0xFFFFFFFFFFFFFFFFULL
+    };
+    FieldElement pm1 = FieldElement::from_limbs(pm1_limbs);
+    if (!(pm1 * pm1 == FieldElement::one())) ok = false;
+    // (p-1)+1 = 0
+    if (!(pm1 + FieldElement::one() == FieldElement::zero())) ok = false;
+    // Random stress: commutativity, associativity, distributive, inverse, square
+    SelftestRng rng(8001);
+    for (int i = 0; i < 20 && ok; ++i) {
+        std::array<uint64_t, 4> la{rng.next(), rng.next(), rng.next(), rng.next()};
+        std::array<uint64_t, 4> lb{rng.next(), rng.next(), rng.next(), rng.next()};
+        std::array<uint64_t, 4> lc{rng.next(), rng.next(), rng.next(), rng.next()};
+        FieldElement a = FieldElement::from_limbs(la);
+        FieldElement b = FieldElement::from_limbs(lb);
+        FieldElement c = FieldElement::from_limbs(lc);
+        if (!(a * b == b * a)) ok = false;                       // commutativity
+        if (!((a * b) * c == a * (b * c))) ok = false;            // associativity
+        if (!(a * (b + c) == a * b + a * c)) ok = false;         // distributive
+        if (!((a - b) + b == a)) ok = false;                      // inverse
+        FieldElement sq = a; sq.square_inplace();
+        if (!(sq == a * a)) ok = false;                           // square consistency
+    }
+    if (verbose) SELFTEST_PRINT(ok ? "    PASS\n" : "    FAIL\n");
+    return ok;
+}
+
+// ── Scalar mul stress: (n-1)^2=1, distributive, associativity ──
+static bool test_scalar_stress(bool verbose) {
+    if (verbose) SELFTEST_PRINT("\nScalar Stress ((n-1)^2=1 + random algebraic laws):\n");
+    bool ok = true;
+    Scalar one_s = Scalar::one();
+    Scalar zero_s = Scalar::zero();
+    // (n-1)^2 = 1
+    Scalar nm1 = Scalar::from_hex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364140");
+    if (!(nm1 * nm1 == one_s)) ok = false;
+    // (n-1)+1 = 0
+    if (!(nm1 + one_s == zero_s)) ok = false;
+    // Random stress: distributive, associativity, identity, inverse
+    SelftestRng rng(9001);
+    for (int i = 0; i < 20 && ok; ++i) {
+        std::array<uint64_t, 4> la{rng.next(), rng.next(), rng.next(), rng.next()};
+        std::array<uint64_t, 4> lb{rng.next(), rng.next(), rng.next(), rng.next()};
+        std::array<uint64_t, 4> lc{rng.next(), rng.next(), rng.next(), rng.next()};
+        Scalar a = Scalar::from_limbs(la);
+        Scalar b = Scalar::from_limbs(lb);
+        Scalar c = Scalar::from_limbs(lc);
+        if (!(a * (b + c) == a * b + a * c)) ok = false;         // distributive
+        if (!((a * b) * c == a * (b * c))) ok = false;            // associativity
+        if (!((a - a) == zero_s)) ok = false;                     // a-a=0
+        if (!((a * one_s) == a)) ok = false;                      // a*1=a
+    }
+    if (verbose) SELFTEST_PRINT(ok ? "    PASS\n" : "    FAIL\n");
+    return ok;
+}
+
+// ── NAF/wNAF encoding validation ──
+static bool test_naf_wnaf(bool verbose) {
+    if (verbose) SELFTEST_PRINT("\nNAF/wNAF Encoding Validation:\n");
+    bool ok = true;
+    // NAF(0) empty, NAF(1) = {1}
+    auto naf0 = Scalar::zero().to_naf();
+    if (!naf0.empty()) ok = false;
+    auto naf1 = Scalar::one().to_naf();
+    if (naf1.size() != 1 || naf1[0] != 1) ok = false;
+    // NAF adjacency: no two consecutive non-zero digits
+    SelftestRng rng(10001);
+    for (int i = 0; i < 20 && ok; ++i) {
+        std::array<uint64_t, 4> ls{rng.next(), rng.next(), rng.next(), rng.next()};
+        Scalar s = Scalar::from_limbs(ls);
+        auto naf = s.to_naf();
+        for (size_t j = 1; j < naf.size(); ++j) {
+            if (naf[j] != 0 && naf[j-1] != 0) { ok = false; break; }
+        }
+    }
+    // wNAF (w=4): all non-zero digits must be odd and |d| < 2^(w-1) = 8
+    for (int i = 0; i < 20 && ok; ++i) {
+        std::array<uint64_t, 4> ls{rng.next(), rng.next(), rng.next(), rng.next()};
+        Scalar s = Scalar::from_limbs(ls);
+        auto wnaf = s.to_wnaf(4);
+        for (auto d : wnaf) {
+            if (d != 0) {
+                if ((d & 1) == 0) { ok = false; break; }
+                if (d >= 8 || d <= -8) { ok = false; break; }
+            }
+        }
+    }
+    if (verbose) SELFTEST_PRINT(ok ? "    PASS\n" : "    FAIL\n");
+    return ok;
+}
+
+// ── Point advanced: commutativity, associativity, mixed_add, distributive, edge ──
+static bool test_point_advanced(bool verbose) {
+    if (verbose) SELFTEST_PRINT("\nPoint Advanced (comm/assoc/mixed/dist/edge):\n");
+    bool ok = true;
+    Point G = Point::generator();
+    Point p3 = scalar_mul_generator(Scalar::from_uint64(3));
+    Point p5 = scalar_mul_generator(Scalar::from_uint64(5));
+    Point p7 = scalar_mul_generator(Scalar::from_uint64(7));
+    // Commutativity: 3G+7G = 7G+3G
+    if (!points_equal(p3.add(p7), p7.add(p3))) ok = false;
+    // Associativity: (3G+5G)+7G = 3G+(5G+7G) = 15G
+    Point p15 = scalar_mul_generator(Scalar::from_uint64(15));
+    if (!points_equal(p3.add(p5).add(p7), p15)) ok = false;
+    if (!points_equal(p3.add(p5.add(p7)), p15)) ok = false;
+    // Mixed add: 3G +_mixed G = 4G
+    Point p4 = scalar_mul_generator(Scalar::from_uint64(4));
+    Point p3m = p3;
+    p3m.add_mixed_inplace(G.x(), G.y());
+    if (!points_equal(p3m, p4)) ok = false;
+    // Distributive: k*(P+Q) = kP + kQ  for k=2..6, P=2G, Q=5G
+    Point P = scalar_mul_generator(Scalar::from_uint64(2));
+    Point Q = scalar_mul_generator(Scalar::from_uint64(5));
+    for (uint64_t k = 2; k <= 6 && ok; ++k) {
+        Scalar sk = Scalar::from_uint64(k);
+        Point lhs = P.add(Q).scalar_mul(sk);
+        Point rhs = P.scalar_mul(sk).add(Q.scalar_mul(sk));
+        if (!points_equal(lhs, rhs)) ok = false;
+    }
+    // K*Q: 2*(7G) = 14G, 3*(7G) = 21G
+    if (!points_equal(p7.scalar_mul(Scalar::from_uint64(2)),
+                      scalar_mul_generator(Scalar::from_uint64(14)))) ok = false;
+    if (!points_equal(p7.scalar_mul(Scalar::from_uint64(3)),
+                      scalar_mul_generator(Scalar::from_uint64(21)))) ok = false;
+    // Edge: 0*G = infinity
+    if (!G.scalar_mul(Scalar::zero()).is_infinity()) ok = false;
+    // Edge: n*G = infinity (n mod n = 0)
+    Scalar n = Scalar::from_hex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141");
+    if (!(n == Scalar::zero())) ok = false;
+    if (!G.scalar_mul(n).is_infinity()) ok = false;
+    if (verbose) SELFTEST_PRINT(ok ? "    PASS\n" : "    FAIL\n");
+    return ok;
+}
+
 // Main self-test function
 bool Selftest(bool verbose) {
     if (verbose) {
@@ -860,7 +1110,16 @@ bool Selftest(bool verbose) {
     if (test_subtraction(verbose)) {
         passed++;
     }
-    
+
+    // ── Expanded comprehensive tests (integrated from test files) ──
+    total++; if (test_extended_kg_vectors(verbose)) passed++;
+    total++; if (test_fast_vs_generic_kG(verbose)) passed++;
+    total++; if (test_repeated_addition_consistency(verbose)) passed++;
+    total++; if (test_field_stress(verbose)) passed++;
+    total++; if (test_scalar_stress(verbose)) passed++;
+    total++; if (test_naf_wnaf(verbose)) passed++;
+    total++; if (test_point_advanced(verbose)) passed++;
+
     // Summary
     if (verbose) {
         SELFTEST_PRINT("\n==============================================\n");

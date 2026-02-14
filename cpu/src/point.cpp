@@ -248,12 +248,12 @@ JacobianPoint jacobian_double(const JacobianPoint& p) {
     FieldElement j = h * i;
     FieldElement r = (s2 - s1) + (s2 - s1);
     FieldElement v = u1 * i;
-    FieldElement two = fe_from_uint(2);
 
     FieldElement x3 = r;                        // Copy for in-place
     x3.square_inplace();                        // r^2 in-place!
     x3 -= j + v + v;                           // x3 = r^2 - j - 2*v
-    FieldElement y3 = r * (v - x3) - (s1 * j * two);
+    FieldElement s1j = s1 * j;
+    FieldElement y3 = r * (v - x3) - (s1j + s1j);
     FieldElement temp_z = p.z + q.z;           // z1 + z2
     temp_z.square_inplace();                   // (z1 + z2)^2 in-place!
     FieldElement z3 = (temp_z - z1z1 - z2z2) * h;
