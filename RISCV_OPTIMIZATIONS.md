@@ -1,203 +1,264 @@
 # RISC-V Optimizations Report
 
-**Date:** 2026-02-10  
-**Platform:** RISC-V 64-bit (Milk-V Mars / StarFive JH7110)  
-**Compiler:** Clang 21.1.8 + LTO  
+**Platform:** Milk-V Mars (StarFive JH7110, SiFive U74 dual-core, 1.5 GHz)  
+**ISA:** RV64GC + RVV (Vector Extension)  
+**Compiler:** Clang 21.1.8, `-Ofast`, LTO  
+**Last Updated:** 2026-02-15  
 
 ---
 
-## Summary of Optimizations
+## Optimization Timeline
 
-### 1. Field Square Optimization (10 mul vs 16)
+| Phase | Scalar Mul | Field Mul | Key Change |
+|-------|-----------|-----------|------------|
+| Baseline (C++ only) | ~900 μs | ~300 ns | Portable C++ |
+| + Assembly mul/square | 694 μs | 197 ns | Comba multiply + fast reduction |
+| + Dedicated square asm | 672 μs | 197 ns | 10 mul vs 16 (symmetry exploit) |
+| + Branchless field ops | 624 μs | 174 ns | ge/add/sub/normalize branchless |
+| + Direct asm calls | 624 μs | 174 ns | Bypass FieldElement wrapper |
+| + Branchless asm reduce | **621 μs** | **173 ns** | Remove beqz/j loop from reduce |
 
-**File:** `cpu/src/field_asm_riscv64.S`
-
-**Problem:** Original `field_square` used tail call to `field_mul`, performing 16 multiplications.
-
-**Solution:** Dedicated squaring using symmetry property:
-```
-a² = sum(ai²) + 2*sum(ai*aj for i<j)
-```
-
-**Implementation Details:**
-- Diagonal terms (4 multiplications): `a0², a1², a2², a3²`
-- Off-diagonal terms (6 multiplications): `a0*a1, a0*a2, a0*a3, a1*a2, a1*a3, a2*a3`
-- Doubling: Add each off-diagonal term twice (avoids complex shift carry propagation)
-- Total: 10 multiplications + 12 additions
-
-**Key Insight:** Instead of shifting 128-bit values (which has complex carry), we add the same value twice. This is mathematically equivalent but avoids carry bugs.
-
-**Result:**
-| Metric | Before | After | Improvement |
-|--------|--------|-------|-------------|
-| Field Square | 186 ns | 177 ns | **5%** |
+**Total improvement: ~31% scalar mul, ~42% field mul from baseline.**
 
 ---
 
-### 2. wNAF Window Width Increase (w=4 → w=5)
+## 1. Assembly Multiply & Square (field_asm_riscv64.S)
+
+### Comba Multiplication (16 → 16 mul)
+
+Standard 4-limb × 4-limb Comba multiplication producing 8-limb (512-bit) intermediate.
+
+**Columns:**
+```
+c0 = a0*b0
+c1 = a0*b1 + a1*b0
+c2 = a0*b2 + a1*b1 + a2*b0
+c3 = a0*b3 + a1*b2 + a2*b1 + a3*b0
+c4 = a1*b3 + a2*b2 + a3*b1
+c5 = a2*b3 + a3*b2
+c6 = a3*b3
+```
+
+Uses `mul` / `mulhu` pairs with `sltu`-based carry propagation throughout.
+
+### Dedicated Square (10 mul)
+
+Exploits $a^2 = \sum a_i^2 + 2\sum_{i<j} a_i \cdot a_j$ symmetry:
+- **4 diagonal:** `a0², a1², a2², a3²`
+- **6 off-diagonal:** `a0*a1, a0*a2, a0*a3, a1*a2, a1*a3, a2*a3`
+- Doubling via add-twice (no 128-bit shift carry complexity)
+
+**Result:** Square 186 → 177 ns (**5% improvement**)
+
+### Fast Reduction (mod p = 2²⁵⁶ - 2³² - 977)
+
+Reduces [c0..c7] → [r0..r3] using $p = 2^{256} - C$ where $C = 2^{32} + 977$:
+
+For each high limb $c_i$ ($i = 4..7$):
+```
+r[i-4] += c_i * 977       (via mul/mulhu)
+r[i-4] += c_i << 32       (via slli/srli)
+```
+
+With full carry propagation through the chain.
+
+### Branchless Overflow Reduce (v2, 2026-02-15)
+
+After first-pass reduction, overflow `s9 < 2^34`. **Previous code** had a branch loop:
+```asm
+# OLD (branchy):
+.Lreduce_loop:
+    beqz    s9, .Lfinal_check   # ← branch
+    ...reduce body...
+    j       .Lreduce_loop       # ← back-branch
+```
+
+**New code** executes reduce body unconditionally once (s9 → {0,1}), then merges residual into final check:
+```asm
+# NEW (branchless):
+    mv      t4, s9              # always execute
+    li      s9, 0
+    ...reduce body...           # s9 now 0 or 1
+
+    # Final: select reduced if overflow OR residual
+    or      a7, a7, s9          # ← key line
+    neg     a7, a7
+    # branchless XOR/AND/XOR select follows
+```
+
+**Mathematical proof:** After first-pass, $s9 < 2^{34}$. One pass of $s9 \times C$ where $C \approx 2^{32}$ produces at most $\sim 2^{66}$ which distributed across 4 limbs yields $s9' \in \{0, 1\}$. The final conditional subtract handles $s9' = 1$ via `or a7, a7, s9`.
+
+**Result:** Mul 174 → 173 ns, Square 162 → 160 ns (deterministic timing, no branch variance)
+
+---
+
+## 2. Branchless C++ Field Operations (field.cpp)
+
+### ge() — Greater-or-Equal Comparison
+
+**Before:** Branchy for-loop with early return:
+```cpp
+for (int i = 3; i >= 0; --i) {
+    if (v[i] > other.v[i]) return true;
+    if (v[i] < other.v[i]) return false;
+}
+```
+
+**After:** Full subtraction chain, check borrow:
+```cpp
+uint64_t borrow = 0;
+for (int i = 0; i < 4; ++i) {
+    uint64_t diff = v[i] - other.v[i] - borrow;
+    borrow = (v[i] < other.v[i] + borrow) | ...;
+}
+return borrow == 0;  // no borrow = a >= b
+```
+
+### add_impl — Field Addition
+
+**Before:** While-loop carry propagation + while-loop conditional reduction.
+
+**After:** Single-pass add with branchless conditional subtract:
+```cpp
+// Add
+uint64_t carry = 0;
+for (int i = 0; i < 4; ++i) {
+    __uint128_t s = (__uint128_t)a[i] + b[i] + carry;
+    out[i] = (uint64_t)s;
+    carry = (uint64_t)(s >> 64);
+}
+
+// Branchless: try subtract p, select via mask
+uint64_t borrow = 0;
+uint64_t reduced[4];
+for (int i = 0; i < 4; ++i) { /* sub PRIME */ }
+
+uint64_t mask = -(uint64_t)(carry | (borrow == 0));
+for (int i = 0; i < 4; ++i)
+    out[i] ^= (out[i] ^ reduced[i]) & mask;
+```
+
+### sub_impl — Field Subtraction
+
+**Before:** if-branch calling `ge()` then subtract or reverse-subtract.
+
+**After:** Always compute `a - b`, conditionally add `p` on borrow:
+```cpp
+uint64_t borrow = 0;
+for (int i = 0; i < 4; ++i) { /* sub chain */ }
+
+// Branchless: add PRIME masked by borrow
+uint64_t mask = -borrow;
+uint64_t addend[4] = { PRIME[i] & mask };
+// add addend to result
+```
+
+### normalize()
+
+**Before:** While-loop `while (ge(PRIME))`.
+
+**After:** Single-pass branchless conditional subtract (same XOR/AND pattern).
+
+---
+
+## 3. Direct ASM Calls (No Wrapper Overhead)
+
+**Before:** C++ wrapper created `FieldElement` temporaries:
+```cpp
+void mul_impl(const uint64_t* a, const uint64_t* b, uint64_t* out) {
+    FieldElement fa = FieldElement::from_limbs(a);  // calls normalize()!
+    FieldElement fb = FieldElement::from_limbs(b);
+    FieldElement result = field_mul_riscv(fa, fb);
+    std::memcpy(out, result.v, 32);
+}
+```
+
+**After:** Direct `extern "C"` call on raw pointers:
+```cpp
+extern "C" void field_mul_asm_riscv64(uint64_t* out, const uint64_t* a, const uint64_t* b);
+
+void mul_impl(const uint64_t* a, const uint64_t* b, uint64_t* out) {
+    field_mul_asm_riscv64(out, a, b);
+}
+```
+
+Eliminates 2× `normalize()` + 2× `memcpy` per mul/square call.
+
+---
+
+## 4. wNAF Window Width (w=4 → w=5)
 
 **File:** `cpu/src/point.cpp`
 
-**Problem:** wNAF with w=4 uses 8 precomputed points, requiring more doublings.
+On RISC-V (not ESP32/STM32), scalar_mul uses wNAF with w=5:
+- 16 precomputed points: [1P, 3P, 5P, ..., 31P]
+- Fewer non-zero digits → fewer point additions in main loop
+- Trade-off: 8 extra precomputed points (8 doublings + 8 additions) vs ~10% fewer additions in 256-bit scan
 
-**Solution:** Increase window width to 5:
-- 16 precomputed points instead of 8
-- Fewer non-zero digits in wNAF representation
-- Better trade-off between precomputation and main loop iterations
-
-**Code Change:**
-```cpp
-// Before
-constexpr unsigned window_width = 4;
-constexpr int table_size = 8;  // [1P, 3P, 5P, ..., 15P]
-
-// After
-constexpr unsigned window_width = 5;
-constexpr int table_size = 16; // [1P, 3P, 5P, ..., 31P]
-```
-
-**Result:**
-| Metric | Before | After | Improvement |
-|--------|--------|-------|-------------|
-| Scalar Mul | 678 μs | 672 μs | **1%** |
+**Result:** Scalar Mul 678 → 672 μs (**~1% improvement**)
 
 ---
 
-### 3. LTO (Link-Time Optimization) Integration
+## 5. Optimizations Attempted But Reverted
 
-**Files:** `cpu/CMakeLists.txt`, `CMakePresets.json`
+### Hand-Written Add/Sub Assembly
 
-**Status:** LTO enabled via `-flto=thin` flags for Clang.
+Wrote `field_add_asm_riscv64` and `field_sub_asm_riscv64` in assembly, wired via `#elif defined(SECP256K1_HAS_RISCV_ASM)` in field.cpp.
 
----
+**Result:** **Regression.** Field Add: 34 → 43 ns (+26%), Field Sub: 31 → 51 ns (+64%).
 
-## Final Performance Summary (RISC-V)
+**Root Cause:** Clang 21 generates better code for simple 256-bit add/sub on U74's in-order pipeline. The compiler:
+- Optimally schedules instructions to fill pipeline bubbles
+- Avoids unnecessary register spills (asm used callee-saved regs)
+- Inline-expands without function call overhead
 
-| Operation | Time | Notes |
-|-----------|------|-------|
-| Field Mul | 197 ns | Assembly + LTO |
-| Field Square | 177 ns | **Optimized (10 mul)** |
-| Field Add | 35 ns | Inline C++ (faster than ASM wrapper) |
-| Field Sub | 31 ns | Inline C++ (faster than ASM wrapper) |
-| Field Inverse | 18 μs | Binary GCD (hybrid_eea) |
-| Point Add | 3 μs | Jacobian |
-| Point Double | 1 μs | Jacobian |
-| Point Scalar Mul | 672 μs | **wNAF w=5** |
-| Generator Mul | 40 μs | Precomputed + GLV |
-| Batch Inverse (n=100) | 765 ns/elem | Montgomery trick |
-| Batch Inverse (n=1000) | 615 ns/elem | Montgomery trick |
+**Lesson:** On in-order cores with good compilers, only complex operations (mul/square with 16+ multiplications) benefit from hand-written assembly.
 
 ---
 
 ## Key Learnings
 
-1. **Assembly wrapper overhead matters**: For simple operations like add/sub (~30ns), the cost of converting between `limbs4` and `FieldElement` via wrappers exceeds the operation itself. Inline C++ is faster.
+1. **Assembly wrapper overhead matters:** For ~30ns operations, converting between `limbs4` ↔ `FieldElement` costs more than the operation itself.
 
-2. **Assembly wins for complex operations**: For mul (~200ns) and square (~180ns), the assembly overhead is negligible compared to the computation, so assembly optimization pays off.
+2. **Branchless > branchy on in-order cores:** U74 has no speculative execution — branch misprediction flushes the entire pipeline. Even well-predicted branches add 1-2 cycles of overhead.
 
-3. **Window width trade-off**: wNAF w=5 provides ~1% improvement over w=4 for scalar multiplication, with acceptable precomputation cost (16 vs 8 points).
+3. **Compiler wins for simple ops:** Clang 21 with `-Ofast` generates near-optimal code for add/sub. Only complex mul/square with carry chains benefit from hand-tuned assembly.
 
-4. **Binary GCD vs Fermat**: Binary GCD (hybrid_eea) is 3x faster than addition chain methods for field inverse on RISC-V (18μs vs 60μs).
+4. **Single-pass reduction is sufficient:** After first-pass, overflow is bounded by $2^{34}$. One unconditional pass always reduces to {0,1}. No loop needed.
 
----
-
-## Optimizations Attempted But Not Used
-
-| Optimization | Result | Reason |
-|--------------|--------|--------|
-| Add/Sub ASM wrapper | 88/96ns vs 34/31ns | Wrapper overhead exceeds operation |
-| Addition chain inverse | 60μs vs 18μs | Binary GCD much faster |
+5. **Binary GCD beats Fermat:** `hybrid_eea` inverse (18 μs) is 3× faster than addition chain methods (~60 μs) on RISC-V.
 
 ---
 
-## Portability to Other Platforms
+## Current Best Results (2026-02-15)
 
-### x86-64 Applicability
+| Operation | Time | Implementation |
+|-----------|------|---------------|
+| Field Mul | 173 ns | RISC-V asm (Comba + branchless reduce) |
+| Field Square | 160 ns | RISC-V asm (10 mul + branchless reduce) |
+| Field Add | 38 ns | C++ branchless (compiler-optimized) |
+| Field Sub | 34 ns | C++ branchless (compiler-optimized) |
+| Field Inverse | 17 μs | Binary GCD (hybrid_eea) |
+| Point Add | 3 μs | Jacobian mixed addition (7M + 4S) |
+| Point Double | 1 μs | Jacobian doubling (4S + 4M, a=0) |
+| **Scalar Mul** | **621 μs** | **GLV + Shamir + wNAF(w=5)** |
+| **Generator Mul** | **37 μs** | **Precomputed fixed-base table** |
+| Batch Inv (n=100) | 695 ns | Montgomery's trick |
+| Batch Inv (n=1000) | 547 ns | Montgomery's trick |
 
-| Optimization | Portable? | Notes |
-|--------------|-----------|-------|
-| Field Square (10 mul) | ✅ YES | Algorithm is platform-independent |
-| wNAF w=5 | ✅ YES | Already in portable C++ code |
-| LTO | ✅ YES | Standard compiler feature |
-
-### CUDA Applicability
-
-| Optimization | Portable? | Notes |
-|--------------|-----------|-------|
-| Field Square (10 mul) | ✅ YES | Same algorithm in PTX/CUDA |
-| wNAF w=5 | ⚠️ PARTIAL | May need tuning for GPU occupancy |
-| LTO | ✅ YES | CUDA supports LTO since 11.0 |
-
----
-
-## Files Changed
-
-1. **cpu/src/field_asm_riscv64.S** - Optimized `field_square_asm_riscv64`
-2. **cpu/src/point.cpp** - Changed `window_width` from 4 to 5
-3. **cpu/src/field.cpp** - Kept add/sub as inline C++ (no ASM wrapper)
+All 29+ tests pass ✅
 
 ---
 
-## Build & Test
+## Files
 
-```bash
-# Configure
-cmake -S . -B build_rel -G Ninja -DCMAKE_BUILD_TYPE=Release
-
-# Build
-cmake --build build_rel -j
-
-# Test
-./build_rel/libs/UltrafastSecp256k1/cpu/bench_comprehensive_riscv
-```
-
-All 29 tests pass ✅
-
----
-
-## Portability to Other Platforms
-
-### x86-64 Applicability
-
-| Optimization | Portable? | Notes |
-|--------------|-----------|-------|
-| Field Square (10 mul) | ✅ YES | Algorithm is platform-independent |
-| wNAF w=5 | ✅ YES | Already in portable C++ code |
-| LTO | ✅ YES | Standard compiler feature |
-
-**x86-64 Implementation:**
-- Use `__int128` for 128-bit arithmetic
-- Or use intrinsics: `_mulx_u64`, `_addcarry_u64`
-- AVX-512 IFMA can do 8 parallel 52-bit muls
-
-### CUDA Applicability
-
-| Optimization | Portable? | Notes |
-|--------------|-----------|-------|
-| Field Square (10 mul) | ✅ YES | Same algorithm in PTX/CUDA |
-| wNAF w=5 | ⚠️ PARTIAL | May need tuning for GPU occupancy |
-| LTO | ✅ YES | CUDA supports LTO since 11.0 |
-
-**CUDA Implementation:**
-- Use `__umul64hi()` for high 64 bits
-- Use PTX inline assembly for optimal performance
-- Consider using `__uint128_t` with newer CUDA
-
----
-
-## Files Changed
-
-1. **cpu/src/field_asm_riscv64.S**
-   - Added optimized `field_square_asm_riscv64` function
-   - ~400 lines of new assembly code
-
-2. **cpu/src/point.cpp**
-   - Changed `window_width` from 4 to 5
-   - Updated comments for 31P instead of 15P
-
-3. **cpu/CMakeLists.txt**
-   - Added direct LTO flags for Clang
-   - Removed dependency on CheckIPOSupported
+| File | Role |
+|------|------|
+| `cpu/src/field_asm_riscv64.S` | Assembly: mul, square, add, sub, negate |
+| `cpu/src/field_asm_riscv64.cpp` | C++ wrappers (mul/square wrappers unused now) |
+| `cpu/src/field.cpp` | Branchless ge/add/sub/normalize, direct asm calls |
+| `cpu/src/point.cpp` | GLV + Shamir + wNAF(w=5) scalar mul |
+| `cpu/src/scalar.cpp` | Scalar arithmetic (pure C++) |
 
 ---
 

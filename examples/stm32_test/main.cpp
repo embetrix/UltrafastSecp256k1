@@ -1,17 +1,19 @@
 /**
- * UltrafastSecp256k1 - ESP32 Integration Test
+ * UltrafastSecp256k1 - STM32F103ZET6 Integration Test
  *
- * Testing real secp256k1 library on ESP32 using the library's Selftest
+ * Tests secp256k1 library on bare-metal Cortex-M3 @ 72MHz
+ * Output via USART1 (PA9/TX → CH340 → COM4)
+ *
+ * Memory budget: 512KB Flash, 64KB SRAM
+ * - NO gen_fixed_mul (30KB table too large for 64KB SRAM)
+ * - Uses GLV + Shamir's trick for scalar multiplication
+ * - Expected Scalar*G: ~35ms at 72MHz
  */
 
-#include <stdio.h>
-#include "esp_chip_info.h"
-#include "esp_system.h"
-#include "esp_timer.h"
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
+#include <cstdio>
+#include <cstdint>
 
-// Include real secp256k1 library
+// secp256k1 library
 #include "secp256k1/field.hpp"
 #include "secp256k1/scalar.hpp"
 #include "secp256k1/point.hpp"
@@ -19,47 +21,46 @@
 
 using namespace secp256k1::fast;
 
-// Helper to get chip model name
-static const char* get_chip_model_name(esp_chip_model_t model) {
-    switch (model) {
-        case CHIP_ESP32:   return "ESP32";
-        case CHIP_ESP32S2: return "ESP32-S2";
-        case CHIP_ESP32S3: return "ESP32-S3";
-        case CHIP_ESP32C3: return "ESP32-C3";
-        case CHIP_ESP32C2: return "ESP32-C2";
-        case CHIP_ESP32C6: return "ESP32-C6";
-        case CHIP_ESP32H2: return "ESP32-H2";
-        default:           return "Unknown";
-    }
+// DWT cycle counter for microsecond-precision timing
+#define DWT_CYCCNT (*(volatile uint32_t*)0xE0001004UL)
+#define SYSCLK_MHZ 72U
+
+static inline uint32_t micros() {
+    return DWT_CYCCNT / SYSCLK_MHZ;
 }
 
-extern "C" void app_main() {
-    vTaskDelay(pdMS_TO_TICKS(1000));
+// UART init (defined in syscalls.cpp)
+extern void uart_init();
+
+// Simple delay using DWT
+static void delay_ms(uint32_t ms) {
+    uint32_t start = DWT_CYCCNT;
+    uint32_t ticks = ms * SYSCLK_MHZ * 1000U;
+    while ((DWT_CYCCNT - start) < ticks) {}
+}
+
+int main() {
+    uart_init();
+    delay_ms(500);  // Let CH340 settle
 
     printf("\n");
     printf("============================================================\n");
-    printf("   UltrafastSecp256k1 - ESP32 Library Test\n");
+    printf("   UltrafastSecp256k1 - STM32F103ZET6 Library Test\n");
     printf("============================================================\n");
     printf("\n");
 
     // Platform information
-    esp_chip_info_t chip_info;
-    esp_chip_info(&chip_info);
-
     printf("Platform Information:\n");
-    printf("  Chip Model:   %s\n", get_chip_model_name(chip_info.model));
-    printf("  Cores:        %d\n", chip_info.cores);
-    printf("  Revision:     %d.%d\n", chip_info.revision / 100, chip_info.revision % 100);
-    printf("  Free Heap:    %lu bytes\n", (unsigned long)esp_get_free_heap_size());
+    printf("  MCU:          STM32F103ZET6 (Cortex-M3)\n");
+    printf("  Clock:        %u MHz\n", SYSCLK_MHZ);
+    printf("  Flash:        512 KB\n");
+    printf("  SRAM:         64 KB\n");
     printf("  Build:        32-bit Portable (no __int128)\n");
+    printf("  Features:     GLV+Shamir (no fixed-base table)\n");
     printf("\n");
 
-    // Run the real library self-test
-    printf("Running SECP256K1 Library Self-Test...\n");
-    printf("(This may take a few seconds on ESP32)\n\n");
-
-    // Quick field diagnostics BEFORE selftest
-    printf("\n=== Field Arithmetic Diagnostics ===\n");
+    // Quick field diagnostics
+    printf("=== Field Arithmetic Diagnostics ===\n");
     {
         // (p-1)^2 should equal 1
         FieldElement pm1 = FieldElement::from_limbs({
@@ -78,7 +79,7 @@ extern "C" void app_main() {
         }
         printf("  sq==mul?         %s\n", (pm1_sq == pm1_mul) ? "PASS" : "FAIL");
 
-        // Random-ish values
+        // Commutativity, associativity, distributivity
         FieldElement x = FieldElement::from_limbs({
             0xA1B2C3D4E5F60718ULL, 0x1928374655647382ULL,
             0xBBAACCDDEEFF0011ULL, 0x2233445566778899ULL
@@ -104,12 +105,16 @@ extern "C" void app_main() {
     }
     printf("=== End Diagnostics ===\n\n");
 
-    bool test_passed = Selftest(true);  // verbose = true
+    // Run library self-test
+    printf("Running SECP256K1 Library Self-Test...\n");
+    printf("(This may take 30-60 seconds on STM32 @ 72MHz)\n\n");
+
+    bool test_passed = Selftest(true);
 
     printf("\n");
     if (test_passed) {
         printf("============================================================\n");
-        printf("   SUCCESS: All library tests passed on ESP32!\n");
+        printf("   SUCCESS: All library tests passed on STM32!\n");
         printf("============================================================\n");
     } else {
         printf("============================================================\n");
@@ -117,10 +122,10 @@ extern "C" void app_main() {
         printf("============================================================\n");
     }
 
-    // Simple performance benchmark
+    // Performance benchmarks
     printf("\n");
     printf("==============================================\n");
-    printf("  Basic Performance Benchmark\n");
+    printf("  Basic Performance Benchmark (STM32 @ %u MHz)\n", SYSCLK_MHZ);
     printf("==============================================\n");
 
     const int iterations = 1000;
@@ -129,50 +134,49 @@ extern "C" void app_main() {
 
     // Field Multiplication
     {
-        int64_t start = esp_timer_get_time();
+        uint32_t start = micros();
         FieldElement result = a;
         for (int i = 0; i < iterations; i++) {
             result = result * b;
         }
-        int64_t elapsed = esp_timer_get_time() - start;
-        printf("  Field Mul:    %5lld ns/op\n", (elapsed * 1000) / iterations);
-        // Force use of result to prevent optimization
+        uint32_t elapsed = micros() - start;
+        printf("  Field Mul:    %5lu ns/op\n", (unsigned long)(elapsed * 1000UL) / iterations);
         if (result == FieldElement::zero()) printf("!");
     }
 
     // Field Squaring
     {
-        int64_t start = esp_timer_get_time();
+        uint32_t start = micros();
         FieldElement result = a;
         for (int i = 0; i < iterations; i++) {
             result = result.square();
         }
-        int64_t elapsed = esp_timer_get_time() - start;
-        printf("  Field Square: %5lld ns/op\n", (elapsed * 1000) / iterations);
+        uint32_t elapsed = micros() - start;
+        printf("  Field Square: %5lu ns/op\n", (unsigned long)(elapsed * 1000UL) / iterations);
         if (result == FieldElement::zero()) printf("!");
     }
 
     // Field Addition
     {
-        int64_t start = esp_timer_get_time();
+        uint32_t start = micros();
         FieldElement result = a;
         for (int i = 0; i < iterations; i++) {
             result = result + b;
         }
-        int64_t elapsed = esp_timer_get_time() - start;
-        printf("  Field Add:    %5lld ns/op\n", (elapsed * 1000) / iterations);
+        uint32_t elapsed = micros() - start;
+        printf("  Field Add:    %5lu ns/op\n", (unsigned long)(elapsed * 1000UL) / iterations);
         if (result == FieldElement::zero()) printf("!");
     }
 
     // Field Inversion
     {
-        int64_t start = esp_timer_get_time();
+        uint32_t start = micros();
         FieldElement result = a;
         for (int i = 0; i < 100; i++) {
             result = result.inverse();
         }
-        int64_t elapsed = esp_timer_get_time() - start;
-        printf("  Field Inv:    %5lld us/op\n", elapsed / 100);
+        uint32_t elapsed = micros() - start;
+        printf("  Field Inv:    %5lu us/op\n", (unsigned long)elapsed / 100);
         if (result == FieldElement::zero()) printf("!");
     }
 
@@ -183,27 +187,30 @@ extern "C" void app_main() {
         Point G = Point::generator();
 
         // Warmup
-        volatile uint64_t sink = 0;
+        volatile uint32_t sink = 0;
         Point warmup = G.scalar_mul(k);
-        sink = warmup.x().limbs()[0];
+        sink = static_cast<uint32_t>(warmup.x().limbs()[0]);
 
-        int64_t start = esp_timer_get_time();
+        uint32_t start = micros();
         Point result = G;
         for (int i = 0; i < 5; i++) {
             result = G.scalar_mul(k);
         }
-        int64_t elapsed = esp_timer_get_time() - start;
-        sink = result.x().limbs()[0];
-        printf("  Scalar*G:     %5lld us/op\n", elapsed / 5);
+        uint32_t elapsed = micros() - start;
+        sink = static_cast<uint32_t>(result.x().limbs()[0]);
+        printf("  Scalar*G:     %5lu us/op\n", (unsigned long)elapsed / 5);
         (void)sink;
     }
 
     printf("\n");
     printf("============================================================\n");
-    printf("   UltrafastSecp256k1 on ESP32 - Test Complete\n");
+    printf("   UltrafastSecp256k1 on STM32F103ZET6 - Test Complete\n");
     printf("============================================================\n");
 
+    // Halt (no RTOS)
     while (1) {
-        vTaskDelay(pdMS_TO_TICKS(10000));
+        // Optionally toggle LED or wait
     }
+
+    return 0;
 }

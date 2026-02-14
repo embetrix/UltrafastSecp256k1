@@ -1,5 +1,5 @@
 #include "secp256k1/point.hpp"
-#if !defined(SECP256K1_PLATFORM_ESP32) && !defined(ESP_PLATFORM)
+#if !defined(SECP256K1_PLATFORM_ESP32) && !defined(ESP_PLATFORM) && !defined(SECP256K1_PLATFORM_STM32)
 #include "secp256k1/precompute.hpp"
 #endif
 #include "secp256k1/glv.hpp"
@@ -12,8 +12,8 @@
 namespace secp256k1::fast {
 namespace {
 
-// ESP32 local wNAF helpers (when precompute.hpp not included)
-#if defined(SECP256K1_PLATFORM_ESP32) || defined(ESP_PLATFORM)
+// ESP32/STM32 local wNAF helpers (when precompute.hpp not included)
+#if defined(SECP256K1_PLATFORM_ESP32) || defined(ESP_PLATFORM) || defined(SECP256K1_PLATFORM_STM32)
 // Simple wNAF computation for ESP32 (inline, no heap allocation)
 static void compute_wnaf_into(const Scalar& scalar, unsigned window_width,
                                int32_t* out, std::size_t out_capacity,
@@ -395,7 +395,7 @@ static void batch_to_affine_into(const JacobianPoint* jacobian_points,
 } // namespace
 
 // KPlan implementation: Cache all K-dependent work for Fixed K × Variable Q
-#if !defined(SECP256K1_PLATFORM_ESP32) && !defined(ESP_PLATFORM)
+#if !defined(SECP256K1_PLATFORM_ESP32) && !defined(ESP_PLATFORM) && !defined(SECP256K1_PLATFORM_STM32)
 KPlan KPlan::from_scalar(const Scalar& k, uint8_t w) {
     // Step 1: GLV decomposition (K → k1, k2, signs)
     auto decomp = split_scalar_glv(k);
@@ -665,15 +665,48 @@ void Point::sub_inplace(const Point& other) {
 
 // Mutable in-place doubling: *this = 2*this (no allocation overhead)
 void Point::dbl_inplace() {
+#if defined(SECP256K1_PLATFORM_ESP32) || defined(__XTENSA__) || defined(SECP256K1_PLATFORM_STM32)
+    // Optimized: 5S + 2M formula (saves 2S vs generic 7S + 1M)
+    // Z3 = 2·Y·Z (1M) replaces (Y+Z)²-Y²-Z² (2S), operates on fields directly
+    if (infinity_) return;
+
+    FieldElement xx = x_; xx.square_inplace();           // 1S: X²
+    FieldElement yy = y_; yy.square_inplace();           // 1S: Y²
+    FieldElement yyyy = yy; yyyy.square_inplace();       // 1S: Y⁴
+
+    FieldElement s = x_ + yy;
+    s.square_inplace();                                  // 1S: (X+Y²)²
+    s -= xx + yyyy;
+    s = s + s;                                           // S = 4·X·Y²
+
+    FieldElement m = xx + xx + xx;                        // M = 3·X²
+
+    // Compute Z3 BEFORE modifying x_, y_ (reads original values)
+    FieldElement z3 = y_ * z_;                           // 1M: Y·Z
+    z3 = z3 + z3;                                        // Z3 = 2·Y·Z
+
+    // X3 = M² - 2·S
+    x_ = m;
+    x_.square_inplace();                                 // 1S: M²
+    x_ -= s + s;
+
+    // Y3 = M·(S - X3) - 8·Y⁴
+    FieldElement yyyy8 = yyyy + yyyy;
+    yyyy8 = yyyy8 + yyyy8;
+    yyyy8 = yyyy8 + yyyy8;
+    y_ = m * (s - x_) - yyyy8;                           // 1M
+
+    z_ = z3;
+    is_generator_ = false;
+#else
     JacobianPoint p{x_, y_, z_, infinity_};
     JacobianPoint r = jacobian_double(p);
-    
-    // Update in-place (no new Point allocation!)
     x_ = r.x;
     y_ = r.y;
     z_ = r.z;
     infinity_ = r.infinity;
     is_generator_ = false;
+#endif
 }
 
 // Mutable in-place negation: *this = -this (no allocation overhead)
@@ -797,14 +830,225 @@ void Point::add_affine_constant_inplace(const FieldElement& ax, const FieldEleme
     x_ = x3; y_ = y3; z_ = z3; infinity_ = false; is_generator_ = false;
 }
 
+// ============================================================================
+// Generator fixed-base multiplication (ESP32)
+// Precomputes [1..15] × 2^(4i) × G in affine for i=0..31 (480 entries, 30KB)
+// Turns k*G into ~60 mixed additions with NO doublings.
+// One-time setup: ~50ms; steady-state: ~4ms per k*G
+// ============================================================================
+#if defined(SECP256K1_PLATFORM_ESP32) || defined(ESP_PLATFORM)
+namespace {
+
+struct GenAffine { FieldElement x, y; };
+
+static GenAffine gen_fb_table[480];
+static bool gen_fb_ready = false;
+
+static void init_gen_fb_table() {
+    if (gen_fb_ready) return;
+
+    auto* z_orig = new FieldElement[480];
+    auto* z_pfx  = new FieldElement[480];
+    if (!z_orig || !z_pfx) { delete[] z_orig; delete[] z_pfx; return; }
+
+    Point base = Point::generator();
+
+    for (int w = 0; w < 32; w++) {
+        // Compute [1..15]×base using doubling chain: 7 dbl + 7 add
+        Point pts[15];
+        pts[0]  = base;
+        pts[1]  = base;  pts[1].dbl_inplace();                  // 2B
+        pts[2]  = pts[1]; pts[2].add_inplace(base);             // 3B
+        pts[3]  = pts[1]; pts[3].dbl_inplace();                 // 4B
+        pts[4]  = pts[3]; pts[4].add_inplace(base);             // 5B
+        pts[5]  = pts[2]; pts[5].dbl_inplace();                 // 6B
+        pts[6]  = pts[5]; pts[6].add_inplace(base);             // 7B
+        pts[7]  = pts[3]; pts[7].dbl_inplace();                 // 8B
+        pts[8]  = pts[7]; pts[8].add_inplace(base);             // 9B
+        pts[9]  = pts[4]; pts[9].dbl_inplace();                 // 10B
+        pts[10] = pts[9];  pts[10].add_inplace(base);           // 11B
+        pts[11] = pts[5];  pts[11].dbl_inplace();               // 12B
+        pts[12] = pts[11]; pts[12].add_inplace(base);           // 13B
+        pts[13] = pts[6];  pts[13].dbl_inplace();               // 14B
+        pts[14] = pts[13]; pts[14].add_inplace(base);           // 15B
+
+        for (int d = 0; d < 15; d++) {
+            int idx = w * 15 + d;
+            gen_fb_table[idx].x = pts[d].x_raw();
+            gen_fb_table[idx].y = pts[d].y_raw();
+            z_orig[idx] = pts[d].z_raw();
+        }
+
+        if (w < 31) {
+            for (int d = 0; d < 4; d++) base.dbl_inplace();
+        }
+    }
+
+    // Batch-to-affine: single inversion for all 480 entries
+    z_pfx[0] = z_orig[0];
+    for (int i = 1; i < 480; i++) z_pfx[i] = z_pfx[i - 1] * z_orig[i];
+
+    FieldElement inv = z_pfx[479].inverse();
+
+    for (int i = 479; i > 0; i--) {
+        FieldElement z_inv = inv * z_pfx[i - 1];
+        inv = inv * z_orig[i];
+        FieldElement zi2 = z_inv.square();
+        FieldElement zi3 = zi2 * z_inv;
+        gen_fb_table[i].x = gen_fb_table[i].x * zi2;
+        gen_fb_table[i].y = gen_fb_table[i].y * zi3;
+    }
+    {
+        FieldElement zi2 = inv.square();
+        FieldElement zi3 = zi2 * inv;
+        gen_fb_table[0].x = gen_fb_table[0].x * zi2;
+        gen_fb_table[0].y = gen_fb_table[0].y * zi3;
+    }
+
+    delete[] z_orig;
+    delete[] z_pfx;
+    gen_fb_ready = true;
+}
+
+inline std::uint8_t get_nybble(const Scalar& s, int pos) {
+    int limb = pos / 16;
+    int shift = (pos % 16) * 4;
+    return static_cast<std::uint8_t>((s.limbs()[limb] >> shift) & 0xFu);
+}
+
+static Point gen_fixed_mul(const Scalar& k) {
+    if (!gen_fb_ready) init_gen_fb_table();
+
+    auto decomp = glv_decompose(k);
+
+    static const FieldElement beta =
+        FieldElement::from_bytes(glv_constants::BETA);
+
+    Point result = Point::infinity();
+
+    for (int w = 0; w < 32; w++) {
+        std::uint8_t d1 = get_nybble(decomp.k1, w);
+        if (d1 > 0) {
+            const GenAffine& e = gen_fb_table[w * 15 + d1 - 1];
+            FieldElement ey = decomp.k1_neg
+                ? (FieldElement::zero() - e.y) : e.y;
+            result.add_inplace(Point::from_affine(e.x, ey));
+        }
+
+        std::uint8_t d2 = get_nybble(decomp.k2, w);
+        if (d2 > 0) {
+            const GenAffine& e = gen_fb_table[w * 15 + d2 - 1];
+            FieldElement px = e.x * beta;
+            FieldElement py = decomp.k2_neg
+                ? (FieldElement::zero() - e.y) : e.y;
+            result.add_inplace(Point::from_affine(px, py));
+        }
+    }
+
+    return result;
+}
+
+}  // anonymous namespace
+#endif  // SECP256K1_PLATFORM_ESP32
+
 Point Point::scalar_mul(const Scalar& scalar) const {
-#if !defined(SECP256K1_PLATFORM_ESP32) && !defined(ESP_PLATFORM)
+#if !defined(SECP256K1_PLATFORM_ESP32) && !defined(ESP_PLATFORM) && !defined(SECP256K1_PLATFORM_STM32)
     if (is_generator_) {
         return scalar_mul_generator(scalar);
     }
 #endif
 
-    // wNAF with w=5: better balance of precomputation vs operations
+#if defined(SECP256K1_PLATFORM_ESP32) || defined(ESP_PLATFORM) || defined(SECP256K1_PLATFORM_STM32)
+    // ESP32 only: generator uses precomputed fixed-base table (~4ms vs ~12ms)
+    // STM32 skips this (64KB SRAM too tight for 30KB table)
+#if defined(SECP256K1_PLATFORM_ESP32) || defined(ESP_PLATFORM)
+    if (is_generator_) {
+        return gen_fixed_mul(scalar);
+    }
+#endif
+
+    // ---------------------------------------------------------------
+    // Embedded: GLV decomposition + Shamir's trick
+    // Splits 256-bit scalar into two ~128-bit half-scalars and processes
+    // both streams simultaneously, halving the number of doublings.
+    //   k*P = sign1·|k1|*P + sign2·|k2|*φ(P)
+    //   where k = k1 + k2·λ (mod n), |k1|,|k2| ≈ √n
+    // ---------------------------------------------------------------
+
+    // Step 1: Decompose scalar
+    GLVDecomposition decomp = glv_decompose(scalar);
+
+    // Step 2: Handle k1 sign by negating base point before precomputation
+    Point P_base = decomp.k1_neg ? this->negate() : *this;
+
+    // Step 3: Compute wNAF for both half-scalars (stack-allocated)
+    // w=4 for ~128-bit scalars: table_size=8, ~32 additions per stream
+    constexpr unsigned glv_window = 4;
+    constexpr int glv_table_size = (1 << (glv_window - 1));  // 8
+
+    std::array<int32_t, 140> wnaf1_buf{}, wnaf2_buf{};
+    std::size_t wnaf1_len = 0, wnaf2_len = 0;
+    compute_wnaf_into(decomp.k1, glv_window,
+                      wnaf1_buf.data(), wnaf1_buf.size(), wnaf1_len);
+    compute_wnaf_into(decomp.k2, glv_window,
+                      wnaf2_buf.data(), wnaf2_buf.size(), wnaf2_len);
+
+    // Step 4: Precompute odd multiples [1, 3, 5, …, 15] for P
+    std::array<Point, glv_table_size> tbl_P, tbl_phiP;
+
+    tbl_P[0] = P_base;
+    Point dbl_P = P_base;
+    dbl_P.dbl_inplace();
+    for (int i = 1; i < glv_table_size; i++) {
+        tbl_P[i] = tbl_P[i - 1];
+        tbl_P[i].add_inplace(dbl_P);
+    }
+
+    // Derive φ(P) table from P table using the endomorphism: φ(X:Y:Z) = (β·X:Y:Z)
+    // This costs only 8 field muls vs 7 additions + 1 doubling (~10× cheaper)
+    // Sign adjustment: tbl_P has k1 sign baked in; flip to k2 sign if different
+    bool flip_phi = (decomp.k1_neg != decomp.k2_neg);
+    for (int i = 0; i < glv_table_size; i++) {
+        tbl_phiP[i] = apply_endomorphism(tbl_P[i]);
+        if (flip_phi) tbl_phiP[i].negate_inplace();
+    }
+
+    // Step 5: Shamir's trick — one doubling per iteration, two lookups
+    Point result = Point::infinity();
+    std::size_t max_len = (wnaf1_len > wnaf2_len) ? wnaf1_len : wnaf2_len;
+
+    for (int i = static_cast<int>(max_len) - 1; i >= 0; --i) {
+        result.dbl_inplace();
+
+        // k1 contribution
+        if (static_cast<std::size_t>(i) < wnaf1_len) {
+            int32_t d = wnaf1_buf[static_cast<std::size_t>(i)];
+            if (d > 0) {
+                result.add_inplace(tbl_P[(d - 1) / 2]);
+            } else if (d < 0) {
+                Point neg = tbl_P[(-d - 1) / 2];
+                neg.negate_inplace();
+                result.add_inplace(neg);
+            }
+        }
+
+        // k2 contribution
+        if (static_cast<std::size_t>(i) < wnaf2_len) {
+            int32_t d = wnaf2_buf[static_cast<std::size_t>(i)];
+            if (d > 0) {
+                result.add_inplace(tbl_phiP[(d - 1) / 2]);
+            } else if (d < 0) {
+                Point neg = tbl_phiP[(-d - 1) / 2];
+                neg.negate_inplace();
+                result.add_inplace(neg);
+            }
+        }
+    }
+
+    return result;
+
+#else
+    // Desktop: wNAF with w=5 (GLV handled at higher level)
     // w=5 means 16 precomputed points, ~51 additions for 256-bit scalar
     constexpr unsigned window_width = 5;
     // No-alloc wNAF: write into stack buffer
@@ -848,11 +1092,12 @@ Point Point::scalar_mul(const Scalar& scalar) const {
     }
     
     return result;
+#endif
 }
 
 // Step 1: Use existing GLV decomposition from K*G implementation
 // Q * k = Q * k1 + φ(Q) * k2
-#if !defined(SECP256K1_PLATFORM_ESP32) && !defined(ESP_PLATFORM)
+#if !defined(SECP256K1_PLATFORM_ESP32) && !defined(ESP_PLATFORM) && !defined(SECP256K1_PLATFORM_STM32)
 Point Point::scalar_mul_precomputed_k(const Scalar& k) const {
     // Use the proven GLV decomposition from scalar_mul_generator
     auto decomp = split_scalar_glv(k);
@@ -871,7 +1116,7 @@ Point Point::scalar_mul_precomputed_k(const Scalar& k) const {
 // K decomposition is done once at startup, not per operation
 Point Point::scalar_mul_predecomposed(const Scalar& k1, const Scalar& k2, 
                                        bool neg1, bool neg2) const {
-#if !defined(SECP256K1_PLATFORM_ESP32) && !defined(ESP_PLATFORM)
+#if !defined(SECP256K1_PLATFORM_ESP32) && !defined(ESP_PLATFORM) && !defined(SECP256K1_PLATFORM_STM32)
     // If both signs are positive, use fast Shamir's trick
     // Otherwise, fall back to separate computation (sign handling is complex)
     if (!neg1 && !neg2) {
@@ -1001,9 +1246,8 @@ Point Point::scalar_mul_precomputed_wnaf(const std::vector<int32_t>& wnaf1,
 // All K-dependent work is cached in KPlan (GLV decomposition + wNAF computation)
 // Runtime: φ(Q), tables, Shamir's trick (if signs allow) or separate computation
 Point Point::scalar_mul_with_plan(const KPlan& plan) const {
-#if defined(SECP256K1_PLATFORM_ESP32) || defined(ESP_PLATFORM)
-    // ESP32: GLV not supported, fallback to regular scalar_mul using stored k1
-    // Note: This is slower but works without locks
+#if defined(SECP256K1_PLATFORM_ESP32) || defined(ESP_PLATFORM) || defined(SECP256K1_PLATFORM_STM32)
+    // Embedded: fallback to regular scalar_mul using stored k1
     return scalar_mul(plan.k1);
 #else
     // Fast path: Interleaved Shamir using precomputed wNAF digits from plan
