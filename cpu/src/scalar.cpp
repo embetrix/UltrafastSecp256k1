@@ -98,6 +98,28 @@ inline std::uint64_t sub64(std::uint64_t a, std::uint64_t b, unsigned char& borr
     return true;
 }
 
+#ifdef SECP256K1_HAS_RISCV_ASM
+// RISC-V: Direct assembly calls for scalar add/sub mod N
+extern "C" {
+    void scalar_add_asm_riscv64(uint64_t* r, const uint64_t* a, const uint64_t* b);
+    void scalar_sub_asm_riscv64(uint64_t* r, const uint64_t* a, const uint64_t* b);
+}
+
+[[nodiscard]] limbs4 add_impl(const limbs4& a, const limbs4& b) {
+    limbs4 out;
+    scalar_add_asm_riscv64(out.data(), a.data(), b.data());
+    return out;
+}
+
+[[nodiscard]] limbs4 sub_impl(const limbs4& a, const limbs4& b) {
+    limbs4 out;
+    scalar_sub_asm_riscv64(out.data(), a.data(), b.data());
+    return out;
+}
+
+#else
+// Generic scalar add/sub mod N using 64-bit limbs
+
 [[nodiscard]] limbs4 sub_impl(const limbs4& a, const limbs4& b);
 
 [[nodiscard]] limbs4 add_impl(const limbs4& a, const limbs4& b) {
@@ -137,6 +159,7 @@ inline std::uint64_t sub64(std::uint64_t a, std::uint64_t b, unsigned char& borr
     }
     return out;
 }
+#endif // SECP256K1_HAS_RISCV_ASM
 
 } // namespace
 

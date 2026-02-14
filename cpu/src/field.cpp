@@ -417,8 +417,27 @@ limbs4 add_impl(const limbs4& a, const limbs4& b) {
     return out;
 }
 
+#elif defined(SECP256K1_HAS_RISCV_ASM)
+// RISC-V: Direct assembly calls for add/sub (zero-copy, no wrapper overhead)
+extern "C" {
+    void field_add_asm_riscv64(uint64_t* r, const uint64_t* a, const uint64_t* b);
+    void field_sub_asm_riscv64(uint64_t* r, const uint64_t* a, const uint64_t* b);
+}
+
+limbs4 sub_impl(const limbs4& a, const limbs4& b) {
+    limbs4 out;
+    field_sub_asm_riscv64(out.data(), a.data(), b.data());
+    return out;
+}
+
+limbs4 add_impl(const limbs4& a, const limbs4& b) {
+    limbs4 out;
+    field_add_asm_riscv64(out.data(), a.data(), b.data());
+    return out;
+}
+
 #else
-// Generic add/sub using 64-bit limbs (x86, ESP32/Xtensa, RISC-V)
+// Generic add/sub using 64-bit limbs (x86, ESP32/Xtensa)
 limbs4 sub_impl(const limbs4& a, const limbs4& b) {
     limbs4 out{};
     unsigned char borrow = 0;
