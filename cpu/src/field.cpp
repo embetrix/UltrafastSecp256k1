@@ -277,6 +277,144 @@ void sub_in_place(limbs4& a, const limbs4& b) {
 
 limbs4 add_impl(const limbs4& a, const limbs4& b);
 
+#if defined(SECP256K1_PLATFORM_STM32) && (defined(__arm__) || defined(__thumb__))
+// ============================================================================
+// ARM Cortex-M3 optimized 256-bit modular add/sub
+// Uses ADDS/ADCS chain on 8×32-bit words — avoids expensive 64-bit emulation.
+// Branchless conditional reduction via mask.
+// ============================================================================
+
+// 256-bit subtraction: out = a - b, returns borrow (0 or 1)
+static inline std::uint32_t arm_sub256(
+    const std::uint32_t a[8], const std::uint32_t b[8], std::uint32_t out[8])
+{
+    std::uint32_t borrow;
+    __asm__ volatile(
+        "ldr  r2, [%[a], #0]\n\t"   "ldr  r3, [%[b], #0]\n\t"
+        "subs r2, r2, r3\n\t"       "str  r2, [%[o], #0]\n\t"
+        "ldr  r2, [%[a], #4]\n\t"   "ldr  r3, [%[b], #4]\n\t"
+        "sbcs r2, r2, r3\n\t"       "str  r2, [%[o], #4]\n\t"
+        "ldr  r2, [%[a], #8]\n\t"   "ldr  r3, [%[b], #8]\n\t"
+        "sbcs r2, r2, r3\n\t"       "str  r2, [%[o], #8]\n\t"
+        "ldr  r2, [%[a], #12]\n\t"  "ldr  r3, [%[b], #12]\n\t"
+        "sbcs r2, r2, r3\n\t"       "str  r2, [%[o], #12]\n\t"
+        "ldr  r2, [%[a], #16]\n\t"  "ldr  r3, [%[b], #16]\n\t"
+        "sbcs r2, r2, r3\n\t"       "str  r2, [%[o], #16]\n\t"
+        "ldr  r2, [%[a], #20]\n\t"  "ldr  r3, [%[b], #20]\n\t"
+        "sbcs r2, r2, r3\n\t"       "str  r2, [%[o], #20]\n\t"
+        "ldr  r2, [%[a], #24]\n\t"  "ldr  r3, [%[b], #24]\n\t"
+        "sbcs r2, r2, r3\n\t"       "str  r2, [%[o], #24]\n\t"
+        "ldr  r2, [%[a], #28]\n\t"  "ldr  r3, [%[b], #28]\n\t"
+        "sbcs r2, r2, r3\n\t"       "str  r2, [%[o], #28]\n\t"
+        "mov  %[bw], #0\n\t"
+        "adc  %[bw], %[bw], #0\n\t"  // borrow = !carry (invert)
+        "eor  %[bw], %[bw], #1"     // borrow = 1 if underflow
+        : [bw] "=r"(borrow)
+        : [a] "r"(a), [b] "r"(b), [o] "r"(out)
+        : "r2", "r3", "cc", "memory"
+    );
+    return borrow;
+}
+
+// 256-bit addition: out = a + b, returns carry (0 or 1)
+static inline std::uint32_t arm_add256(
+    const std::uint32_t a[8], const std::uint32_t b[8], std::uint32_t out[8])
+{
+    std::uint32_t carry;
+    __asm__ volatile(
+        "ldr  r2, [%[a], #0]\n\t"   "ldr  r3, [%[b], #0]\n\t"
+        "adds r2, r2, r3\n\t"       "str  r2, [%[o], #0]\n\t"
+        "ldr  r2, [%[a], #4]\n\t"   "ldr  r3, [%[b], #4]\n\t"
+        "adcs r2, r2, r3\n\t"       "str  r2, [%[o], #4]\n\t"
+        "ldr  r2, [%[a], #8]\n\t"   "ldr  r3, [%[b], #8]\n\t"
+        "adcs r2, r2, r3\n\t"       "str  r2, [%[o], #8]\n\t"
+        "ldr  r2, [%[a], #12]\n\t"  "ldr  r3, [%[b], #12]\n\t"
+        "adcs r2, r2, r3\n\t"       "str  r2, [%[o], #12]\n\t"
+        "ldr  r2, [%[a], #16]\n\t"  "ldr  r3, [%[b], #16]\n\t"
+        "adcs r2, r2, r3\n\t"       "str  r2, [%[o], #16]\n\t"
+        "ldr  r2, [%[a], #20]\n\t"  "ldr  r3, [%[b], #20]\n\t"
+        "adcs r2, r2, r3\n\t"       "str  r2, [%[o], #20]\n\t"
+        "ldr  r2, [%[a], #24]\n\t"  "ldr  r3, [%[b], #24]\n\t"
+        "adcs r2, r2, r3\n\t"       "str  r2, [%[o], #24]\n\t"
+        "ldr  r2, [%[a], #28]\n\t"  "ldr  r3, [%[b], #28]\n\t"
+        "adcs r2, r2, r3\n\t"       "str  r2, [%[o], #28]\n\t"
+        "mov  %[cy], #0\n\t"
+        "adc  %[cy], %[cy], #0"
+        : [cy] "=r"(carry)
+        : [a] "r"(a), [b] "r"(b), [o] "r"(out)
+        : "r2", "r3", "cc", "memory"
+    );
+    return carry;
+}
+
+// p = FFFFFFFE FFFFFFFF FFFFFFFF FFFFFFFF FFFFFFFF FFFFFFFF FFFFFFFE FFFFFC2F
+// In 32-bit words (LE): {0xFFFFFC2F, 0xFFFFFFFE, 0xFFFFFFFF, 0xFFFFFFFF,
+//                         0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF}
+static const std::uint32_t PRIME32[8] = {
+    0xFFFFFC2FU, 0xFFFFFFFEU, 0xFFFFFFFFU, 0xFFFFFFFFU,
+    0xFFFFFFFFU, 0xFFFFFFFFU, 0xFFFFFFFFU, 0xFFFFFFFFU
+};
+// C = p + 1 mod 2^256 = {0x3D1, 0x1, 0, 0, 0, 0, 0, 0} (= 2^32 + 977)
+static const std::uint32_t MOD_C32[8] = {
+    0x000003D1U, 0x00000001U, 0, 0, 0, 0, 0, 0
+};
+
+limbs4 sub_impl(const limbs4& a, const limbs4& b) {
+    // Work in 32-bit words the entire time
+    const std::uint32_t* a32 = reinterpret_cast<const std::uint32_t*>(a.data());
+    const std::uint32_t* b32 = reinterpret_cast<const std::uint32_t*>(b.data());
+    std::uint32_t out32[8];
+
+    std::uint32_t borrow = arm_sub256(a32, b32, out32);
+
+    // If borrow: out += p (equiv. out -= C where C = 2^256 - p)
+    // out + p = out - C + 2^256, wrapping to 256 bits
+    if (borrow) {
+        // out += p (add the prime back)
+        arm_add256(out32, PRIME32, out32);
+    }
+
+    // Conditional subtract p if out >= p
+    std::uint32_t tmp[8];
+    std::uint32_t no_borrow = 1 - arm_sub256(out32, PRIME32, tmp);
+    // If no_borrow (out >= p), use tmp; else keep out32
+    const std::uint32_t* src = no_borrow ? tmp : out32;
+
+    limbs4 out;
+    out[0] = (std::uint64_t)src[0] | ((std::uint64_t)src[1] << 32);
+    out[1] = (std::uint64_t)src[2] | ((std::uint64_t)src[3] << 32);
+    out[2] = (std::uint64_t)src[4] | ((std::uint64_t)src[5] << 32);
+    out[3] = (std::uint64_t)src[6] | ((std::uint64_t)src[7] << 32);
+    return out;
+}
+
+limbs4 add_impl(const limbs4& a, const limbs4& b) {
+    const std::uint32_t* a32 = reinterpret_cast<const std::uint32_t*>(a.data());
+    const std::uint32_t* b32 = reinterpret_cast<const std::uint32_t*>(b.data());
+    std::uint32_t out32[8];
+
+    std::uint32_t carry = arm_add256(a32, b32, out32);
+
+    // If carry: out -= p (equiv. out += C)
+    if (carry) {
+        arm_add256(out32, MOD_C32, out32);
+    }
+
+    // Conditional subtract p if out >= p
+    std::uint32_t tmp[8];
+    std::uint32_t no_borrow = 1 - arm_sub256(out32, PRIME32, tmp);
+    const std::uint32_t* src = no_borrow ? tmp : out32;
+
+    limbs4 out;
+    out[0] = (std::uint64_t)src[0] | ((std::uint64_t)src[1] << 32);
+    out[1] = (std::uint64_t)src[2] | ((std::uint64_t)src[3] << 32);
+    out[2] = (std::uint64_t)src[4] | ((std::uint64_t)src[5] << 32);
+    out[3] = (std::uint64_t)src[6] | ((std::uint64_t)src[7] << 32);
+    return out;
+}
+
+#else
+// Generic add/sub using 64-bit limbs (x86, ESP32/Xtensa, RISC-V)
 limbs4 sub_impl(const limbs4& a, const limbs4& b) {
     limbs4 out{};
     unsigned char borrow = 0;
@@ -318,6 +456,7 @@ limbs4 add_impl(const limbs4& a, const limbs4& b) {
     }
     return out;
 }
+#endif // SECP256K1_PLATFORM_STM32 && __arm__
 
 inline void mul_add_to(wide8& acc, std::size_t index, std::uint64_t a, std::uint64_t b) {
     std::uint64_t lo = 0;
@@ -437,6 +576,24 @@ limbs4 reduce(const wide8& t) {
 // ============================================================================
 
 // Accumulate product a[i]*b[j] into 96-bit accumulator (c0,c1,c2)
+#if defined(SECP256K1_PLATFORM_STM32) && (defined(__arm__) || defined(__thumb__))
+// ARM Cortex-M3: UMULL + ADDS/ADCS/ADC — 4 instructions per product
+// vs ~12 instructions with C uint64_t emulation on 32-bit target
+#define MULACC(i, j) do {                                        \
+    std::uint32_t _lo, _hi;                                      \
+    __asm__ volatile(                                             \
+        "umull %[lo], %[hi], %[ai], %[bj]\n\t"               \
+        "adds  %[c0], %[c0], %[lo]\n\t"                       \
+        "adcs  %[c1], %[c1], %[hi]\n\t"                       \
+        "adc   %[c2], %[c2], #0"                                \
+        : [c0] "+r"(c0), [c1] "+r"(c1), [c2] "+r"(c2),     \
+          [lo] "=&r"(_lo), [hi] "=&r"(_hi)                    \
+        : [ai] "r"(a[i]), [bj] "r"(b[j])                      \
+        : "cc"                                                  \
+    );                                                            \
+} while (0)
+#else
+// Generic C version for ESP32/Xtensa and other 32-bit targets
 #define MULACC(i, j) do {                                        \
     std::uint64_t _p = (std::uint64_t)a[i] * b[j];              \
     std::uint64_t _s = (std::uint64_t)c0 + (std::uint32_t)_p;   \
@@ -445,6 +602,7 @@ limbs4 reduce(const wide8& t) {
     c1 = (std::uint32_t)_s;                                      \
     c2 += (std::uint32_t)(_s >> 32);                             \
 } while (0)
+#endif
 // Store column and shift accumulator
 #define COL_END(k) do { r[k] = c0; c0 = c1; c1 = c2; c2 = 0; } while (0)
 
@@ -487,6 +645,40 @@ static void esp32_mul_comba(const std::uint32_t a[8], const std::uint32_t b[8],
 #undef COL_END
 
 // Cross-product: accumulate a[i]*a[j] TWICE (for i≠j symmetry in squaring)
+#if defined(SECP256K1_PLATFORM_STM32) && (defined(__arm__) || defined(__thumb__))
+// ARM Cortex-M3: UMULL + 2×(ADDS/ADCS/ADC) — 7 instructions per cross-product
+#define SQRMAC2(i, j) do {                                       \
+    std::uint32_t _lo, _hi;                                      \
+    __asm__ volatile(                                             \
+        "umull %[lo], %[hi], %[ai], %[aj]\n\t"               \
+        "adds  %[c0], %[c0], %[lo]\n\t"                       \
+        "adcs  %[c1], %[c1], %[hi]\n\t"                       \
+        "adc   %[c2], %[c2], #0\n\t"                           \
+        "adds  %[c0], %[c0], %[lo]\n\t"                       \
+        "adcs  %[c1], %[c1], %[hi]\n\t"                       \
+        "adc   %[c2], %[c2], #0"                                \
+        : [c0] "+r"(c0), [c1] "+r"(c1), [c2] "+r"(c2),     \
+          [lo] "=&r"(_lo), [hi] "=&r"(_hi)                    \
+        : [ai] "r"(a[i]), [aj] "r"(a[j])                      \
+        : "cc"                                                  \
+    );                                                            \
+} while (0)
+// Diagonal: accumulate a[i]² once
+#define SQRMAC1(i) do {                                          \
+    std::uint32_t _lo, _hi;                                      \
+    __asm__ volatile(                                             \
+        "umull %[lo], %[hi], %[ai], %[ai]\n\t"               \
+        "adds  %[c0], %[c0], %[lo]\n\t"                       \
+        "adcs  %[c1], %[c1], %[hi]\n\t"                       \
+        "adc   %[c2], %[c2], #0"                                \
+        : [c0] "+r"(c0), [c1] "+r"(c1), [c2] "+r"(c2),     \
+          [lo] "=&r"(_lo), [hi] "=&r"(_hi)                    \
+        : [ai] "r"(a[i])                                       \
+        : "cc"                                                  \
+    );                                                            \
+} while (0)
+#else
+// Generic C version for ESP32/Xtensa and other 32-bit targets
 #define SQRMAC2(i, j) do {                                       \
     std::uint64_t _p = (std::uint64_t)a[i] * a[j];              \
     std::uint32_t _pl = (std::uint32_t)_p;                       \
@@ -507,6 +699,7 @@ static void esp32_mul_comba(const std::uint32_t a[8], const std::uint32_t b[8],
     c1 = (std::uint32_t)_s;                                      \
     c2 += (std::uint32_t)(_s >> 32);                             \
 } while (0)
+#endif
 #define SQR_COL_END(k) do { r[k] = c0; c0 = c1; c1 = c2; c2 = 0; } while (0)
 
 // Fully unrolled 8-word squaring (36 muls vs 64 for general, 0 branches)
@@ -558,23 +751,38 @@ static limbs4 esp32_reduce_secp256k1(const std::uint32_t r[16]) {
     std::uint32_t res[8];
 
     // First reduction pass: fold r[8..15] into r[0..7]
+    // Fully unrolled: no loop overhead, no branch mispredictions
     acc = (std::uint64_t)r[0] + (std::uint64_t)r[8] * 977ULL;
     res[0] = (std::uint32_t)acc;
     acc >>= 32;
 
-    for (int i = 1; i < 8; i++) {
-        acc += (std::uint64_t)r[i] + (std::uint64_t)r[8 + i] * 977ULL + r[8 + i - 1];
-        res[i] = (std::uint32_t)acc;
-        acc >>= 32;
-    }
+    acc += (std::uint64_t)r[1] + (std::uint64_t)r[9]  * 977ULL + r[8];
+    res[1] = (std::uint32_t)acc; acc >>= 32;
 
-    // Position 8 overflow: carry + r[15] can be up to ~33 bits
+    acc += (std::uint64_t)r[2] + (std::uint64_t)r[10] * 977ULL + r[9];
+    res[2] = (std::uint32_t)acc; acc >>= 32;
+
+    acc += (std::uint64_t)r[3] + (std::uint64_t)r[11] * 977ULL + r[10];
+    res[3] = (std::uint32_t)acc; acc >>= 32;
+
+    acc += (std::uint64_t)r[4] + (std::uint64_t)r[12] * 977ULL + r[11];
+    res[4] = (std::uint32_t)acc; acc >>= 32;
+
+    acc += (std::uint64_t)r[5] + (std::uint64_t)r[13] * 977ULL + r[12];
+    res[5] = (std::uint32_t)acc; acc >>= 32;
+
+    acc += (std::uint64_t)r[6] + (std::uint64_t)r[14] * 977ULL + r[13];
+    res[6] = (std::uint32_t)acc; acc >>= 32;
+
+    acc += (std::uint64_t)r[7] + (std::uint64_t)r[15] * 977ULL + r[14];
+    res[7] = (std::uint32_t)acc; acc >>= 32;
+
+    // Position 8 overflow: carry + r[15]
     acc += r[15];
-    // acc is now the full overflow value (kept as uint64_t, not truncated)
 
-    // Second reduction: fold overflow back into res[0..7]
-    // overflow * 2^256 ≡ overflow * (977 + 2^32) (mod p)
-    while (acc) {
+    // Second reduction: fold overflow (runs at most once, value < 2^34)
+    // overflow × 2^256 ≡ overflow × (977 + 2^32) (mod p)
+    if (acc) {
         std::uint64_t ov = acc;
 
         acc = (std::uint64_t)res[0] + ov * 977ULL;
@@ -585,21 +793,21 @@ static limbs4 esp32_reduce_secp256k1(const std::uint32_t r[16]) {
         res[1] = (std::uint32_t)acc;
         acc >>= 32;
 
-        for (int i = 2; i < 8; i++) {
-            if (!acc) break;
-            acc += res[i];
-            res[i] = (std::uint32_t)acc;
-            acc >>= 32;
-        }
-        // acc is the new overflow (0 or very small, loop terminates quickly)
+        acc += res[2]; res[2] = (std::uint32_t)acc; acc >>= 32;
+        acc += res[3]; res[3] = (std::uint32_t)acc; acc >>= 32;
+        acc += res[4]; res[4] = (std::uint32_t)acc; acc >>= 32;
+        acc += res[5]; res[5] = (std::uint32_t)acc; acc >>= 32;
+        acc += res[6]; res[6] = (std::uint32_t)acc; acc >>= 32;
+        acc += res[7]; res[7] = (std::uint32_t)acc;
+        // acc >> 32 is guaranteed 0 here (overflow was < 2^34)
     }
 
     // Convert 8×32 → 4×64
     limbs4 out;
-    for (int i = 0; i < 4; i++) {
-        out[i] = (std::uint64_t)res[2 * i] |
-                 ((std::uint64_t)res[2 * i + 1] << 32);
-    }
+    out[0] = (std::uint64_t)res[0] | ((std::uint64_t)res[1] << 32);
+    out[1] = (std::uint64_t)res[2] | ((std::uint64_t)res[3] << 32);
+    out[2] = (std::uint64_t)res[4] | ((std::uint64_t)res[5] << 32);
+    out[3] = (std::uint64_t)res[6] | ((std::uint64_t)res[7] << 32);
 
     // Final conditional subtraction of p (at most once)
     if (ge(out, PRIME)) {
