@@ -429,15 +429,15 @@ RISC-V results were collected on **Milk-V Mars** (RV64 + RVV).
 | Operation | Time |
 |-----------|------:|
 | Field Mul | 197 ns |
-| Field Square | 177 ns |
-| Field Add | 35 ns |
+| Field Square | 176 ns |
+| Field Add | 34 ns |
 | Field Sub | 31 ns |
 | Field Inverse | 18 μs |
 | Point Add | 3 μs |
 | Point Double | 1 μs |
-| Point Scalar Mul | 672 μs |
+| Point Scalar Mul | 694 μs |
 | Generator Mul | 40 μs |
-| Batch Inverse (n=100) | 765 ns |
+| Batch Inverse (n=100) | 767 ns |
 | Batch Inverse (n=1000) | 615 ns |
 
 *See [RISCV_OPTIMIZATIONS.md](RISCV_OPTIMIZATIONS.md) for optimization details.*
