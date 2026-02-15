@@ -47,6 +47,36 @@ Ultra high-performance secp256k1 elliptic curve cryptography library with multi-
   - Constant-time (CT) layer for side-channel resistance
   - Public key derivation
 
+### Feature Coverage (v3.2.0)
+
+| Category | Component | Status |
+|----------|-----------|--------|
+| **Core** | Field, Scalar, Point, GLV, Precompute | ✅ |
+| **Assembly** | x64 MASM/GAS, BMI2/ADX, RISC-V | ✅ |
+| **SIMD** | AVX2/AVX-512 batch ops, Montgomery batch inverse | ✅ |
+| **CT** | Constant-time field/scalar/point | ✅ |
+| **ECDSA** | Sign/Verify, RFC 6979, DER/Compact, low-S | ✅ |
+| **Schnorr** | BIP-340 sign/verify | ✅ |
+| **Recovery** | ECDSA pubkey recovery (recid) | ✅ |
+| **ECDH** | Key exchange (raw, xonly, SHA-256) | ✅ |
+| **Multi-scalar** | Strauss/Shamir | ✅ |
+| **Batch verify** | ECDSA + Schnorr batch | ✅ |
+| **BIP-32** | HD derivation, path parsing, xprv/xpub | ✅ |
+| **MuSig2** | BIP-327, key aggregation, 2-round | ✅ |
+| **Taproot** | BIP-341/342, tweak, Merkle | ✅ |
+| **Pedersen** | Commitments, homomorphic, switch | ✅ |
+| **FROST** | Threshold signatures, t-of-n | ✅ |
+| **Adaptor** | Schnorr + ECDSA adaptor sigs | ✅ |
+| **Address** | P2PKH, P2WPKH, P2TR, Base58, Bech32/m | ✅ |
+| **Silent Pay** | BIP-352 | ✅ |
+| **Hashing** | SHA-256, SHA-512, HMAC, Keccak-256 | ✅ |
+| **Coins** | 27 coins, auto-dispatch, EIP-55 | ✅ |
+| **Custom G** | CurveContext, custom generator/curve | ✅ |
+| **BIP-44** | Coin-type HD, auto-purpose | ✅ |
+| **Self-test** | Known vector verification | ✅ |
+| **GPU** | CUDA kernels, occupancy | ✅ |
+| **Platforms** | x64, ARM64, RISC-V, ESP32, WASM, iOS, Android, ROCm | ✅ |
+
 ## 📦 Use Cases
 
 > ### ⚠️ Testers Wanted
