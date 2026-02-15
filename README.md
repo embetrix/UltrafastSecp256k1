@@ -133,6 +133,262 @@ for (int i = 0; i < 1000; ++i) {
     // ... process walker ...
 }
 ```
+### Mixed Add + Batch Inverse: Collecting Z Values for Cheap Jacobian→Affine
+
+During serial mixed additions, each point accumulates a growing Z coordinate.
+To extract affine X (for DB lookup, comparison, etc.), you need Z⁻² — which requires an expensive modular inversion.
+**Solution**: Collect Z values in a batch, then invert them all at once with Montgomery trick (1 inversion + 3N multiplications instead of N inversions).
+
+```cpp
+#include <secp256k1/point.hpp>
+#include <secp256k1/field.hpp>
+
+using namespace secp256k1::fast;
+
+constexpr size_t BATCH_SIZE = 1024;
+
+// Buffers (allocate once, reuse)
+Point batch_points[BATCH_SIZE];
+FieldElement batch_z[BATCH_SIZE];
+
+// Start from some point P
+Point walker = Point::generator();
+FieldElement gx = walker.x();
+FieldElement gy = walker.y();
+
+size_t idx = 0;
+
+for (uint64_t j = 0; j < total_count; ++j) {
+    // Save point and its Z coordinate
+    batch_points[idx] = walker;
+    batch_z[idx] = walker.z();
+    idx++;
+
+    // Advance walker using mixed add (7M + 4S)
+    walker.add_mixed_inplace(gx, gy);
+
+    // When batch is full — do batch inversion
+    if (idx == BATCH_SIZE) {
+        // ONE modular inversion for 1024 points!
+        fe_batch_inverse(batch_z.data(), idx);
+
+        // Now batch_z[i] contains Z_i^(-1)
+        for (size_t i = 0; i < idx; ++i) {
+            FieldElement z_inv_sq = batch_z[i].square();         // Z^(-2)
+            FieldElement x_affine = batch_points[i].X() * z_inv_sq;  // X_affine = X_jac * Z^(-2)
+
+            // Use x_affine for DB lookup, bloom filter check, etc.
+            // ...
+        }
+        idx = 0;  // Reset batch
+    }
+}
+```
+
+**Performance**: For N=1024 batch, this is **~500× cheaper** than individual inversions. A single field inversion costs ~3.5μs (Fermat), while batch amortizes to ~7ns per element.
+
+### GPU Pattern: H-Product Serial Inversion (`jacobian_add_mixed_h`)
+
+Production GPU apps use a more memory-efficient variant: instead of storing full Z coordinates,
+`jacobian_add_mixed_h` returns **H = U2 − X1** separately from each addition. Since Z_{k} = Z_0 · H_0 · H_1 · … · H_{k-1},
+we can reconstruct and invert the entire Z chain from just the H values + initial Z_0.
+
+**Step 1 — Collect H values during serial additions** (CUDA kernel):
+```cuda
+// jacobian_add_mixed_h: madd-2004-hmv (8M+3S), outputs H separately
+// H = U2 - X1, and internally computes Z3 = Z1 * H
+__device__ void jacobian_add_mixed_h(
+    const JacobianPoint* p, const AffinePoint* q,
+    JacobianPoint* r, FieldElement& h_out);
+
+// --- Step kernel: add G repeatedly, save X and H at each slot ---
+FieldElement h;
+win_z0[tid] = P.z;                    // Save initial Z_0
+
+for (int slot = 0; slot < batch_interval; ++slot) {
+    win_x[tid + slot * stride] = P.x; // Save Jacobian X
+    jacobian_add_mixed_h(&P, &G, &P, h);
+    win_h[tid + slot * stride] = h;   // Save H (not Z!)
+}
+```
+
+**Step 2 — Serial Z chain inversion** (1 Fermat inversion per thread):
+```cuda
+// Forward: reconstruct Z_final = Z_0 * H_0 * H_1 * ... * H_{N-1}
+FieldElement z_current = z0_values[tid];
+for (int slot = 0; slot < batch_interval; ++slot) {
+    z_current = z_current * h_array[tid + slot * stride];
+}
+
+// ONE inversion of Z_final (Fermat: 255 sqr + 16 mul)
+FieldElement z_inv = field_inverse(z_current);
+
+// Backward: unwind to get Z_slot^{-2} at each position
+for (int slot = batch_interval - 1; slot >= 0; --slot) {
+    int idx = tid + slot * stride;
+    z_inv = z_inv * h_array[idx];     // Z_{slot}^{-1}
+    h_array[idx] = z_inv * z_inv;     // Z_{slot}^{-2} (overwrite H in-place!)
+}
+```
+
+**Step 3 — Affine X extraction**:
+```cuda
+// h_array now contains Z^{-2} at each slot
+for (int slot = 0; slot < batch_interval; ++slot) {
+    int idx = tid + slot * stride;
+    FieldElement x_affine = win_x[idx] * h_array[idx];  // X_jac * Z^{-2}
+    // Use x_affine for bloom filter check, DB lookup, etc.
+}
+```
+
+**Why H instead of Z?**
+- **Memory**: H is a single field element; Z would also be a field element, but H is computed "for free" inside the addition — no extra multiply needed
+- **Serial inversion**: Z_k = Z_0 · ∏H_i, so the backward sweep naturally yields Z_k^{-1} at each step using just the stored H values
+- **In-place**: H array is overwritten with Z^{-2} — zero extra memory allocation
+- **Cost**: 1 Fermat inversion + 2N multiplications per thread (vs N Fermat inversions naively)
+
+> See production usage: `apps/secp256k1_search_gpu_only/gpu_only.cu` (step kernel) + `unified_split.cuh` (batch inversion kernel)
+
+### Other Batch Inverse Use Cases
+
+#### 1. სრული წერტილის კონვერსია: Jacobian → Affine (X + Y)
+
+როდესაც X და Y ორივე გჭირდება (precompute table, სერიალიზაცია, დებაგი):
+
+```cpp
+// N Jacobian წერტილი → N Affine წერტილი (1 ინვერსია)
+FieldElement z_values[N];
+for (size_t i = 0; i < N; ++i)
+    z_values[i] = points[i].z();
+
+fe_batch_inverse(z_values.data(), N);  // z_values[i] = Z_i^(-1)
+
+for (size_t i = 0; i < N; ++i) {
+    FieldElement z_inv = z_values[i];
+    FieldElement z2 = z_inv.square();          // Z^(-2)
+    FieldElement z3 = z2 * z_inv;              // Z^(-3)
+    affine_x[i] = points[i].X() * z2;         // X_affine = X_jac · Z^(-2)
+    affine_y[i] = points[i].Y() * z3;         // Y_affine = Y_jac · Z^(-3)
+}
+```
+
+#### 2. მხოლოდ X კოორდინატის ამოღება (ძებნა / DB lookup)
+
+უმეტეს შემთხვევაში Y არ გჭირდება — მხოლოდ X-ით ხდება bloom check ან DB lookup:
+
+```cpp
+// CPU პატერნი (sorted_ecc_db.cpp — production code)
+constexpr size_t BATCH_SIZE = 1024;
+Point batch_points[BATCH_SIZE];
+FieldElement batch_z[BATCH_SIZE];
+size_t batch_idx = 0;
+
+for (uint64_t j = start; j < end; ++j) {
+    batch_points[batch_idx] = p;
+    batch_z[batch_idx] = p.z();
+    batch_idx++;
+    p.next_inplace();
+
+    if (batch_idx == BATCH_SIZE || j == end - 1) {
+        fe_batch_inverse(batch_z.data(), batch_idx);  // 1 ინვერსია!
+
+        for (size_t i = 0; i < batch_idx; ++i) {
+            FieldElement z_inv_sq = batch_z[i].square();           // Z^(-2)
+            FieldElement x_affine = batch_points[i].X() * z_inv_sq;  // მხოლოდ X!
+            // bloom_check(x_affine) ან db_lookup(x_affine)
+        }
+        batch_idx = 0;
+    }
+}
+```
+
+#### 3. CUDA: Z ამოღება → batch_inverse_kernel → affine X
+
+GPU-ზე სადაც `JacobianPoint` მასივი გაქვს წერტილებისთვის — Z-ები ცალკე ამოიღება, ინვერსია shared memory-ით:
+
+```cuda
+// Step 1: Z კოორდინატების ამოღება (1 kernel)
+__global__ void extract_z_kernel(const JacobianPoint* points,
+                                 FieldElement* zs, int n) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < n) zs[idx] = points[idx].z;
+}
+
+// Step 2: Montgomery batch inverse (shared memory prefix/suffix scan)
+//         1 ინვერსია block-ზე, შიდა ელემენტები მხოლოდ გამრავლებით
+batch_inverse_kernel<<<blocks, 256, shared_mem>>>(d_zs, d_inv_zs, N);
+
+// Step 3: Affine X = X_jac * Z_inv² (bloom check-თან ერთად)
+__global__ void affine_and_bloom_kernel(const JacobianPoint* points,
+                                        const FieldElement* inv_zs, ...) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    FieldElement z_inv = inv_zs[idx];
+    FieldElement z2;
+    field_sqr(&z_inv, &z2);           // Z^(-2)
+    FieldElement x_aff;
+    field_mul(&points[idx].x, &z2, &x_aff);  // X_affine
+    // bloom_check(&x_aff, bloom_bits)
+}
+```
+
+> ეს პატერნი გამოიყენება: `cuda/app/search_cpu_identical.cuh` — `extract_z_kernel` → `batch_inverse_kernel` → `affine_and_bloom_kernel`
+
+#### 4. Batch მოდულური გაყოფა: a[i] / b[i]
+
+ნებისმიერი ბაჩ გაყოფა field ელემენტებისთვის:
+
+```cpp
+FieldElement denominators[] = {b0, b1, b2, b3};
+fe_batch_inverse(denominators, 4);
+// denominators[i] = b_i^(-1)
+FieldElement r0 = a0 * denominators[0];  // a0 / b0
+FieldElement r1 = a1 * denominators[1];  // a1 / b1
+FieldElement r2 = a2 * denominators[2];  // a2 / b2
+FieldElement r3 = a3 * denominators[3];  // a3 / b3
+```
+
+#### 5. Scratch ბუფერის ხელახალი გამოყენება
+
+მრავალი round-ის შემთხვევაში ერთხელ ალოცირებული scratch ბუფერი ხელახლა გამოიყენება:
+
+```cpp
+std::vector<FieldElement> scratch;
+scratch.reserve(BATCH_SIZE);  // ერთხელ ალოცირება
+
+for (int round = 0; round < total_rounds; ++round) {
+    // ... batch_z[] შევსება ...
+    fe_batch_inverse(batch_z.data(), N, scratch);  // scratch ხელახლა იყენებს
+    // ... affine კონვერსია ...
+}
+```
+
+### Montgomery Trick - ალგორითმის სრული ახსნა
+
+```
+შეყვანა: [a₀, a₁, a₂, ..., aₙ₋₁]
+
+1) Forward pass — კუმულატიური ნამრავლი:
+   prod[0] = a₀
+   prod[1] = a₀ · a₁
+   prod[2] = a₀ · a₁ · a₂
+   ...
+   prod[N-1] = a₀ · a₁ · ... · aₙ₋₁
+
+2) ერთი ინვერსია:
+   inv = prod[N-1]⁻¹ = (a₀ · a₁ · ... · aₙ₋₁)⁻¹
+
+3) Backward pass — ინდივიდუალური ინვერსიების ამოღება:
+   aₙ₋₁⁻¹ = inv · prod[N-2]
+   inv ← inv · aₙ₋₁(original)
+   aₙ₋₂⁻¹ = inv · prod[N-3]
+   inv ← inv · aₙ₋₂(original)
+   ...
+   a₀⁻¹ = inv
+
+ღირებულება: 1 ინვერსია + 3(N-1) გამრავლება
+N=1024: 1×3.5μs + 3069×5ns ≈ 18.8μs (vs 1024×3.5μs = 3584μs → 190× ჩქარი!)
+```
+
 ## �📦 Use Cases
 
 > ### ⚠️ Testers Wanted
