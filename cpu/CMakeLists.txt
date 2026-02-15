@@ -28,6 +28,11 @@ set(SECP256K1_SOURCES
     src/frost.cpp         # FROST threshold signatures (t-of-n)
     src/adaptor.cpp       # Adaptor signatures (Schnorr + ECDSA)
     src/address.cpp       # Address generation + BIP-352 Silent Payments
+    # Coins layer — multi-coin infrastructure
+    src/keccak256.cpp     # Keccak-256 hash (Ethereum address derivation)
+    src/coin_address.cpp  # Unified per-coin address generation
+    src/ethereum.cpp      # Ethereum EIP-55 checksummed addresses
+    src/coin_hd.cpp       # BIP-44 coin-type HD derivation
 )
 
 # Optional inline assembly (Tier 3: Maximum performance, x64/RISC-V)
@@ -553,4 +558,9 @@ if(BUILD_TESTING)
     add_executable(test_v4_features tests/test_v4_features.cpp)
     target_link_libraries(test_v4_features PRIVATE ${SECP256K1_LIB_NAME})
     add_test(NAME test_v4_features COMMAND test_v4_features)
+
+    # Test: Coins layer — multi-coin addresses, Keccak-256, Ethereum, BIP-44, custom generator
+    add_executable(test_coins tests/test_coins.cpp)
+    target_link_libraries(test_coins PRIVATE ${SECP256K1_LIB_NAME})
+    add_test(NAME test_coins COMMAND test_coins)
 endif()

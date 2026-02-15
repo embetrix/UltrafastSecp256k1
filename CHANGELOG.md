@@ -9,6 +9,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.2.0] - 2026-02-16
+
+### Added — Coins Layer
+- **Multi-coin infrastructure** — `coins/coin_params.hpp` with constexpr `CoinParams` definitions for 27 secp256k1-based cryptocurrencies: Bitcoin, Litecoin, Dogecoin, Dash, Ethereum, Bitcoin Cash, Bitcoin SV, Zcash, DigiByte, Namecoin, Peercoin, Vertcoin, Viacoin, Groestlcoin, Syscoin, BNB Smart Chain, Polygon, Avalanche, Fantom, Arbitrum, Optimism, Ravencoin, Flux, Qtum, Horizen, Bitcoin Gold, Komodo
+- **Unified address generation** — `coin_address()`, `coin_address_p2pkh()`, `coin_address_p2wpkh()`, `coin_address_p2tr()` with automatic encoding dispatch per coin (Base58Check / Bech32 / EIP-55)
+- **Per-coin WIF encoding** — `coin_wif_encode()` with coin-specific prefix bytes
+- **Full key derivation pipeline** — `coin_derive()` takes private key + CoinParams → public key + address + WIF in one call
+- **Coin registry** — `find_by_ticker("BTC")`, `find_by_coin_type(60)`, `ALL_COINS[]` array for iteration
+
+### Added — Ethereum & EVM Support
+- **Keccak-256 hash** — Standard Keccak-256 (NOT SHA3-256; Ethereum-compatible 0x01 padding), incremental API (`Keccak256State::update/finalize`), one-shot `keccak256()` (`coins/keccak256.hpp`, `src/keccak256.cpp`)
+- **Ethereum addresses (EIP-55)** — `ethereum_address()` with mixed-case checksummed output, `ethereum_address_raw()`, `ethereum_address_bytes()`, `eip55_checksum()`, `eip55_verify()` (`coins/ethereum.hpp`, `src/ethereum.cpp`)
+- **EVM chain compatibility** — Same address derivation works for BSC, Polygon, Avalanche, Fantom, Arbitrum, Optimism
+
+### Added — BIP-44 HD Derivation
+- **Coin-type derivation** — `coin_derive_key()` with automatic purpose selection: BIP-86 (Taproot) for Bitcoin, BIP-84 (SegWit) for Litecoin, BIP-44 (legacy) for Dogecoin/Ethereum
+- **Path construction** — `coin_derive_path()` builds `m/purpose'/coin_type'/account'/change/index`
+- **Seed-to-address pipeline** — `coin_address_from_seed()` full pipeline: seed → BIP-32 master → BIP-44 derivation → coin address
+
+### Added — Custom Generator Point & Curve Context
+- **CurveContext** — `context.hpp` with custom generator point support, curve order (raw bytes), cofactor, and name (`CurveContext::secp256k1_default()`, `CurveContext::with_generator()`, `CurveContext::custom()`)
+- **Context-aware operations** — `derive_public_key(privkey, &ctx)`, `scalar_mul_G(scalar, &ctx)`, `effective_generator(&ctx)` — nullptr = standard secp256k1, custom context = custom G
+- **Zero-overhead default** — Standard secp256k1 usage with nullptr context has no extra cost
+
+### Added — Tests
+- **test_coins** — 32 tests covering CurveContext, CoinParams registry, Keccak-256 vectors, EIP-55 checksum, Bitcoin/Litecoin/Dogecoin/Dash/Ethereum addresses, WIF encoding, BIP-44 path/derivation, custom generator derivation, full multi-coin pipeline
+
+---
+
 ## [3.1.0] - 2026-02-15
 
 ### Added — Cryptographic Protocols
