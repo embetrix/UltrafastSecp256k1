@@ -117,14 +117,32 @@ cmake --build cuda/build -j
 
 | ოფცია | Default | აღწერა |
 |-------|---------|--------|
-| `CMAKE_CUDA_ARCHITECTURES` | 89 (Ada) | GPU არქიტექტურა (75/80/86/89/90) |
+| `CMAKE_CUDA_ARCHITECTURES` | 89 (Ada) | NVIDIA GPU არქიტექტურა (75/80/86/89/90) |
 | `SECP256K1_CUDA_USE_MONTGOMERY` | OFF | Montgomery domain |
 | `SECP256K1_CUDA_LIMBS_32` | OFF | 8×32-bit limb backend |
+| `SECP256K1_BUILD_ROCM` | OFF | AMD ROCm/HIP build (portable math) |
+| `CMAKE_HIP_ARCHITECTURES` | — | AMD GPU არქიტექტურები (gfx906/gfx1030/gfx1100/...) |
 
 ### მოთხოვნები
-- CUDA Toolkit 12.0+
-- NVIDIA GPU Compute Capability 7.0+ (Volta+)
-- CMake 3.18+
+- **NVIDIA**: CUDA Toolkit 12.0+, GPU Compute Capability 7.0+ (Volta+), CMake 3.18+
+- **AMD**: ROCm 5.0+ (HIP SDK), CMake 3.21+, gfx9/gfx10/gfx11 GPU
+
+### ROCm/HIP Build (AMD GPU)
+
+```bash
+# ROCm Docker-ით ან ნატიური ინსტალაციით
+cmake -S . -B build-rocm -G Ninja \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DSECP256K1_BUILD_ROCM=ON \
+  -DCMAKE_HIP_ARCHITECTURES="gfx1030;gfx1100"
+
+cmake --build build-rocm -j
+./build-rocm/cuda_rocm/secp256k1_cuda_test
+```
+
+> **შენიშვნა**: ROCm build-ში PTX inline asm ავტომატურად იცვლება პორტაბელური
+> `__int128` ფალბექებით (`gpu_compat.h` → `SECP256K1_USE_PTX=0`).
+> 32-bit hybrid mul backend (PTX-dependent) ავტომატურად გამორთულია HIP-ზე.
 
 ---
 

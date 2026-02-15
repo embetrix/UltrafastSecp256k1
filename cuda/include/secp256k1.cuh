@@ -1,5 +1,5 @@
 #pragma once
-#include <cuda_runtime.h>
+#include "gpu_compat.h"
 #include <cstdint>
 #include "hash160.cuh"
 #include "secp256k1/types.hpp"
@@ -16,6 +16,12 @@ namespace cuda {
 // If enabled, use optimized 32-bit hybrid mul/sqr (1.10x faster!)
 #ifndef SECP256K1_CUDA_USE_HYBRID_MUL
 #define SECP256K1_CUDA_USE_HYBRID_MUL 1
+#endif
+
+// Force hybrid off for HIP/ROCm — 32-bit Comba uses PTX inline asm
+#if !SECP256K1_USE_PTX
+#undef SECP256K1_CUDA_USE_HYBRID_MUL
+#define SECP256K1_CUDA_USE_HYBRID_MUL 0
 #endif
 
 // If enabled, field_mul/field_sqr use Montgomery multiplication.
@@ -190,6 +196,12 @@ __device__ __forceinline__ uint64_t add_cc(uint64_t a, uint64_t b, uint64_t& car
     return (uint64_t)sum;
 }
 
+__device__ __forceinline__ uint64_t sub_cc(uint64_t a, uint64_t b, uint64_t& borrow) {
+    unsigned __int128 diff = (unsigned __int128)a - b - borrow;
+    borrow = (uint64_t)((diff >> 127) & 1);
+    return (uint64_t)diff;
+}
+
 // Forward decls used by Montgomery helpers.
 __device__ inline void mul_256_512(const FieldElement* a, const FieldElement* b, uint64_t r[8]);
 __device__ inline void sqr_256_512(const FieldElement* a, uint64_t r[8]);
@@ -199,6 +211,7 @@ __device__ inline void sqr_256_512(const FieldElement* a, uint64_t r[8]);
 // We use n' = -p^{-1} mod 2^64. Since p0 = 2^64 - k, p0^{-1} = (-k)^{-1}.
 // For k = 2^32 + 977, (-k)^{-1} mod 2^64 = -(0x1000003D1)^{-1}.
 // Numerically, n' = 0xD838091DD2253531.
+#if SECP256K1_USE_PTX
 __device__ __forceinline__ void mont_reduce_512(const uint64_t t_in[8], FieldElement* r) {
     uint64_t t0 = t_in[0], t1 = t_in[1], t2 = t_in[2], t3 = t_in[3];
     uint64_t t4 = t_in[4], t5 = t_in[5], t6 = t_in[6], t7 = t_in[7];
@@ -353,6 +366,108 @@ __device__ __forceinline__ void mont_reduce_512(const uint64_t t_in[8], FieldEle
         r->limbs[3] = t7;
     }
 }
+#else
+// Portable mont_reduce_512 — __int128 fallback for HIP/ROCm
+__device__ __forceinline__ void mont_reduce_512(const uint64_t t_in[8], FieldElement* r) {
+    uint64_t t0 = t_in[0], t1 = t_in[1], t2 = t_in[2], t3 = t_in[3];
+    uint64_t t4 = t_in[4], t5 = t_in[5], t6 = t_in[6], t7 = t_in[7];
+
+    constexpr uint64_t N0_INV = 0xD838091DD2253531ULL;
+
+    uint64_t m, m_977_lo, m_977_hi, x0, x1, c_x;
+    uint64_t top_carry = 0;
+
+    // Iteration 0
+    m = t0 * N0_INV;
+    { unsigned __int128 _mp = (unsigned __int128)m * 977; m_977_lo = (uint64_t)_mp; m_977_hi = (uint64_t)(_mp >> 64); }
+    x0 = m_977_lo + (m << 32);
+    c_x = (x0 < m_977_lo);
+    x1 = m_977_hi + (m >> 32) + c_x;
+    {
+        uint64_t bw = 0;
+        t1 = sub_cc(t1, x1, bw); t2 = sub_cc(t2, 0, bw); t3 = sub_cc(t3, 0, bw);
+        t4 = sub_cc(t4, 0, bw); t5 = sub_cc(t5, 0, bw); t6 = sub_cc(t6, 0, bw);
+        t7 = sub_cc(t7, 0, bw);
+        top_carry -= bw;
+    }
+    {
+        uint64_t ca = 0;
+        t4 = add_cc(t4, m, ca); t5 = add_cc(t5, 0, ca);
+        t6 = add_cc(t6, 0, ca); t7 = add_cc(t7, 0, ca);
+        top_carry += ca;
+    }
+
+    // Iteration 1
+    m = t1 * N0_INV;
+    { unsigned __int128 _mp = (unsigned __int128)m * 977; m_977_lo = (uint64_t)_mp; m_977_hi = (uint64_t)(_mp >> 64); }
+    x0 = m_977_lo + (m << 32);
+    c_x = (x0 < m_977_lo);
+    x1 = m_977_hi + (m >> 32) + c_x;
+    {
+        uint64_t bw = 0;
+        t2 = sub_cc(t2, x1, bw); t3 = sub_cc(t3, 0, bw); t4 = sub_cc(t4, 0, bw);
+        t5 = sub_cc(t5, 0, bw); t6 = sub_cc(t6, 0, bw); t7 = sub_cc(t7, 0, bw);
+        top_carry -= bw;
+    }
+    {
+        uint64_t ca = 0;
+        t5 = add_cc(t5, m, ca); t6 = add_cc(t6, 0, ca); t7 = add_cc(t7, 0, ca);
+        top_carry += ca;
+    }
+
+    // Iteration 2
+    m = t2 * N0_INV;
+    { unsigned __int128 _mp = (unsigned __int128)m * 977; m_977_lo = (uint64_t)_mp; m_977_hi = (uint64_t)(_mp >> 64); }
+    x0 = m_977_lo + (m << 32);
+    c_x = (x0 < m_977_lo);
+    x1 = m_977_hi + (m >> 32) + c_x;
+    {
+        uint64_t bw = 0;
+        t3 = sub_cc(t3, x1, bw); t4 = sub_cc(t4, 0, bw);
+        t5 = sub_cc(t5, 0, bw); t6 = sub_cc(t6, 0, bw); t7 = sub_cc(t7, 0, bw);
+        top_carry -= bw;
+    }
+    {
+        uint64_t ca = 0;
+        t6 = add_cc(t6, m, ca); t7 = add_cc(t7, 0, ca);
+        top_carry += ca;
+    }
+
+    // Iteration 3
+    m = t3 * N0_INV;
+    { unsigned __int128 _mp = (unsigned __int128)m * 977; m_977_lo = (uint64_t)_mp; m_977_hi = (uint64_t)(_mp >> 64); }
+    x0 = m_977_lo + (m << 32);
+    c_x = (x0 < m_977_lo);
+    x1 = m_977_hi + (m >> 32) + c_x;
+    {
+        uint64_t bw = 0;
+        t4 = sub_cc(t4, x1, bw); t5 = sub_cc(t5, 0, bw);
+        t6 = sub_cc(t6, 0, bw); t7 = sub_cc(t7, 0, bw);
+        top_carry -= bw;
+    }
+    {
+        uint64_t ca = 0;
+        t7 = add_cc(t7, m, ca);
+        top_carry += ca;
+    }
+
+    // Final reduction
+    uint64_t k0, k1, k2, k3, k_carry;
+    k_carry = 0;
+    k0 = add_cc(t4, K_MOD, k_carry);
+    k1 = add_cc(t5, 0, k_carry);
+    k2 = add_cc(t6, 0, k_carry);
+    k3 = add_cc(t7, 0, k_carry);
+
+    bool use_k = (top_carry != 0) || (k_carry != 0);
+
+    if (use_k) {
+        r->limbs[0] = k0; r->limbs[1] = k1; r->limbs[2] = k2; r->limbs[3] = k3;
+    } else {
+        r->limbs[0] = t4; r->limbs[1] = t5; r->limbs[2] = t6; r->limbs[3] = t7;
+    }
+}
+#endif // SECP256K1_USE_PTX (mont_reduce_512)
 
 // Forward declarations for Montgomery conversion functions (defined after hybrid include)
 __device__ __forceinline__ void field_to_mont(const FieldElement* a, FieldElement* r);
@@ -360,12 +475,7 @@ __device__ __forceinline__ void field_from_mont(const FieldElement* a, FieldElem
 __device__ __forceinline__ void field_mul_mont(const FieldElement* a, const FieldElement* b, FieldElement* r);
 __device__ __forceinline__ void field_sqr_mont(const FieldElement* a, FieldElement* r);
 
-__device__ __forceinline__ uint64_t sub_cc(uint64_t a, uint64_t b, uint64_t& borrow) {
-    unsigned __int128 diff = (unsigned __int128)a - b - borrow;
-    borrow = (uint64_t)((diff >> 127) & 1);
-    return (uint64_t)diff;
-}
-
+#if SECP256K1_USE_PTX
 __device__ __forceinline__ void mul64(uint64_t a, uint64_t b, uint64_t& lo, uint64_t& hi) {
     asm volatile(
         "mul.lo.u64 %0, %2, %3; \n\t"
@@ -374,6 +484,14 @@ __device__ __forceinline__ void mul64(uint64_t a, uint64_t b, uint64_t& lo, uint
         : "l"(a), "l"(b)
     );
 }
+#else
+// Portable __int128 fallback for HIP/ROCm
+__device__ __forceinline__ void mul64(uint64_t a, uint64_t b, uint64_t& lo, uint64_t& hi) {
+    unsigned __int128 product = (unsigned __int128)a * b;
+    lo = (uint64_t)product;
+    hi = (uint64_t)(product >> 64);
+}
+#endif
 
 // Scalar helper functions
 __device__ __forceinline__ bool scalar_ge(const Scalar* a, const uint64_t* b) {
@@ -470,7 +588,8 @@ __device__ inline uint8_t scalar_bit(const Scalar* s, int index) {
 // Standard 64-bit field operations (used for add/sub - faster for these!)
 // ============================================================================
 
-// Field Addition (PTX Optimized)
+// Field Addition
+#if SECP256K1_USE_PTX
 __device__ __forceinline__ void field_add(const FieldElement* a, const FieldElement* b, FieldElement* r) {
     uint64_t r0, r1, r2, r3, carry;
     
@@ -503,8 +622,31 @@ __device__ __forceinline__ void field_add(const FieldElement* a, const FieldElem
         r->limbs[0] = r0; r->limbs[1] = r1; r->limbs[2] = r2; r->limbs[3] = r3;
     }
 }
+#else
+// Portable field_add for HIP/ROCm
+__device__ __forceinline__ void field_add(const FieldElement* a, const FieldElement* b, FieldElement* r) {
+    uint64_t carry = 0;
+    uint64_t r0 = add_cc(a->limbs[0], b->limbs[0], carry);
+    uint64_t r1 = add_cc(a->limbs[1], b->limbs[1], carry);
+    uint64_t r2 = add_cc(a->limbs[2], b->limbs[2], carry);
+    uint64_t r3 = add_cc(a->limbs[3], b->limbs[3], carry);
 
-// Field Subtraction (PTX Optimized)
+    uint64_t borrow = 0;
+    uint64_t t0 = sub_cc(r0, MODULUS[0], borrow);
+    uint64_t t1 = sub_cc(r1, MODULUS[1], borrow);
+    uint64_t t2 = sub_cc(r2, MODULUS[2], borrow);
+    uint64_t t3 = sub_cc(r3, MODULUS[3], borrow);
+
+    if (carry || borrow == 0) {
+        r->limbs[0] = t0; r->limbs[1] = t1; r->limbs[2] = t2; r->limbs[3] = t3;
+    } else {
+        r->limbs[0] = r0; r->limbs[1] = r1; r->limbs[2] = r2; r->limbs[3] = r3;
+    }
+}
+#endif
+
+// Field Subtraction
+#if SECP256K1_USE_PTX
 __device__ __forceinline__ void field_sub(const FieldElement* a, const FieldElement* b, FieldElement* r) {
     uint64_t r0, r1, r2, r3, borrow;
     
@@ -533,10 +675,30 @@ __device__ __forceinline__ void field_sub(const FieldElement* a, const FieldElem
         r->limbs[0] = r0; r->limbs[1] = r1; r->limbs[2] = r2; r->limbs[3] = r3;
     }
 }
+#else
+// Portable field_sub for HIP/ROCm
+__device__ __forceinline__ void field_sub(const FieldElement* a, const FieldElement* b, FieldElement* r) {
+    uint64_t borrow = 0;
+    uint64_t r0 = sub_cc(a->limbs[0], b->limbs[0], borrow);
+    uint64_t r1 = sub_cc(a->limbs[1], b->limbs[1], borrow);
+    uint64_t r2 = sub_cc(a->limbs[2], b->limbs[2], borrow);
+    uint64_t r3 = sub_cc(a->limbs[3], b->limbs[3], borrow);
+
+    if (borrow) {
+        uint64_t carry = 0;
+        r->limbs[0] = add_cc(r0, MODULUS[0], carry);
+        r->limbs[1] = add_cc(r1, MODULUS[1], carry);
+        r->limbs[2] = add_cc(r2, MODULUS[2], carry);
+        r->limbs[3] = add_cc(r3, MODULUS[3], carry);
+    } else {
+        r->limbs[0] = r0; r->limbs[1] = r1; r->limbs[2] = r2; r->limbs[3] = r3;
+    }
+}
+#endif
 
 // Field Negation: r = -a (mod P)
+#if SECP256K1_USE_PTX
 __device__ inline void field_negate(const FieldElement* a, FieldElement* r) {
-    // -a = P - a
     uint64_t r0, r1, r2, r3;
     
     asm volatile(
@@ -554,6 +716,16 @@ __device__ inline void field_negate(const FieldElement* a, FieldElement* r) {
     r->limbs[2] = r2;
     r->limbs[3] = r3;
 }
+#else
+// Portable field_negate for HIP/ROCm
+__device__ inline void field_negate(const FieldElement* a, FieldElement* r) {
+    uint64_t borrow = 0;
+    r->limbs[0] = sub_cc(MODULUS[0], a->limbs[0], borrow);
+    r->limbs[1] = sub_cc(MODULUS[1], a->limbs[1], borrow);
+    r->limbs[2] = sub_cc(MODULUS[2], a->limbs[2], borrow);
+    r->limbs[3] = sub_cc(MODULUS[3], a->limbs[3], borrow);
+}
+#endif
 
 // Field multiplication by small constant: r = a * small (mod P)
 // Optimized for small constants (e.g., 7, 28 for secp256k1)
@@ -616,6 +788,8 @@ __device__ __forceinline__ void sqr_256_512(const FieldElement* a, uint64_t r[8]
     sqr_256_512_ptx(a->limbs, r);
 }
 
+// 512→256 reduction: T mod P where P = 2^256 - K_MOD
+#if SECP256K1_USE_PTX
 __device__ __forceinline__ void reduce_512_to_256(uint64_t t[8], FieldElement* r) {
     // P = 2^256 - K_MOD, where K_MOD = 2^32 + 977 = 0x1000003D1
     // T = T_hi * 2^256 + T_lo ≡ T_hi * K_MOD + T_lo (mod P)
@@ -713,6 +887,75 @@ __device__ __forceinline__ void reduce_512_to_256(uint64_t t[8], FieldElement* r
         r->limbs[0] = t0; r->limbs[1] = t1; r->limbs[2] = t2; r->limbs[3] = t3;
     }
 }
+#else
+// Portable reduce_512_to_256 for HIP/ROCm — uses __int128 instead of PTX
+__device__ __forceinline__ void reduce_512_to_256(uint64_t t[8], FieldElement* r) {
+    uint64_t t0 = t[0], t1 = t[1], t2 = t[2], t3 = t[3];
+    uint64_t t4 = t[4], t5 = t[5], t6 = t[6], t7 = t[7];
+
+    // 1. Compute A = T_hi * K_MOD using __int128
+    unsigned __int128 prod;
+    uint64_t carry_p;
+
+    prod = (unsigned __int128)t4 * K_MOD;
+    uint64_t a0 = (uint64_t)prod;
+    carry_p = (uint64_t)(prod >> 64);
+
+    prod = (unsigned __int128)t5 * K_MOD + carry_p;
+    uint64_t a1 = (uint64_t)prod;
+    carry_p = (uint64_t)(prod >> 64);
+
+    prod = (unsigned __int128)t6 * K_MOD + carry_p;
+    uint64_t a2 = (uint64_t)prod;
+    carry_p = (uint64_t)(prod >> 64);
+
+    prod = (unsigned __int128)t7 * K_MOD + carry_p;
+    uint64_t a3 = (uint64_t)prod;
+    uint64_t a4 = (uint64_t)(prod >> 64);
+
+    // 2. Add A[0..3] to T_lo
+    uint64_t carry = 0;
+    t0 = add_cc(t0, a0, carry);
+    t1 = add_cc(t1, a1, carry);
+    t2 = add_cc(t2, a2, carry);
+    t3 = add_cc(t3, a3, carry);
+
+    // 3. Reduce overflow: extra = a4 + carry
+    uint64_t extra = a4 + carry;
+    unsigned __int128 ek = (unsigned __int128)extra * K_MOD;
+    uint64_t ek_lo = (uint64_t)ek;
+    uint64_t ek_hi = (uint64_t)(ek >> 64);
+
+    carry = 0;
+    t0 = add_cc(t0, ek_lo, carry);
+    t1 = add_cc(t1, ek_hi, carry);
+    t2 = add_cc(t2, 0, carry);
+    t3 = add_cc(t3, 0, carry);
+    uint64_t c = carry;
+
+    // 4. Rare carry overflow
+    if (c) {
+        carry = 0;
+        t0 = add_cc(t0, K_MOD, carry);
+        t1 = add_cc(t1, 0, carry);
+        t2 = add_cc(t2, 0, carry);
+        t3 = add_cc(t3, 0, carry);
+    }
+
+    // 5. Conditional subtraction of P
+    uint64_t borrow = 0;
+    uint64_t r0 = sub_cc(t0, MODULUS[0], borrow);
+    uint64_t r1 = sub_cc(t1, MODULUS[1], borrow);
+    uint64_t r2 = sub_cc(t2, MODULUS[2], borrow);
+    uint64_t r3 = sub_cc(t3, MODULUS[3], borrow);
+
+    if (borrow == 0) {
+        r->limbs[0] = r0; r->limbs[1] = r1; r->limbs[2] = r2; r->limbs[3] = r3;
+    } else {
+        r->limbs[0] = t0; r->limbs[1] = t1; r->limbs[2] = t2; r->limbs[3] = t3;
+    }
+}
+#endif // SECP256K1_USE_PTX (reduce_512_to_256)
 
 // ============================================================================
 // HYBRID 32-bit smart operations (include AFTER reduce_512_to_256)

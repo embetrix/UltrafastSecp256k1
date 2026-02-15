@@ -25,6 +25,7 @@ configure_file(
 # Build options
 option(SECP256K1_BUILD_CPU "Build CPU implementation" ON)
 option(SECP256K1_BUILD_CUDA "Build CUDA GPU support" OFF)
+option(SECP256K1_BUILD_ROCM "Build ROCm/HIP GPU support (AMD)" OFF)
 option(SECP256K1_BUILD_OPENCL "Build OpenCL support" OFF)
 option(SECP256K1_BUILD_TESTS "Build test suite" ON)
 option(SECP256K1_BUILD_BENCH "Build benchmarks" ON)
@@ -128,6 +129,20 @@ if(SECP256K1_BUILD_OPENCL)
     endif()
 endif()
 
+# ROCm/HIP build — reuses cuda/ sources with portable math fallbacks
+if(SECP256K1_BUILD_ROCM)
+    # CMake 3.21+ has native HIP language support
+    cmake_minimum_required(VERSION 3.21)
+    find_package(hip QUIET)
+    if(hip_FOUND)
+        message(STATUS "ROCm/HIP found: ${hip_VERSION}")
+        enable_language(HIP)
+        add_subdirectory(cuda cuda_rocm)  # reuse sources, separate build dir
+    else()
+        message(WARNING "SECP256K1_BUILD_ROCM=ON but HIP SDK not found. Skipping ROCm build.")
+    endif()
+endif()
+
 if(SECP256K1_BUILD_EXAMPLES)
     add_subdirectory(examples)
 endif()
@@ -196,6 +211,7 @@ message(STATUS "")
 message(STATUS "  Components:")
 message(STATUS "    CPU:            ${SECP256K1_BUILD_CPU}")
 message(STATUS "    CUDA:           ${SECP256K1_BUILD_CUDA}")
+message(STATUS "    ROCm/HIP:       ${SECP256K1_BUILD_ROCM}")
 message(STATUS "    OpenCL:         ${SECP256K1_BUILD_OPENCL}")
 message(STATUS "    Tests:          ${SECP256K1_BUILD_TESTS}")
 message(STATUS "    Benchmarks:     ${SECP256K1_BUILD_BENCH}")

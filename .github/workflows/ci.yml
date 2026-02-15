@@ -148,3 +148,33 @@ jobs:
           name: UltrafastSecp256k1.xcframework
           path: build-xcframework/output/UltrafastSecp256k1.xcframework
           retention-days: 30
+
+  # ── ROCm/HIP (AMD GPU, Docker) ────────────────────────────────────────────
+  rocm:
+    runs-on: ubuntu-24.04
+    container:
+      image: rocm/dev-ubuntu-24.04:6.3-complete
+      options: --device=/dev/kfd --device=/dev/dri --group-add video
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build tools
+        run: |
+          apt-get update -qq
+          apt-get install -y cmake ninja-build
+
+      - name: Configure (ROCm/HIP)
+        run: |
+          cmake -S . -B build-rocm -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DSECP256K1_BUILD_CPU=ON \
+            -DSECP256K1_BUILD_ROCM=ON \
+            -DSECP256K1_BUILD_TESTS=ON \
+            -DCMAKE_HIP_ARCHITECTURES="gfx906;gfx908;gfx90a;gfx1030;gfx1100"
+
+      - name: Build
+        run: cmake --build build-rocm -j$(nproc)
+
+      - name: Test (CPU + compile check)
+        run: ctest --test-dir build-rocm --output-on-failure -j$(nproc)

@@ -2,9 +2,15 @@
 
 #include <cstdint>
 
+// If SECP256K1_USE_PTX not defined by gpu_compat.h, default to PTX (CUDA build)
+#ifndef SECP256K1_USE_PTX
+#define SECP256K1_USE_PTX 1
+#endif
+
 // Macro for Accumulating Multiply-Add (c0, c1, c2) += a * b
-// Uses PTX mad.lo.cc / madc.hi.cc for optimal instruction chaining.
 // c0, c1, c2 are the running 192-bit accumulator (low, mid, high).
+#if SECP256K1_USE_PTX
+// Uses PTX mad.lo.cc / madc.hi.cc for optimal instruction chaining.
 #define PTX_MAD_ACC(c0, c1, c2, a, b) \
     asm volatile( \
         "mad.lo.cc.u64 %0, %3, %4, %0; \n\t" \
@@ -13,6 +19,18 @@
         : "+l"(c0), "+l"(c1), "+l"(c2) \
         : "l"(a), "l"(b) \
     );
+#else
+// Portable __int128 fallback for HIP/ROCm
+#define PTX_MAD_ACC(c0, c1, c2, a, b) \
+    do { \
+        unsigned __int128 _mad_prod = (unsigned __int128)(uint64_t)(a) * (uint64_t)(b); \
+        unsigned __int128 _mad_s0 = (unsigned __int128)(c0) + (uint64_t)_mad_prod; \
+        (c0) = (uint64_t)_mad_s0; \
+        unsigned __int128 _mad_s1 = (unsigned __int128)(c1) + (uint64_t)(_mad_prod >> 64) + (_mad_s0 >> 64); \
+        (c1) = (uint64_t)_mad_s1; \
+        (c2) += (uint64_t)(_mad_s1 >> 64); \
+    } while(0)
+#endif
 
 // Optimized 256x256 -> 512 multiplication using Product Scanning (Comba)
 // with PTX mad.lo.cc / madc.hi.cc chain.
