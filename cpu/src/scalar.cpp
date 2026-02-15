@@ -487,6 +487,54 @@ bool Scalar::operator==(const Scalar& rhs) const noexcept {
     return limbs_ == rhs.limbs_;
 }
 
+Scalar Scalar::inverse() const {
+    // Fermat's little theorem: a^{-1} = a^{n-2} mod n
+    // n = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141
+    // n-2 = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD036413F
+    //
+    // Fixed addition-chain exponentiation (no secret-dependent branches).
+    // Uses square-and-multiply with a hand-crafted chain for n-2.
+    // The binary representation of n-2 has 256 bits; we process them MSB→LSB.
+
+    if (is_zero()) return Scalar::zero();
+
+    // n-2 limbs (little-endian):
+    //  [0] = 0xBFD25E8CD036413F
+    //  [1] = 0xBAAEDCE6AF48A03B
+    //  [2] = 0xFFFFFFFFFFFFFFFE
+    //  [3] = 0xFFFFFFFFFFFFFFFF
+    constexpr uint64_t nm2[4] = {
+        0xBFD25E8CD036413FULL,
+        0xBAAEDCE6AF48A03BULL,
+        0xFFFFFFFFFFFFFFFEULL,
+        0xFFFFFFFFFFFFFFFFULL
+    };
+
+    Scalar result = Scalar::one();
+    Scalar base = *this;
+
+    // Square-and-multiply, LSB first is simpler but MSB first is standard.
+    // We do MSB→LSB (bit 255 down to 0).
+    for (int i = 255; i >= 0; --i) {
+        result *= result; // square
+        int limb_idx = i / 64;
+        int bit_idx = i % 64;
+        if ((nm2[limb_idx] >> bit_idx) & 1) {
+            result *= base;
+        }
+    }
+    return result;
+}
+
+Scalar Scalar::negate() const {
+    if (is_zero()) return Scalar::zero();
+    return Scalar(sub_impl(ORDER, limbs_), true);
+}
+
+bool Scalar::is_even() const noexcept {
+    return (limbs_[0] & 1) == 0;
+}
+
 std::uint8_t Scalar::bit(std::size_t index) const {
     if (index >= 256) {
         return 0;

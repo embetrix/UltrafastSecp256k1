@@ -41,6 +41,16 @@ public:
     bool operator==(const Scalar& rhs) const noexcept;
     bool operator!=(const Scalar& rhs) const noexcept { return !(*this == rhs); }
 
+    // Modular inverse: a^{-1} mod n  (Fermat's little theorem: a^{n-2} mod n)
+    // Returns zero if this is zero.
+    Scalar inverse() const;
+
+    // Modular negation: -a mod n  (= n - a, or 0 if a == 0)
+    Scalar negate() const;
+
+    // Parity check: returns true if lowest bit is 0
+    bool is_even() const noexcept;
+
     // Zero-cost conversion to/from shared data type (for cross-backend interop)
     const ::secp256k1::ScalarData& data() const noexcept {
         return *reinterpret_cast<const ::secp256k1::ScalarData*>(&limbs_);

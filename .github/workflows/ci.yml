@@ -1,0 +1,101 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ── Linux (GCC + Clang) ────────────────────────────────────────────────────
+  linux:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler: [gcc-13, clang-17]
+        build_type: [Release, Debug]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install compiler
+        run: |
+          sudo apt-get update -qq
+          if [[ "${{ matrix.compiler }}" == gcc-* ]]; then
+            sudo apt-get install -y g++-13
+          else
+            sudo apt-get install -y clang-17 lld-17
+          fi
+
+      - name: Configure
+        run: |
+          if [[ "${{ matrix.compiler }}" == gcc-* ]]; then
+            export CC=gcc-13 CXX=g++-13
+          else
+            export CC=clang-17 CXX=clang++-17
+          fi
+          cmake -S . -B build \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            -DSECP256K1_BUILD_TESTS=ON \
+            -DSECP256K1_BUILD_BENCH=ON \
+            -DSECP256K1_BUILD_EXAMPLES=ON
+
+      - name: Build
+        run: cmake --build build -j$(nproc)
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure -j$(nproc)
+
+  # ── Windows (MSVC + Clang-cl) ──────────────────────────────────────────────
+  windows:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        build_type: [Release]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure (MSVC)
+        run: |
+          cmake -S . -B build -G "Visual Studio 17 2022" -A x64 `
+            -DSECP256K1_BUILD_TESTS=ON `
+            -DSECP256K1_BUILD_BENCH=ON `
+            -DSECP256K1_BUILD_EXAMPLES=ON
+
+      - name: Build
+        run: cmake --build build --config ${{ matrix.build_type }} -j
+
+      - name: Test
+        run: ctest --test-dir build -C ${{ matrix.build_type }} --output-on-failure -j
+
+  # ── macOS (AppleClang) ─────────────────────────────────────────────────────
+  macos:
+    runs-on: macos-14
+    strategy:
+      fail-fast: false
+      matrix:
+        build_type: [Release]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: |
+          cmake -S . -B build \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            -DSECP256K1_BUILD_TESTS=ON \
+            -DSECP256K1_BUILD_BENCH=ON \
+            -DSECP256K1_BUILD_EXAMPLES=ON
+
+      - name: Build
+        run: cmake --build build -j$(sysctl -n hw.logicalcpu)
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure -j$(sysctl -n hw.logicalcpu)

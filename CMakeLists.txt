@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.18)
 
 project(UltrafastSecp256k1
-    VERSION 1.0.0
+    VERSION 2.2.0
     DESCRIPTION "Ultra high-performance secp256k1 elliptic curve cryptography library"
     LANGUAGES CXX
 )
@@ -14,6 +14,13 @@ set(PROJECT_LICENSE "AGPL-3.0")
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+
+# Generate version header from template
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/version.hpp.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/include/secp256k1/version.hpp"
+    @ONLY
+)
 
 # Build options
 option(SECP256K1_BUILD_CPU "Build CPU implementation" ON)
@@ -81,6 +88,11 @@ endif()
 
 # Subdirectories
 if(SECP256K1_BUILD_CPU)
+    # Enable testing so cpu/CMakeLists.txt BUILD_TESTING guard works
+    if(SECP256K1_BUILD_TESTS OR SECP256K1_BUILD_BENCH)
+        set(BUILD_TESTING ON CACHE BOOL "Enable testing" FORCE)
+        enable_testing()
+    endif()
     add_subdirectory(cpu)
 endif()
 
@@ -124,7 +136,18 @@ endif()
 if(SECP256K1_INSTALL)
     include(GNUInstallDirs)
     include(CMakePackageConfigHelpers)
-    
+
+    # Install public headers
+    install(DIRECTORY cpu/include/secp256k1
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+        FILES_MATCHING PATTERN "*.hpp"
+    )
+
+    # Install generated version header
+    install(FILES "${CMAKE_CURRENT_BINARY_DIR}/include/secp256k1/version.hpp"
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/secp256k1
+    )
+
     # Generate package config
     write_basic_package_version_file(
         "${CMAKE_CURRENT_BINARY_DIR}/secp256k1-fast-config-version.cmake"

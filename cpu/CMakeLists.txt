@@ -14,6 +14,8 @@ set(SECP256K1_SOURCES
     src/ct_field.cpp   # CT field arithmetic (side-channel resistant)
     src/ct_scalar.cpp  # CT scalar arithmetic
     src/ct_point.cpp   # CT point ops (complete addition, CT scalar_mul)
+    src/ecdsa.cpp      # ECDSA sign/verify + RFC 6979
+    src/schnorr.cpp    # Schnorr BIP-340 sign/verify
 )
 
 # Optional inline assembly (Tier 3: Maximum performance, x64/RISC-V)
@@ -247,18 +249,34 @@ if(NOT TARGET ${SECP256K1_LIB_NAME})
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../include>
+        $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/include>
         $<INSTALL_INTERFACE:include>
     PRIVATE
         ${CMAKE_SOURCE_DIR}  # For rdtsc.h and intrinsics.h
 )
 
 target_compile_features(${SECP256K1_LIB_NAME} PUBLIC cxx_std_20)
-
+# Install target
+if(SECP256K1_INSTALL)
+    include(GNUInstallDirs)
+    install(TARGETS ${SECP256K1_LIB_NAME}
+        EXPORT secp256k1-fast-targets
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    )
+    install(EXPORT secp256k1-fast-targets
+        FILE secp256k1-fast-targets.cmake
+        NAMESPACE secp256k1::
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/secp256k1-fast
+    )
+endif()
 target_compile_definitions(${SECP256K1_LIB_NAME}
     PUBLIC
         SECP256K1_FAST_NO_SECURITY_CHECKS=1
         SECP256K1_ULTRA_SPEED=1        # Maximum speed mode
         $<$<CONFIG:Release>:NDEBUG>    # Remove assertions only in Release
+        $<$<CXX_COMPILER_ID:MSVC>:SECP256K1_NO_INT128=1>  # MSVC has no __int128
 )
 
 # Optional inline assembly support (x64 only)
@@ -422,6 +440,10 @@ if(BUILD_TESTING)
     add_executable(bench_atomic_operations bench/bench_atomic_operations.cpp)
     target_link_libraries(bench_atomic_operations PRIVATE ${SECP256K1_LIB_NAME})
 
+    # CT (Constant-Time) layer benchmark — fast:: vs ct:: overhead comparison
+    add_executable(bench_ct bench/bench_ct.cpp)
+    target_link_libraries(bench_ct PRIVATE ${SECP256K1_LIB_NAME})
+
     # Comprehensive cross-platform benchmark (all operations for README performance table)
     add_executable(bench_comprehensive bench/bench_comprehensive_riscv.cpp)
     target_link_libraries(bench_comprehensive PRIVATE ${SECP256K1_LIB_NAME})
@@ -469,4 +491,9 @@ if(BUILD_TESTING)
         target_link_options(test_ct PRIVATE "LINKER:/STACK:8388608")
     endif()
     add_test(NAME test_ct COMMAND test_ct)
+
+    # Test: ECDSA + Schnorr (BIP-340) sign/verify
+    add_executable(test_ecdsa_schnorr tests/test_ecdsa_schnorr.cpp)
+    target_link_libraries(test_ecdsa_schnorr PRIVATE ${SECP256K1_LIB_NAME})
+    add_test(NAME test_ecdsa_schnorr COMMAND test_ecdsa_schnorr)
 endif()
