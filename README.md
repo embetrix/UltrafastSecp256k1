@@ -9,19 +9,22 @@ Ultra high-performance secp256k1 elliptic curve cryptography library with multi-
 [![CUDA](https://img.shields.io/badge/CUDA-12.0+-green.svg)](https://developer.nvidia.com/cuda-toolkit)
 [![OpenCL](https://img.shields.io/badge/OpenCL-3.0-green.svg)](https://www.khronos.org/opencl/)
 [![RISC-V](https://img.shields.io/badge/RISC--V-RV64GC-orange.svg)](https://riscv.org/)
+[![ARM64](https://img.shields.io/badge/ARM64-Cortex--A55%2FA76-orange.svg)](https://developer.android.com/ndk)
 [![ESP32-S3](https://img.shields.io/badge/ESP32--S3-Xtensa%20LX7-orange.svg)](https://www.espressif.com/en/products/socs/esp32-s3)
 [![STM32](https://img.shields.io/badge/STM32-Cortex--M3-orange.svg)](https://www.st.com/en/microcontrollers-microprocessors/stm32f103ze.html)
 
 ## 🚀 Features
 
 - **Multi-Platform Architecture**
-  - CPU: Optimized for x86-64 (BMI2/ADX) and RISC-V (RV64GC)
+  - CPU: Optimized for x86-64 (BMI2/ADX), RISC-V (RV64GC), and ARM64 (MUL/UMULH)
+  - Mobile: Android ARM64 (NDK r27, Clang 18)
   - Embedded: ESP32-S3 (Xtensa LX7) + STM32F103 (ARM Cortex-M3) support
   - GPU/CUDA: Batch operations with 4.63M kG/s throughput
   - GPU/OpenCL: PTX inline asm, 3.39M kG/s
 
 - **Performance**
   - x86-64: 3-5× speedup with BMI2/ADX assembly
+  - ARM64: ~5× speedup with MUL/UMULH inline assembly
   - RISC-V: 2-3× speedup with native assembly
   - CUDA: Batch processing of thousands of operations in parallel
   - Memory-mapped database support for large-scale lookups
@@ -465,6 +468,26 @@ RISC-V results were collected on **Milk-V Mars** (RV64 + RVV).
 | Scalar × G (Generator Mul) | 37,982 μs |
 
 *ARM Cortex-M3 inline assembly (UMULL/ADDS/ADCS) for multiply/squaring/reduction. Portable C++ for field add/sub. All 35 library tests pass. See [examples/stm32_test/](examples/stm32_test/) for details.*
+
+### Android ARM64 (RK3588, Cortex-A55/A76 @ 2.4 GHz, NDK r27 Clang 18, -O3)
+
+| Operation | Time |
+|-----------|------:|
+| Field Mul | 85 ns |
+| Field Square | 66 ns |
+| Field Add | 18 ns |
+| Field Sub | 16 ns |
+| Field Inverse | 2,621 ns |
+| Scalar Mul | 105 ns |
+| Scalar Add | 12 ns |
+| Point Add | 9,329 ns |
+| Point Double | 8,711 ns |
+| Fast Scalar × G (Generator Mul) | 7.6 μs |
+| Fast Scalar × P (Non-Generator) | 77.6 μs |
+| CT Scalar × G | 545 μs |
+| CT ECDH | 545 μs |
+
+*ARM64 inline assembly (MUL/UMULH) for field mul/sqr/add/sub/neg. ~5× faster than generic C++. All 12 Android tests pass. See [android/](android/) for details.*
 
 ### Embedded Cross-Platform Comparison
 
