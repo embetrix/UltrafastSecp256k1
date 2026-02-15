@@ -133,6 +133,93 @@ for (int i = 0; i < 1000; ++i) {
     // ... process walker ...
 }
 ```
+### Mixed Add + Batch Inverse: Collecting Z Values for Cheap Jacobian→Affine
+
+During serial mixed additions, each point accumulates a growing Z coordinate.
+To extract affine X (for DB lookup, comparison, etc.), you need Z⁻² — which requires an expensive modular inversion.
+**Solution**: Collect Z values in a batch, then invert them all at once with Montgomery trick (1 inversion + 3N multiplications instead of N inversions).
+
+```cpp
+#include <secp256k1/point.hpp>
+#include <secp256k1/field.hpp>
+
+using namespace secp256k1::fast;
+
+constexpr size_t BATCH_SIZE = 1024;
+
+// Buffers (allocate once, reuse)
+Point batch_points[BATCH_SIZE];
+FieldElement batch_z[BATCH_SIZE];
+
+// Start from some point P
+Point walker = Point::generator();
+FieldElement gx = walker.x();
+FieldElement gy = walker.y();
+
+size_t idx = 0;
+
+for (uint64_t j = 0; j < total_count; ++j) {
+    // Save point and its Z coordinate
+    batch_points[idx] = walker;
+    batch_z[idx] = walker.z();
+    idx++;
+
+    // Advance walker using mixed add (7M + 4S)
+    walker.add_mixed_inplace(gx, gy);
+
+    // When batch is full — do batch inversion
+    if (idx == BATCH_SIZE) {
+        // ONE modular inversion for 1024 points!
+        fe_batch_inverse(batch_z.data(), idx);
+
+        // Now batch_z[i] contains Z_i^(-1)
+        for (size_t i = 0; i < idx; ++i) {
+            FieldElement z_inv_sq = batch_z[i].square();         // Z^(-2)
+            FieldElement x_affine = batch_points[i].X() * z_inv_sq;  // X_affine = X_jac * Z^(-2)
+
+            // Use x_affine for DB lookup, bloom filter check, etc.
+            // ...
+        }
+        idx = 0;  // Reset batch
+    }
+}
+```
+
+**Performance**: For N=1024 batch, this is **~500× cheaper** than individual inversions. A single field inversion costs ~3.5μs (Fermat), while batch amortizes to ~7ns per element.
+
+### Other Batch Inverse Use Cases
+
+```cpp
+// 1. Batch Jacobian-to-Affine conversion (e.g. precompute table)
+std::vector<FieldElement> z_values(N);
+for (size_t i = 0; i < N; ++i)
+    z_values[i] = points[i].z();
+
+fe_batch_inverse(z_values.data(), N);  // z_values now = Z^(-1)
+
+for (size_t i = 0; i < N; ++i) {
+    FieldElement z2 = z_values[i].square();          // Z^(-2)
+    FieldElement z3 = z2 * z_values[i];              // Z^(-3)
+    affine_x[i] = points[i].X() * z2;               // X_affine
+    affine_y[i] = points[i].Y() * z3;               // Y_affine
+}
+
+// 2. Batch modular division: compute a[i] / b[i] for all i
+std::vector<FieldElement> denominators = {b0, b1, b2, b3};
+fe_batch_inverse(denominators.data(), denominators.size());
+// Now denominators[i] = b_i^(-1)
+FieldElement result0 = a0 * denominators[0];  // a0 / b0
+FieldElement result1 = a1 * denominators[1];  // a1 / b1
+
+// 3. Scratch buffer reuse (avoid repeated heap allocation)
+std::vector<FieldElement> scratch;
+scratch.reserve(BATCH_SIZE);  // Allocate once
+
+for (int round = 0; round < many_rounds; ++round) {
+    // ... fill z_values ...
+    fe_batch_inverse(z_values.data(), N, scratch);  // Reuses scratch
+}
+```
 ## �📦 Use Cases
 
 > ### ⚠️ Testers Wanted
