@@ -16,7 +16,7 @@ export declare class Secp256k1 {
     /** Run self-test. Returns true if all internal checks pass. */
     selftest(): boolean;
 
-    /** Library version string (e.g. "2.2.0"). */
+    /** Library version string (e.g. "3.0.0"). */
     version(): string;
 
     /**

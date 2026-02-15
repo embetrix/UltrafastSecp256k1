@@ -47,7 +47,7 @@ int secp256k1_wasm_selftest(void) {
 
 const char* secp256k1_wasm_version(void) {
     // Matches PROJECT_VERSION in CMakeLists.txt
-    return "2.2.0";
+    return "3.0.0";
 }
 
 int secp256k1_wasm_pubkey_create(const uint8_t* seckey32,

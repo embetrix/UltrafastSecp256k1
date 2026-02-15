@@ -49,6 +49,13 @@ Ultra high-performance secp256k1 elliptic curve cryptography library with multi-
 
 ## 📦 Use Cases
 
+> ### ⚠️ Testers Wanted
+> We need community testers for platforms we cannot fully validate in CI:
+> - **iOS** — Build & run on real iPhone/iPad hardware with Xcode
+> - **AMD GPU (ROCm/HIP)** — Test on AMD Radeon RX / Instinct GPUs
+>
+> If you can help, please [open an issue](https://github.com/shrec/UltrafastSecp256k1/issues) with your results!
+
 - **Cryptocurrency Applications**
   - Bitcoin/Ethereum address generation
   - Transaction signing and verification

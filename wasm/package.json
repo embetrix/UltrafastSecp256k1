@@ -1,6 +1,6 @@
 {
   "name": "@ultrafastsecp256k1/wasm",
-  "version": "2.2.0",
+  "version": "3.0.0",
   "description": "Ultra high-performance secp256k1 elliptic curve cryptography — WebAssembly build",
   "type": "module",
   "main": "secp256k1.mjs",

@@ -7,6 +7,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [3.0.0] - 2025-07-22
+
+### Added — Cryptographic Primitives
+- **ECDSA (RFC 6979)** — Deterministic signing & verification (`cpu/include/ecdsa.hpp`)
+- **Schnorr BIP-340** — x-only signing & verification (`cpu/include/schnorr.hpp`)
+- **SHA-256** — Standalone hash, zero-dependency (`cpu/include/sha256.hpp`)
+- **Constant-time benchmarks** — CT layer micro-benchmarks via CTest
+
+### Added — Platform Support
+- **iOS** — CMake toolchain, XCFramework build script, SPM (`Package.swift`), CocoaPods (`UltrafastSecp256k1.podspec`), C++ umbrella header
+- **WebAssembly (Emscripten)** — C API (11 functions), JS wrapper (`secp256k1.mjs`), TypeScript declarations, npm package `@ultrafastsecp256k1/wasm`
+- **ROCm / HIP** — CUDA ↔ HIP portability layer (`gpu_compat.h`), all 24 PTX asm blocks guarded with `#if SECP256K1_USE_PTX` + portable `__int128` alternatives, dual CUDA/HIP CMake build
+- **Android NDK** — arm64-v8a CI build with NDK r27c
+
+### Added — Infrastructure
+- **CI/CD (GitHub Actions)** — Linux (gcc-13/clang-17 × Release/Debug), Windows (MSVC), macOS (AppleClang), iOS (OS + Simulator + XCFramework), WASM (Emscripten), Android (NDK), ROCm (Docker)
+- **Doxygen → GitHub Pages** — Auto-generated API docs on push to main
+- **Fuzzing harness** — `tests/fuzz_field.cpp` for libFuzzer field arithmetic testing
+- **Version header** — `cmake/version.hpp.in` auto-generates `SECP256K1_VERSION_*` macros
+- **`.clang-format` + `.editorconfig`** — Consistent code formatting
+- **Desktop example app** — `examples/desktop_example.cpp` with CTest integration
+- **CMake install** — `install(TARGETS)` + `install(DIRECTORY)` for system-wide deployment
+
+### Changed
+- **Search kernels relocated** — `cuda/include/` → `cuda/app/` (cleaner library vs. app separation)
+- **README** — 7 CI badges, comprehensive build instructions for all platforms
+
+### ⚠️ Testers Wanted
+> We need community testers for platforms we cannot fully validate in CI:
+> - **iOS** — Real device testing (iPhone/iPad with Xcode)
+> - **AMD GPU (ROCm/HIP)** — AMD Radeon RX / Instinct hardware
+>
+> If you have access to these platforms, please run the build and report results!
+> Open an issue at https://github.com/shrec/UltrafastSecp256k1/issues
+
+---
+
+## [2.0.0] - 2025-07-10
+
 ### Added
 - **Shared POD types** (`include/secp256k1/types.hpp`): Canonical data layouts
   (`FieldElementData`, `ScalarData`, `AffinePointData`, `JacobianPointData`,

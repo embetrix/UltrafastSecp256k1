@@ -82,7 +82,7 @@ Initialize the WASM module.
 Run built-in self-test.
 
 ### `version(): string`
-Library version (e.g. "2.2.0").
+Library version (e.g. "3.0.0").
 
 ### `pubkeyCreate(seckey: Uint8Array): { x, y }`
 Derive public key from 32-byte private key.

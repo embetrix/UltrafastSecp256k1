@@ -25,7 +25,7 @@ extern "C" {
 /** Run built-in self-test. Returns 1 on success, 0 on failure. */
 int secp256k1_wasm_selftest(void);
 
-/** Return library version as a static string (e.g. "2.2.0"). */
+/** Return library version as a static string (e.g. "3.0.0"). */
 const char* secp256k1_wasm_version(void);
 
 /* ── Key Generation ───────────────────────────────────────────────────────── */

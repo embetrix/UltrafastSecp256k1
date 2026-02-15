@@ -11,7 +11,7 @@
 cmake_minimum_required(VERSION 3.18)
 
 project(UltrafastSecp256k1Wasm
-    VERSION 2.2.0
+    VERSION 3.0.0
     LANGUAGES CXX
     DESCRIPTION "UltrafastSecp256k1 WASM bindings"
 )
