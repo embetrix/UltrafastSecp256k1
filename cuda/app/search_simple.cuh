@@ -6,7 +6,7 @@
 namespace secp256k1 {
 namespace cuda {
 
-// SearchResult defined in search_cpu_identical.cuh — use that as canonical definition
+// SearchResult defined in search_cpu_identical.cuh (app/) — use that as canonical definition
 #ifndef SECP256K1_CUDA_SEARCH_RESULT_DEFINED
 #define SECP256K1_CUDA_SEARCH_RESULT_DEFINED
 // 40-byte structure for results
