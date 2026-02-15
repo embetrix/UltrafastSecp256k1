@@ -1,17 +1,22 @@
 # Performance Benchmarks
 
-Benchmark results for UltrafastSecp256k1 across different platforms.
+Benchmark results for UltrafastSecp256k1 across all supported platforms.
 
 ---
 
 ## Summary
 
-| Platform | Field Mul | Scalar Mul | Generator Mul |
-|----------|-----------|------------|---------------|
-| x86-64 (i5, AVX2) | 33 ns | 110 μs | 5 μs |
-| RISC-V 64 (RVV) | 198 ns | 672 μs | 40 μs |
-| CUDA (RTX 5060 Ti) | 0.2 ns | 266.5 ns | 216.1 ns |
-| OpenCL (RTX 5060 Ti) | 0.2 ns | 295.1 ns | 307.7 ns |
+| Platform | Field Mul | Generator Mul | Scalar Mul |
+|----------|-----------|---------------|------------|
+| x86-64 (i5, AVX2) | 33 ns | 5 μs | 110 μs |
+| x86-64 (Clang 21, Win) | 32 ns | 7 μs | 111 μs |
+| RISC-V 64 (RVV) | 173 ns | 37 μs | 621 μs |
+| ARM64 (RK3588) | 85 ns | 7.6 μs | 77.6 μs |
+| ESP32-S3 (LX7, 240 MHz) | 7,458 ns | 2,483 μs | — |
+| ESP32 (LX6, 240 MHz) | 6,993 ns | 6,203 μs | — |
+| STM32F103 (CM3, 72 MHz) | 15,331 ns | 37,982 μs | — |
+| CUDA (RTX 5060 Ti) | 0.2 ns | 216.1 ns | 266.5 ns |
+| OpenCL (RTX 5060 Ti) | 0.2 ns | 295.1 ns | — |
 
 ---
 
@@ -144,6 +149,103 @@ Benchmark results for UltrafastSecp256k1 across different platforms.
 
 ---
 
+## Android ARM64 Benchmarks
+
+**Hardware:** RK3588 (Cortex-A55/A76 @ 2.4 GHz)  
+**OS:** Android  
+**Compiler:** NDK r27, Clang 18  
+**Assembly:** ARM64 inline (MUL/UMULH)
+
+| Operation | Time | Notes |
+|-----------|------|-------|
+| Field Mul | 85 ns | ARM64 MUL/UMULH |
+| Field Square | 66 ns | |
+| Field Add | 18 ns | |
+| Field Sub | 16 ns | |
+| Field Inverse | 2,621 ns | Fermat's theorem |
+| Scalar Mul | 105 ns | |
+| Point Add | 9,329 ns | |
+| Point Double | 8,711 ns | |
+| Fast Scalar × G | 7.6 μs | Precomputed tables |
+| Fast Scalar × P | 77.6 μs | Non-generator |
+| CT Scalar × G | 545 μs | Constant-time |
+| CT ECDH | 545 μs | Full CT |
+
+ARM64 inline assembly provides **~5× speedup** over portable C++.
+
+---
+
+## ESP32-S3 Benchmarks (Embedded)
+
+**Hardware:** ESP32-S3 (Xtensa LX7 Dual Core @ 240 MHz)  
+**OS:** ESP-IDF v5.5.1  
+**Assembly:** None (portable C++, no `__int128`)
+
+| Operation | Time | Notes |
+|-----------|------|-------|
+| Field Mul | 7,458 ns | |
+| Field Square | 7,592 ns | |
+| Field Add | 636 ns | |
+| Field Inv | 844 μs | |
+| Scalar × G | 2,483 μs | Generator mul |
+
+All 35 library self-tests pass.
+
+---
+
+## ESP32-PICO-D4 Benchmarks (Embedded)
+
+**Hardware:** ESP32-PICO-D4 (Xtensa LX6 Dual Core @ 240 MHz)  
+**OS:** ESP-IDF v5.5.1  
+**Assembly:** None (portable C++, no `__int128`)
+
+| Operation | Time | Notes |
+|-----------|------|-------|
+| Field Mul | 6,993 ns | |
+| Field Square | 6,247 ns | |
+| Field Add | 985 ns | |
+| Field Inv | 609 μs | |
+| Scalar × G | 6,203 μs | Generator mul |
+| CT Scalar × G | 44,810 μs | Constant-time |
+| CT Add (complete) | 249,672 ns | |
+| CT Dbl | 87,113 ns | |
+| CT/Fast ratio | 6.5× | |
+
+All 35 self-tests + 8 CT tests pass.
+
+---
+
+## STM32F103 Benchmarks (Embedded)
+
+**Hardware:** STM32F103ZET6 (ARM Cortex-M3 @ 72 MHz)  
+**Compiler:** ARM GCC 13.3.1, -O3  
+**Assembly:** ARM Cortex-M3 inline (UMULL/ADDS/ADCS)
+
+| Operation | Time | Notes |
+|-----------|------|-------|
+| Field Mul | 15,331 ns | ARM inline asm |
+| Field Square | 12,083 ns | ARM inline asm |
+| Field Add | 4,139 ns | Portable C++ |
+| Field Inv | 1,645 μs | |
+| Scalar × G | 37,982 μs | Generator mul |
+
+All 35 library self-tests pass.
+
+---
+
+## Embedded Cross-Platform Comparison
+
+| Operation | ESP32-S3 (LX7) | ESP32 (LX6) | STM32F103 (M3) |
+|-----------|:--------------:|:-----------:|:-------------:|
+| | 240 MHz | 240 MHz | 72 MHz |
+| Field Mul | 7,458 ns | 6,993 ns | 15,331 ns |
+| Field Square | 7,592 ns | 6,247 ns | 12,083 ns |
+| Field Add | 636 ns | 985 ns | 4,139 ns |
+| Field Inv | 844 μs | 609 μs | 1,645 μs |
+| Scalar × G | 2,483 μs | 6,203 μs | 37,982 μs |
+
+---
+
 ## Comparison with Other Libraries
 
 ### vs libsecp256k1 (Bitcoin Core)
@@ -219,22 +321,25 @@ Benchmark results for UltrafastSecp256k1 across different platforms.
 
 ### Planned
 
-- [ ] ARM64 NEON assembly
 - [ ] AVX-512 vectorization (x86-64)
 - [ ] Multi-threaded batch operations
-- [x] OpenCL backend (**DONE** — 1.64× faster kG than CUDA)
+- [x] ARM64 NEON/MUL assembly (**DONE** — ~5× speedup)
+- [x] OpenCL backend (**DONE** — 3.39M kG/s)
 - [x] Shared POD types across backends
+- [x] ARM64 inline assembly (MUL/UMULH)
 
 ### Experimental
 
-- [ ] Montgomery domain for CUDA (mixed results)
+- [ ] AVX-512 vectorization (x86-64)
+- [ ] Multi-threaded batch operations
+- [x] Montgomery domain for CUDA (mixed results)
 - [x] 8×32-bit hybrid limb representation (**DONE** — 1.10× faster mul)
-- [ ] Constant-time side-channel resistance
+- [x] Constant-time side-channel resistance (CT layer implemented)
 
 ---
 
 ## Version
 
-UltrafastSecp256k1 v1.0.0  
+UltrafastSecp256k1 v3.0.0  
 Benchmarks updated: 2026-02-14
 

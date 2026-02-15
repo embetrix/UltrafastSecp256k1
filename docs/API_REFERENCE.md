@@ -1,6 +1,6 @@
 # UltrafastSecp256k1 API Reference
 
-Complete API documentation for both CPU and CUDA implementations.
+Complete API documentation for CPU, CUDA, and WASM implementations.
 
 ---
 
@@ -10,14 +10,19 @@ Complete API documentation for both CPU and CUDA implementations.
    - [FieldElement](#fieldelement)
    - [Scalar](#scalar)
    - [Point](#point)
+   - [ECDSA (RFC 6979)](#ecdsa-rfc-6979)
+   - [Schnorr (BIP-340)](#schnorr-bip-340)
+   - [SHA-256](#sha-256)
+   - [Constant-Time Layer](#constant-time-layer)
    - [Utility Functions](#utility-functions)
 2. [CUDA API](#cuda-api)
    - [Data Structures](#cuda-data-structures)
    - [Field Operations](#cuda-field-operations)
    - [Point Operations](#cuda-point-operations)
    - [Batch Operations](#cuda-batch-operations)
-3. [Performance Tips](#performance-tips)
-4. [Examples](#examples)
+3. [WASM API](#wasm-api)
+4. [Performance Tips](#performance-tips)
+5. [Examples](#examples)
 
 ---
 
@@ -308,6 +313,257 @@ if (!passed) {
 
 ---
 
+### ECDSA (RFC 6979)
+
+**Namespace:** `secp256k1`
+
+**Header:**
+```cpp
+#include <secp256k1/ecdsa.hpp>
+```
+
+#### ECDSASignature
+
+```cpp
+struct ECDSASignature {
+    fast::Scalar r;
+    fast::Scalar s;
+
+    // DER encoding (variable length, max 72 bytes)
+    std::pair<std::array<uint8_t, 72>, std::size_t> to_der() const;
+
+    // Compact 64-byte encoding: r (32 bytes) || s (32 bytes)
+    std::array<uint8_t, 64> to_compact() const;
+
+    // Decode from compact
+    static ECDSASignature from_compact(const std::array<uint8_t, 64>& data);
+
+    // Normalize to low-S (BIP-62)
+    ECDSASignature normalize() const;
+
+    // Check low-S
+    bool is_low_s() const;
+};
+```
+
+#### Signing
+
+```cpp
+// Sign a 32-byte message hash with RFC 6979 deterministic nonce.
+// Returns normalized (low-S) signature. Returns {0,0} on failure.
+ECDSASignature ecdsa_sign(
+    const std::array<uint8_t, 32>& msg_hash,
+    const fast::Scalar& private_key
+);
+```
+
+#### Verification
+
+```cpp
+// Verify ECDSA signature. Accepts both low-S and high-S.
+bool ecdsa_verify(
+    const std::array<uint8_t, 32>& msg_hash,
+    const fast::Point& public_key,
+    const ECDSASignature& sig
+);
+```
+
+#### RFC 6979 Nonce
+
+```cpp
+// Deterministic nonce generation per RFC 6979.
+fast::Scalar rfc6979_nonce(
+    const fast::Scalar& private_key,
+    const std::array<uint8_t, 32>& msg_hash
+);
+```
+
+#### Example
+
+```cpp
+#include <secp256k1/ecdsa.hpp>
+#include <secp256k1/sha256.hpp>
+#include <secp256k1/point.hpp>
+
+using namespace secp256k1;
+
+auto msg_hash = SHA256::hash("Hello ECDSA", 11);
+fast::Scalar sk = fast::Scalar::from_hex("...");
+fast::Point pk = fast::Point::generator().scalar_mul(sk);
+
+// Sign
+auto sig = ecdsa_sign(msg_hash, sk);
+
+// Verify
+bool ok = ecdsa_verify(msg_hash, pk, sig);
+
+// Compact encoding (64 bytes)
+auto compact = sig.to_compact();
+auto recovered = ECDSASignature::from_compact(compact);
+```
+
+---
+
+### Schnorr (BIP-340)
+
+**Namespace:** `secp256k1`
+
+**Header:**
+```cpp
+#include <secp256k1/schnorr.hpp>
+```
+
+#### SchnorrSignature
+
+```cpp
+struct SchnorrSignature {
+    std::array<uint8_t, 32> r;  // R.x (nonce point x-coordinate)
+    fast::Scalar s;              // scalar s
+
+    // 64-byte encoding: r (32) || s (32)
+    std::array<uint8_t, 64> to_bytes() const;
+    static SchnorrSignature from_bytes(const std::array<uint8_t, 64>& data);
+};
+```
+
+#### Signing
+
+```cpp
+// BIP-340 Schnorr sign.
+// aux_rand: 32 bytes of auxiliary randomness (use zeros for deterministic).
+SchnorrSignature schnorr_sign(
+    const fast::Scalar& private_key,
+    const std::array<uint8_t, 32>& msg,
+    const std::array<uint8_t, 32>& aux_rand
+);
+```
+
+#### Verification
+
+```cpp
+// BIP-340 Schnorr verify with x-only public key.
+bool schnorr_verify(
+    const std::array<uint8_t, 32>& pubkey_x,
+    const std::array<uint8_t, 32>& msg,
+    const SchnorrSignature& sig
+);
+```
+
+#### Utilities
+
+```cpp
+// X-only public key (BIP-340: negate if Y is odd)
+std::array<uint8_t, 32> schnorr_pubkey(const fast::Scalar& private_key);
+
+// Tagged hash: H_tag(msg) = SHA256(SHA256(tag) || SHA256(tag) || msg)
+std::array<uint8_t, 32> tagged_hash(
+    const char* tag, const void* data, std::size_t len
+);
+```
+
+#### Example
+
+```cpp
+#include <secp256k1/schnorr.hpp>
+
+using namespace secp256k1;
+
+fast::Scalar sk = fast::Scalar::from_hex("...");
+auto pk_x = schnorr_pubkey(sk);
+
+std::array<uint8_t, 32> msg = { /* message hash */ };
+std::array<uint8_t, 32> aux = {}; // zeros for deterministic
+
+auto sig = schnorr_sign(sk, msg, aux);
+bool ok = schnorr_verify(pk_x, msg, sig);
+```
+
+---
+
+### SHA-256
+
+**Namespace:** `secp256k1`
+
+**Header:**
+```cpp
+#include <secp256k1/sha256.hpp>
+```
+
+#### One-shot Hashing
+
+```cpp
+// SHA-256
+SHA256::digest_type SHA256::hash(const void* data, std::size_t len);
+
+// Double-SHA256: SHA256(SHA256(data))
+SHA256::digest_type SHA256::hash256(const void* data, std::size_t len);
+```
+
+#### Streaming API
+
+```cpp
+secp256k1::SHA256 ctx;
+ctx.update("part1", 5);
+ctx.update("part2", 5);
+auto digest = ctx.finalize();
+
+// Reuse
+ctx.reset();
+ctx.update("new data", 8);
+auto digest2 = ctx.finalize();
+```
+
+#### Example
+
+```cpp
+#include <secp256k1/sha256.hpp>
+
+auto hash = secp256k1::SHA256::hash("Hello, world!", 13);
+// hash is std::array<uint8_t, 32>
+
+// Double-SHA256 (Bitcoin's hash)
+auto hash256 = secp256k1::SHA256::hash256("tx_data", 7);
+```
+
+---
+
+### Constant-Time Layer
+
+**Namespace:** `secp256k1::fast::ct`
+
+**Headers:**
+```cpp
+#include <secp256k1/ct/field.hpp>
+#include <secp256k1/ct/scalar.hpp>
+#include <secp256k1/ct/point.hpp>
+#include <secp256k1/ct/ops.hpp>
+```
+
+The CT layer provides side-channel resistant variants of critical operations:
+
+```cpp
+namespace secp256k1::fast::ct {
+
+// Constant-time field operations
+void field_mul(const FieldElement& a, const FieldElement& b, FieldElement& out);
+void field_inv(const FieldElement& a, FieldElement& out);
+
+// Constant-time scalar multiplication (branchless double-and-add)
+void scalar_mul(const Point& base, const Scalar& k, Point& out);
+
+// Complete addition formula (handles all edge cases without branching)
+void point_add_complete(const Point& p, const Point& q, Point& out);
+
+// Constant-time point doubling
+void point_dbl(const Point& p, Point& out);
+
+} // namespace secp256k1::fast::ct
+```
+
+> ⚠️ CT operations are ~5-7× slower than the fast variants. Use only for private key operations (signing, ECDH).
+
+---
+
 ## CUDA API
 
 **Namespace:** `secp256k1::cuda`
@@ -426,6 +682,55 @@ __device__ void batch_invert(FieldElement* elements, int n, FieldElement* scratc
 __device__ void hash160_compressed(const uint8_t pubkey[33], uint8_t hash[20]);
 __device__ void hash160_uncompressed(const uint8_t pubkey[65], uint8_t hash[20]);
 ```
+
+---
+
+## WASM API
+
+**Module:** `@ultrafastsecp256k1/wasm`
+
+**Usage:**
+```javascript
+import { Secp256k1 } from './secp256k1.mjs';
+const lib = await Secp256k1.create();
+```
+
+### Functions
+
+| Function | Parameters | Returns | Description |
+|----------|-----------|---------|-------------|
+| `selftest()` | — | `boolean` | Run built-in self-test |
+| `version()` | — | `string` | Library version (`"3.0.0"`) |
+| `pubkeyCreate(seckey)` | `Uint8Array(32)` | `{x, y}` | Public key from private key |
+| `pointMul(px, py, scalar)` | `Uint8Array(32)` × 3 | `{x, y}` | Scalar × Point |
+| `pointAdd(px, py, qx, qy)` | `Uint8Array(32)` × 4 | `{x, y}` | Point addition |
+| `ecdsaSign(msgHash, seckey)` | `Uint8Array(32)` × 2 | `Uint8Array(64)` | ECDSA sign (r‖s) |
+| `ecdsaVerify(msgHash, pubX, pubY, sig)` | `Uint8Array(32)` × 3 + `Uint8Array(64)` | `boolean` | ECDSA verify |
+| `schnorrSign(seckey, msg, aux?)` | `Uint8Array(32)` × 2-3 | `Uint8Array(64)` | Schnorr BIP-340 sign |
+| `schnorrVerify(pubkeyX, msg, sig)` | `Uint8Array(32)` × 2 + `Uint8Array(64)` | `boolean` | Schnorr verify |
+| `schnorrPubkey(seckey)` | `Uint8Array(32)` | `Uint8Array(32)` | X-only public key |
+| `sha256(data)` | `Uint8Array` | `Uint8Array(32)` | SHA-256 hash |
+
+### C API
+
+For direct C/C++ or custom WASM bindings, see [secp256k1_wasm.h](../wasm/secp256k1_wasm.h).
+
+### Example
+
+```javascript
+const lib = await Secp256k1.create();
+console.log('v' + lib.version(), lib.selftest() ? '✓' : '✗');
+
+// ECDSA workflow
+const privkey = new Uint8Array(32);
+privkey[31] = 1;
+const { x, y } = lib.pubkeyCreate(privkey);
+const msgHash = lib.sha256(new TextEncoder().encode('Hello'));
+const sig = lib.ecdsaSign(msgHash, privkey);
+const valid = lib.ecdsaVerify(msgHash, x, y, sig);
+```
+
+See [wasm/README.md](../wasm/README.md) for detailed build and usage instructions.
 
 ---
 
@@ -579,17 +884,21 @@ int main() {
 
 | Platform | Assembly | SIMD | Status |
 |----------|----------|------|--------|
-| x86-64 Linux/Windows | BMI2/ADX | AVX2 | ✅ Production |
+| x86-64 Linux/Windows/macOS | BMI2/ADX | AVX2 | ✅ Production |
 | RISC-V 64 | RV64GC | RVV 1.0 | ✅ Production |
-| CUDA (sm_75+) | PTX | - | ✅ Production |
-| ARM64 | - | NEON | 🚧 Planned |
-| OpenCL | - | - | 🚧 Planned |
+| ARM64 (Android/iOS/macOS) | MUL/UMULH | NEON | ✅ Production |
+| CUDA (sm_75+) | PTX | — | ✅ Production |
+| ROCm/HIP (AMD) | Portable | — | ✅ CI |
+| OpenCL 3.0 | PTX | — | ✅ Production |
+| WebAssembly | Portable | — | ✅ Production |
+| ESP32-S3 / ESP32 | Portable | — | ✅ Tested |
+| STM32F103 (Cortex-M3) | UMULL | — | ✅ Tested |
 
 ---
 
 ## Version
 
-UltrafastSecp256k1 v1.0.0
+UltrafastSecp256k1 v3.0.0
 
 For more information, see the [README](../README.md) or [GitHub repository](https://github.com/shrec/UltrafastSecp256k1).
 
