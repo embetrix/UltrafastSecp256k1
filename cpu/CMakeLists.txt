@@ -16,6 +16,10 @@ set(SECP256K1_SOURCES
     src/ct_point.cpp   # CT point ops (complete addition, CT scalar_mul)
     src/ecdsa.cpp      # ECDSA sign/verify + RFC 6979
     src/schnorr.cpp    # Schnorr BIP-340 sign/verify
+    src/multiscalar.cpp  # Multi-scalar multiplication (Strauss/Shamir)
+    src/batch_verify.cpp # Batch ECDSA/Schnorr verification
+    src/bip32.cpp        # BIP-32 HD key derivation
+    src/musig2.cpp       # MuSig2 multi-signatures (BIP-327)
 )
 
 # Optional inline assembly (Tier 3: Maximum performance, x64/RISC-V)
@@ -241,6 +245,21 @@ if(NOT TARGET ${SECP256K1_LIB_NAME})
                     -fprofile-use -fprofile-dir=${SECP256K1_PGO_PROFILE_DIR}
                     -fprofile-correction  # Handle missing data gracefully
                 )
+            endif()
+        endif()
+    elseif(MSVC)
+        if(SECP256K1_USE_PGO_GEN)
+            message(STATUS "Secp256k1: MSVC PGO instrumentation enabled")
+            target_compile_options(${SECP256K1_LIB_NAME} PRIVATE /GL)
+            target_link_options(${SECP256K1_LIB_NAME} PRIVATE /LTCG /GENPROFILE:PGD=${SECP256K1_PGO_PROFILE_DIR}/secp256k1.pgd)
+        elseif(SECP256K1_USE_PGO_USE)
+            set(PGO_PGD_FILE "${SECP256K1_PGO_PROFILE_DIR}/secp256k1.pgd")
+            if(EXISTS "${PGO_PGD_FILE}")
+                message(STATUS "Secp256k1: MSVC PGO optimization enabled (using ${PGO_PGD_FILE})")
+                target_compile_options(${SECP256K1_LIB_NAME} PRIVATE /GL)
+                target_link_options(${SECP256K1_LIB_NAME} PRIVATE /LTCG /USEPROFILE:PGD=${PGO_PGD_FILE})
+            else()
+                message(WARNING "Secp256k1: PGO profile not found at ${PGO_PGD_FILE}")
             endif()
         endif()
     endif()
@@ -496,4 +515,19 @@ if(BUILD_TESTING)
     add_executable(test_ecdsa_schnorr tests/test_ecdsa_schnorr.cpp)
     target_link_libraries(test_ecdsa_schnorr PRIVATE ${SECP256K1_LIB_NAME})
     add_test(NAME test_ecdsa_schnorr COMMAND test_ecdsa_schnorr)
+
+    # Test: Multi-scalar multiplication + Batch verification
+    add_executable(test_multiscalar_batch tests/test_multiscalar_batch.cpp)
+    target_link_libraries(test_multiscalar_batch PRIVATE ${SECP256K1_LIB_NAME})
+    add_test(NAME test_multiscalar_batch COMMAND test_multiscalar_batch)
+
+    # Test: BIP-32 HD key derivation
+    add_executable(test_bip32 tests/test_bip32.cpp)
+    target_link_libraries(test_bip32 PRIVATE ${SECP256K1_LIB_NAME})
+    add_test(NAME test_bip32 COMMAND test_bip32)
+
+    # Test: MuSig2 multi-signatures
+    add_executable(test_musig2 tests/test_musig2.cpp)
+    target_link_libraries(test_musig2 PRIVATE ${SECP256K1_LIB_NAME})
+    add_test(NAME test_musig2 COMMAND test_musig2)
 endif()

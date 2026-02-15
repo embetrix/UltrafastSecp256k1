@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.18)
 
 project(UltrafastSecp256k1
-    VERSION 3.0.0
+    VERSION 3.1.0
     DESCRIPTION "Ultra high-performance secp256k1 elliptic curve cryptography library"
     LANGUAGES CXX
 )

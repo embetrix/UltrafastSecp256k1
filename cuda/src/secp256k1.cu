@@ -3,36 +3,46 @@
 namespace secp256k1 {
 namespace cuda {
 
-__global__ void field_mul_kernel(const FieldElement* a, const FieldElement* b, FieldElement* r, int count) {
+// Field operation kernels — lightweight, high-occupancy targets.
+// 256 threads/block, min 4 blocks/SM for register pressure balance.
+
+__global__ __launch_bounds__(256, 4)
+void field_mul_kernel(const FieldElement* a, const FieldElement* b, FieldElement* r, int count) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < count) {
         field_mul(&a[idx], &b[idx], &r[idx]);
     }
 }
 
-__global__ void field_add_kernel(const FieldElement* a, const FieldElement* b, FieldElement* r, int count) {
+__global__ __launch_bounds__(256, 4)
+void field_add_kernel(const FieldElement* a, const FieldElement* b, FieldElement* r, int count) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < count) {
         field_add(&a[idx], &b[idx], &r[idx]);
     }
 }
 
-__global__ void field_sub_kernel(const FieldElement* a, const FieldElement* b, FieldElement* r, int count) {
+__global__ __launch_bounds__(256, 4)
+void field_sub_kernel(const FieldElement* a, const FieldElement* b, FieldElement* r, int count) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < count) {
         field_sub(&a[idx], &b[idx], &r[idx]);
     }
 }
 
-__global__ void field_inv_kernel(const FieldElement* a, FieldElement* r, int count) {
+__global__ __launch_bounds__(256, 4)
+void field_inv_kernel(const FieldElement* a, FieldElement* r, int count) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < count) {
         field_inv(&a[idx], &r[idx]);
     }
 }
 
-// MEGA BATCH: Scalar multiplication P * k
-__global__ void scalar_mul_batch_kernel(const JacobianPoint* points, const Scalar* scalars, 
+// Scalar multiplication kernels — register-heavy, lower occupancy acceptable.
+// 128 threads/block, min 2 blocks/SM to balance register pressure vs. latency hiding.
+
+__global__ __launch_bounds__(128, 2)
+void scalar_mul_batch_kernel(const JacobianPoint* points, const Scalar* scalars, 
                                          JacobianPoint* results, int count) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < count) {
@@ -40,8 +50,8 @@ __global__ void scalar_mul_batch_kernel(const JacobianPoint* points, const Scala
     }
 }
 
-// Generator multiplication G * k (optimized)
-__global__ void generator_mul_batch_kernel(const Scalar* scalars, JacobianPoint* results, int count) {
+__global__ __launch_bounds__(128, 2)
+void generator_mul_batch_kernel(const Scalar* scalars, JacobianPoint* results, int count) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < count) {
         // Compute G * scalar using pre-loaded constant generator (reduces per-thread setup)
@@ -49,21 +59,24 @@ __global__ void generator_mul_batch_kernel(const Scalar* scalars, JacobianPoint*
     }
 }
 
-__global__ void point_add_kernel(const JacobianPoint* a, const JacobianPoint* b, JacobianPoint* r, int count) {
+__global__ __launch_bounds__(256, 4)
+void point_add_kernel(const JacobianPoint* a, const JacobianPoint* b, JacobianPoint* r, int count) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < count) {
         jacobian_add(&a[idx], &b[idx], &r[idx]);
     }
 }
 
-__global__ void point_dbl_kernel(const JacobianPoint* a, JacobianPoint* r, int count) {
+__global__ __launch_bounds__(256, 4)
+void point_dbl_kernel(const JacobianPoint* a, JacobianPoint* r, int count) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < count) {
         jacobian_double(&a[idx], &r[idx]);
     }
 }
 
-__global__ void hash160_pubkey_kernel(const uint8_t* pubkeys, int pubkey_len, uint8_t* out_hashes, int count) {
+__global__ __launch_bounds__(256, 4)
+void hash160_pubkey_kernel(const uint8_t* pubkeys, int pubkey_len, uint8_t* out_hashes, int count) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < count) {
         const uint8_t* pk = pubkeys + static_cast<size_t>(idx) * static_cast<size_t>(pubkey_len);

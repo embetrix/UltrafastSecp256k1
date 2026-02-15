@@ -9,6 +9,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.1.0] - 2025-07-23
+
+### Added — Cryptographic Features
+- **Multi-scalar multiplication** — Shamir's trick (2-point) + Strauss interleaved wNAF (n-point) (`cpu/include/multiscalar.hpp`, `cpu/src/multiscalar.cpp`)
+- **Batch signature verification** — Schnorr and ECDSA batch verify with random linear combination; `identify_invalid()` to pinpoint bad signatures (`cpu/include/batch_verify.hpp`, `cpu/src/batch_verify.cpp`)
+- **BIP-32 HD key derivation** — Master key from seed, hardened/normal child derivation, path parsing (m/0'/1/2h), Base58Check serialization (xprv/xpub), RIPEMD-160 fingerprinting (`cpu/include/bip32.hpp`, `cpu/src/bip32.cpp`)
+- **MuSig2 multi-signatures (BIP-327)** — Key aggregation (KeyAgg), deterministic nonce generation, 2-round signing protocol, partial sig verify, Schnorr-compatible aggregate signatures (`cpu/include/musig2.hpp`, `cpu/src/musig2.cpp`)
+- **SHA-512** — Header-only implementation for HMAC-SHA512 / BIP-32 (`cpu/include/sha512.hpp`)
+
+### Added — GPU Optimization
+- **Occupancy auto-tune utility** — `gpu_occupancy.cuh` with `optimal_launch_1d()` (uses `cudaOccupancyMaxPotentialBlockSize`), `query_occupancy()`, and startup device diagnostics
+- **Warp-level reduction primitives** — `warp_reduce_sum()`, `warp_reduce_sum64()`, `warp_reduce_or()`, `warp_broadcast()`, `warp_aggregated_atomic_add()` in reusable header
+- **`__launch_bounds__` on library kernels** — `field_mul/add/sub/inv_kernel` (256,4), `scalar_mul_batch/generator_mul_batch_kernel` (128,2), `point_add/dbl_kernel` (256,4), `hash160_pubkey_kernel` (256,4)
+
+### Added — Build & Tooling
+- **PGO build scripts** — `build_pgo.sh` (Linux, Clang/GCC auto-detect) and `build_pgo.ps1` (Windows, MSVC/ClangCL)
+- **MSVC PGO support** — CMakeLists.txt now handles `/GL` + `/GENPROFILE` / `/USEPROFILE` for MSVC in addition to Clang/GCC
+
+### Added — Tests (63 new)
+- `test_multiscalar_batch` — 16 tests: Shamir edge cases, multi-scalar sums, Schnorr & ECDSA batch verify + identify invalid
+- `test_bip32` — 28 tests: HMAC-SHA512 vectors, BIP-32 TV1 master/child keys, path derivation, serialization, seed validation
+- `test_musig2` — 19 tests: key aggregation, nonce generation, 2-of-2 & 3-of-3 signing with Schnorr cross-verify, single-signer edge case
+
+### Fixed
+- **SHA-512 K[23] constant** — Single-bit typo (`0x76f988da831153b6` → `0x76f988da831153b5`) that caused all SHA-512 hashes to be incorrect
+- **MuSig2 per-signer Y parity** — `musig2_partial_sign()` now negates the secret key when the signer's public key has odd Y (required for x-only pubkey compatibility)
+
+---
+
 ## [3.0.0] - 2025-07-22
 
 ### Added — Cryptographic Primitives
