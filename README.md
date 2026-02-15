@@ -679,11 +679,13 @@ Any higher-level usage is entirely external to this repository.
 
 ## 📚 Documentation
 
-- [API Reference](docs/api.md)
-- [Build Guide](docs/building.md)
-- [Performance Tuning](docs/performance.md)
-- [Platform Support](docs/platforms.md)
+- [Documentation Index](docs/README.md)
+- [API Reference](docs/API_REFERENCE.md)
+- [Build Guide](docs/BUILDING.md)
+- [Benchmarks](docs/BENCHMARKS.md)
 - [Contributing](CONTRIBUTING.md)
+- [Security Policy](SECURITY.md)
+- [Changelog](CHANGELOG.md)
 
 ## 🧪 Testing
 
@@ -704,7 +706,7 @@ Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for gu
 ### Development Setup
 
 ```bash
-git clone https://github.com/shrec/Secp256K1fast.git
+git clone https://github.com/shrec/UltrafastSecp256k1.git
 cd UltrafastSecp256k1
 cmake -S . -B build-dev -G Ninja -DCMAKE_BUILD_TYPE=Debug
 cmake --build build-dev -j
@@ -732,7 +734,7 @@ If you want to use this library in a proprietary/closed-source product or servic
 
 📧 **Contact for commercial licensing:**
 - Email: [payysoon@gmail.com](mailto:payysoon@gmail.com)
-- GitHub: https://github.com/shrec/Secp256K1fast
+- GitHub: https://github.com/shrec/UltrafastSecp256k1
 
 We offer flexible licensing options for commercial applications.
 
@@ -745,8 +747,8 @@ We offer flexible licensing options for commercial applications.
 
 ## 📧 Contact
 
-- Issues: [GitHub Issues](https://github.com/shrec/Secp256K1fast/issues)
-- Discussions: [GitHub Discussions](https://github.com/shrec/Secp256K1fast/discussions)
+- Issues: [GitHub Issues](https://github.com/shrec/UltrafastSecp256k1/issues)
+- Discussions: [GitHub Discussions](https://github.com/shrec/UltrafastSecp256k1/discussions)
 
 ## ☕ Support the Project
 

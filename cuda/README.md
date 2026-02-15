@@ -1,5 +1,7 @@
 # Secp256k1 CUDA — GPU ECC Library
 
+> **English summary**: Full secp256k1 ECC library for NVIDIA GPUs — header-only core with PTX inline assembly. Supports CUDA and ROCm/HIP (via `gpu_compat.h` abstraction layer). Priority: maximum throughput for batch operations. Not side-channel resistant (research/development use). See [docs/API_REFERENCE.md](../docs/API_REFERENCE.md) for the full API and [docs/BUILDING.md](../docs/BUILDING.md) for build instructions.
+
 სრული secp256k1 ECC ბიბლიოთეკა NVIDIA GPU-სთვის — header-only ბირთვი PTX inline assembly-ით.
 
 **პრიორიტეტი**: მაქსიმალური throughput batch ოპერაციებისთვის. Side-channel დაცვა არ არის (კვლევა/dev გამოყენებისთვის).
@@ -236,7 +238,7 @@ CPU-ზე გამოთვლილი მონაცემები პი�
 
 ## ლიცენზია
 
-MIT License
+AGPL-3.0 — იხილეთ [LICENSE](../LICENSE)
 
 ---
 
@@ -245,3 +247,7 @@ MIT License
 **პორტი**: C++ ბიბლიოთეკის პირდაპირი CUDA ადაპტაცია  
 **ფოკუსი**: მაქსიმალური throughput batch ECC ოპერაციებისთვის  
 **ფილოსოფია**: სიჩქარე > უსაფრთხოება (კვლევა/development)
+
+---
+
+*UltrafastSecp256k1 v3.0.0 — CUDA/ROCm GPU Library*

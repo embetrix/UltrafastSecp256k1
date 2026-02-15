@@ -1,6 +1,6 @@
-# Contributing to secp256k1-fast
+# Contributing to UltrafastSecp256k1
 
-Thank you for your interest in contributing to secp256k1-fast! This document provides guidelines for contributing to the project.
+Thank you for your interest in contributing to UltrafastSecp256k1! This document provides guidelines for contributing to the project.
 
 ## 📋 Table of Contents
 
@@ -10,6 +10,7 @@ Thank you for your interest in contributing to secp256k1-fast! This document pro
 - [Coding Standards](#coding-standards)
 - [Testing](#testing)
 - [Pull Request Process](#pull-request-process)
+- [Areas for Contribution](#areas-for-contribution)
 
 ## 🤝 Code of Conduct
 
@@ -196,25 +197,43 @@ List any breaking changes
 
 ### High Priority
 
-- **ARM64/AArch64** assembly optimizations
-- **OpenCL** implementation
-- **WebAssembly** port
-- Performance benchmarking on various platforms
-- Documentation improvements
+- **Formal verification** of field/scalar arithmetic
+- **Side-channel analysis** and hardening (cache-timing, power analysis)
+- **Performance benchmarking** on new hardware (Apple M3/M4, Intel Raptor Lake, AMD Zen 5)
+- **GPU kernel optimization** (occupancy, register pressure, warp-level primitives)
+- **Additional signature schemes** (EdDSA/Ed25519, multi-sig)
 
 ### Good First Issues
 
-- Documentation updates
-- Example programs
-- Test coverage improvements
-- Build system enhancements
+- Documentation improvements and typo fixes
+- Example programs (key derivation, address generation, HD wallets)
+- Test coverage improvements (edge cases, error paths)
+- Build system enhancements (new compilers, package managers)
+- Localization of documentation
 
 ### Advanced Contributions
 
-- New platform support (ARM, RISC-V variants)
-- Constant-time verification
-- Side-channel attack resistance
-- Formal verification of critical paths
+- **FPGA** acceleration port
+- **New embedded targets** (nRF52, RP2040, AVR)
+- **Multi-scalar multiplication** (Pippenger, Straus)
+- **Batch verification** for ECDSA and Schnorr signatures
+- **Zero-knowledge proof** integration
+- **Threshold signatures** (FROST, GG20)
+
+### Already Implemented ✅
+
+The following were previously listed as desired contributions and are now part of v3.0.0:
+
+- ✅ ARM64/AArch64 assembly optimizations (MUL/UMULH)
+- ✅ OpenCL implementation (3.39M kG/s)
+- ✅ WebAssembly port (Emscripten, npm package)
+- ✅ Constant-time layer (ct:: namespace)
+- ✅ ECDSA signatures (RFC 6979)
+- ✅ Schnorr signatures (BIP-340)
+- ✅ iOS support (XCFramework, SPM, CocoaPods)
+- ✅ Android NDK support
+- ✅ ROCm/HIP GPU support
+- ✅ ESP32/STM32 embedded support
 
 ## 🐛 Reporting Issues
 
@@ -236,10 +255,12 @@ Include:
 
 ## 📚 Resources
 
-- [API Documentation](docs/api.md)
-- [Performance Guide](docs/performance.md)
-- [Platform Support](docs/platforms.md)
-- [CMake Options](docs/building.md)
+- [Documentation Index](docs/README.md)
+- [API Reference](docs/API_REFERENCE.md)
+- [Building Guide](docs/BUILDING.md)
+- [Benchmarks](docs/BENCHMARKS.md)
+- [Security Policy](SECURITY.md)
+- [Changelog](CHANGELOG.md)
 
 ## 📧 Contact
 
