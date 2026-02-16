@@ -138,9 +138,14 @@ DeviceInfo MetalRuntime::device_info() const {
     info.max_threads_per_threadgroup = 1024; // Apple Silicon default
     info.supports_family_apple7 = [impl_->device supportsFamily:MTLGPUFamilyApple7];
     info.supports_family_apple8 = [impl_->device supportsFamily:MTLGPUFamilyApple8];
-    // Apple9 check — may not be available on older SDKs
-#if defined(MTLGPUFamilyApple9)
-    info.supports_family_apple9 = [impl_->device supportsFamily:MTLGPUFamilyApple9];
+    // Apple9 check — MTLGPUFamilyApple9 is an enum (not a macro),
+    // so #if defined() doesn't work. Use SDK version guard instead.
+#if (__MAC_OS_X_VERSION_MAX_ALLOWED >= 140000)
+    if (@available(macOS 14.0, *)) {
+        info.supports_family_apple9 = [impl_->device supportsFamily:MTLGPUFamilyApple9];
+    } else {
+        info.supports_family_apple9 = false;
+    }
 #else
     info.supports_family_apple9 = false;
 #endif

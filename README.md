@@ -952,6 +952,22 @@ RISC-V results were collected on **Milk-V Mars** (RV64 + RVV).
 
 *Benchmarks: 2026-02-14, Linux x86_64, NVIDIA Driver 580.126.09*
 
+### Apple Metal (Apple M3 Pro) — Kernel-Only
+
+| Operation | Time/Op | Throughput |
+|-----------|---------|------------|
+| Field Mul | 1.9 ns | 527 M/s |
+| Field Add | 1.0 ns | 990 M/s |
+| Field Sub | 1.1 ns | 892 M/s |
+| Field Sqr | 1.1 ns | 872 M/s |
+| Field Inv | 106.4 ns | 9.40 M/s |
+| Point Add | 10.1 ns | 98.6 M/s |
+| Point Double | 5.1 ns | 196 M/s |
+| Scalar Mul (P×k) | 2.94 μs | 0.34 M/s |
+| Generator Mul (G×k) | 3.00 μs | 0.33 M/s |
+
+*Metal 2.4, 8×32-bit Comba limbs, Apple M3 Pro (18 GPU cores, Unified Memory 18 GB)*
+
 ## 🏗️ Architecture
 
 ```

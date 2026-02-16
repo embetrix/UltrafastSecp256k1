@@ -17,6 +17,7 @@ Benchmark results for UltrafastSecp256k1 across all supported platforms.
 | STM32F103 (CM3, 72 MHz) | 15,331 ns | 37,982 μs | — |
 | CUDA (RTX 5060 Ti) | 0.2 ns | 216.1 ns | 266.5 ns |
 | OpenCL (RTX 5060 Ti) | 0.2 ns | 295.1 ns | — |
+| Metal (Apple M3 Pro) | 1.9 ns | 3.00 μs | 2.94 μs |
 
 ---
 
@@ -146,6 +147,44 @@ Benchmark results for UltrafastSecp256k1 across all supported platforms.
 | Point Double | 0.7 ns | 0.9 ns | **CUDA 1.29×** |
 | Point Add | 1.1 ns | 1.6 ns | **CUDA 1.45×** |
 | Scalar Mul (kG) | 216.1 ns | 295.1 ns | **CUDA 1.37×** |
+
+---
+
+## Apple Metal Benchmarks
+
+**Hardware:** Apple M3 Pro (18 GPU cores, Unified Memory 18 GB)  
+**OS:** macOS Sequoia  
+**Metal:** Metal 2.4, MSL macos-metal2.4  
+**Limb Model:** 8×32-bit Comba (no 64-bit int in MSL)  
+**Build:** AppleClang, Release, -O3, ARC
+
+| Operation | Time/Op | Throughput | Notes |
+|-----------|---------|------------|-------|
+| Field Mul | 1.9 ns | 527 M/s | Comba product scanning, batch 1M |
+| Field Add | 1.0 ns | 990 M/s | Branchless, batch 1M |
+| Field Sub | 1.1 ns | 892 M/s | Branchless, batch 1M |
+| Field Sqr | 1.1 ns | 872 M/s | Comba + symmetry, batch 1M |
+| Field Inv | 106.4 ns | 9.40 M/s | Fermat (a^(p-2)), batch 64K |
+| Point Add | 10.1 ns | 98.6 M/s | Jacobian, batch 256K |
+| Point Double | 5.1 ns | 196 M/s | dbl-2001-b, batch 256K |
+| Scalar Mul (P×k) | 2.94 μs | 0.34 M/s | 4-bit windowed, batch 64K |
+| Generator Mul (G×k) | 3.00 μs | 0.33 M/s | 4-bit windowed, batch 128K |
+
+### Metal vs CUDA vs OpenCL — GPU Comparison
+
+| Operation | CUDA (RTX 5060 Ti) | OpenCL (RTX 5060 Ti) | Metal (M3 Pro) |
+|-----------|-------------------|---------------------|----------------|
+| Field Mul | 0.2 ns | 0.2 ns | 1.9 ns |
+| Field Add | 0.2 ns | 0.2 ns | 1.0 ns |
+| Field Inv | 12.1 ns | 14.3 ns | 106.4 ns |
+| Point Double | 0.7 ns | 0.9 ns | 5.1 ns |
+| Point Add | 1.1 ns | 1.6 ns | 10.1 ns |
+| Scalar Mul | 266.5 ns | 295.1 ns | 2.94 μs |
+| Generator Mul | 216.1 ns | 295.1 ns | 3.00 μs |
+
+> **შენიშვნა:** CUDA/OpenCL — RTX 5060 Ti (36 SMs, 2602 MHz, GDDR7 256 GB/s).  
+> Metal — M3 Pro (18 GPU cores, ~150 GB/s unified memory bandwidth).  
+> RTX 5060 Ti-ს აქვს ~8× მეტი compute throughput; Metal-ის უპირატესობა unified memory zero-copy I/O-ში.
 
 ---
 
@@ -325,6 +364,7 @@ All 35 library self-tests pass.
 - [ ] Multi-threaded batch operations
 - [x] ARM64 NEON/MUL assembly (**DONE** — ~5× speedup)
 - [x] OpenCL backend (**DONE** — 3.39M kG/s)
+- [x] Apple Metal backend (**DONE** — 527M field_mul/s, M3 Pro)
 - [x] Shared POD types across backends
 - [x] ARM64 inline assembly (MUL/UMULH)
 
@@ -340,6 +380,6 @@ All 35 library self-tests pass.
 
 ## Version
 
-UltrafastSecp256k1 v3.0.0  
-Benchmarks updated: 2026-02-14
+UltrafastSecp256k1 v3.3.0  
+Benchmarks updated: 2026-02-16
 
