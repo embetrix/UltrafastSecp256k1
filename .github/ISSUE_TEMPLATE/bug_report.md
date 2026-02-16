@@ -1,38 +1,42 @@
 ---
-name: Bug report
-about: Create a report to help us improve
-title: ''
-labels: ''
+name: Bug Report
+about: Report incorrect behavior, crashes, or build failures
+title: '[BUG] '
+labels: 'bug'
 assignees: ''
 
 ---
 
+**Environment**
+- OS: [e.g. Ubuntu 24.04, macOS 15, Windows 11]
+- Compiler: [e.g. GCC 13, Clang 17, MSVC 2022, AppleClang]
+- Backend: [CPU / CUDA / Metal / OpenCL / WASM / ROCm]
+- Architecture: [x86-64 / ARM64 / RISC-V / ESP32]
+- Library version: [e.g. v3.3.0]
+
 **Describe the bug**
-A clear and concise description of what the bug is.
+A clear description of the incorrect behavior.
 
 **To Reproduce**
-Steps to reproduce the behavior:
-1. Go to '...'
-2. Click on '....'
-3. Scroll down to '....'
-4. See error
+```bash
+# Build commands used
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j
+# Command that triggers the bug
+./build/cpu/test_runner
+```
 
 **Expected behavior**
-A clear and concise description of what you expected to happen.
+What you expected to happen.
 
-**Screenshots**
-If applicable, add screenshots to help explain your problem.
+**Actual behavior**
+What actually happened. Include error messages, stack traces, or test output.
 
-**Desktop (please complete the following information):**
- - OS: [e.g. iOS]
- - Browser [e.g. chrome, safari]
- - Version [e.g. 22]
-
-**Smartphone (please complete the following information):**
- - Device: [e.g. iPhone6]
- - OS: [e.g. iOS8.1]
- - Browser [e.g. stock browser, safari]
- - Version [e.g. 22]
+**Selftest output**
+If relevant, paste the selftest output:
+```
+./build/cpu/test_runner --selftest
+```
 
 **Additional context**
-Add any other context about the problem here.
+Any other information (compiler flags, config.json, hardware specs, etc.)

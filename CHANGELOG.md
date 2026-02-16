@@ -1,11 +1,60 @@
 # Changelog
 
-All notable changes to secp256k1-fast will be documented in this file.
+All notable changes to UltrafastSecp256k1 are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+---
+
+## [3.3.0] - 2026-02-16
+
+### Added — Comprehensive Benchmarks
+- **Metal GPU benchmark** (`bench_metal.mm`): 9 operations — Field Mul/Add/Sub/Sqr/Inv, Point Add/Double, Scalar Mul (P×k), Generator Mul (G×k). Matches CUDA benchmark format with warmup, kernel-only timing, and throughput tables.
+- **3 new Metal GPU kernels**: `field_add_bench`, `field_sub_bench`, `field_inv_bench` in `secp256k1_kernels.metal`
+- **WASM benchmark** (`bench_wasm.mjs`): Node.js benchmark for all WASM-exported operations — Pubkey Create (G×k), Point Mul, Point Add, ECDSA Sign/Verify, Schnorr Sign/Verify, SHA-256 (32B/1KB)
+- WASM benchmark runs automatically in CI (Node.js 20 setup + execution)
+
+### Added — Security & Maturity
+- SECURITY.md v3.2 with vulnerability reporting guidelines
+- THREAT_MODEL.md with detailed threat analysis
+- API stability guarantees documented
+- Fuzz testing documentation and libFuzzer harnesses
+- Selftest modes: smoke (fast), ci (full), stress (extended)
+- Repro bundle support for deterministic test reproduction
+- Sanitizer CI integration (ASan/UBSan/TSan)
+
+### Added — Testing
+- Boundary KAT vectors for field limb boundaries
+- Batch inverse sweep tests
+- Unified test runner (12 test files consolidated into single runner)
+
+### Added — Documentation
+- Batch inverse & mixed addition API reference with examples (full point, X-only, CUDA, division, scratch reuse, Montgomery trick)
+- CHANGELOG.md (this file), CODE_OF_CONDUCT.md
+- Benchmark dashboard link in README
+
+### Changed
+- Benchmark alert threshold 120% → 150% (reduces false positive alerts on shared CI runners)
+- README: added Apple Silicon/Metal badges, CI status badge, version badge, benchmark dashboard link
+- Feature coverage table updated to v3.3.0
+- Badge layout reorganized: CI/Bench/Release first, then GPU backends, then platforms
+
+### Fixed
+- Metal shader compilation errors (MSL address space mismatches, jacobian_to_affine ordering)
+- Metal: skip generator_mul test on non-Apple7+ paravirtual devices (CI fix)
+- Keccak `rotl64` undefined behavior (shift by 0)
+- macOS build flags for Clang compatibility
+- Metal `metal2.4` shader standard for newer Xcode toolchains
+- WASM runtime crash: removed `--closure 1`, added `-fno-exceptions`, increased initial memory to 4MB
+- Bitcoin CoinFeatures header fix
+
+### Removed
+- Unused `.cuh` files and `sorted_ecc_db`
+- Database/lookup/bloom references from public documentation
+- AI-generated text removed from README
 
 ---
 

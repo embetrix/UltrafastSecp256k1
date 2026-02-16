@@ -2,21 +2,26 @@
 
 Ultra high-performance secp256k1 elliptic curve cryptography library with multi-platform support.
 
-[![GitHub stars](https://img.shields.io/github/stars/shrec/UltrafastSecp256k1?style=social)](https://github.com/shrec/UltrafastSecp256k1/stargazers)
-[![GitHub forks](https://img.shields.io/github/forks/shrec/UltrafastSecp256k1?style=social)](https://github.com/shrec/UltrafastSecp256k1/network/members)
+[![CI](https://img.shields.io/github/actions/workflow/status/shrec/UltrafastSecp256k1/ci.yml?branch=main&label=CI)](https://github.com/shrec/UltrafastSecp256k1/actions/workflows/ci.yml)
+[![Benchmark](https://img.shields.io/github/actions/workflow/status/shrec/UltrafastSecp256k1/benchmark.yml?branch=main&label=Bench)](https://shrec.github.io/UltrafastSecp256k1/dev/bench/)
+[![Release](https://img.shields.io/github/v/release/shrec/UltrafastSecp256k1?label=Release)](https://github.com/shrec/UltrafastSecp256k1/releases/latest)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 [![C++20](https://img.shields.io/badge/C%2B%2B-20-blue.svg)](https://en.cppreference.com/w/cpp/20)
+[![GitHub stars](https://img.shields.io/github/stars/shrec/UltrafastSecp256k1?style=social)](https://github.com/shrec/UltrafastSecp256k1/stargazers)
+
 [![CUDA](https://img.shields.io/badge/CUDA-12.0+-green.svg)](https://developer.nvidia.com/cuda-toolkit)
 [![OpenCL](https://img.shields.io/badge/OpenCL-3.0-green.svg)](https://www.khronos.org/opencl/)
-[![RISC-V](https://img.shields.io/badge/RISC--V-RV64GC-orange.svg)](https://riscv.org/)
+[![Apple Silicon](https://img.shields.io/badge/Apple%20Silicon-M1%2FM2%2FM3%2FM4-black.svg?logo=apple)](metal/)
+[![Metal](https://img.shields.io/badge/Metal-GPU%20Compute-silver.svg?logo=apple)](metal/)
+[![ROCm](https://img.shields.io/badge/ROCm-6.3%20HIP-red.svg)](cuda/README.md)
+[![WebAssembly](https://img.shields.io/badge/WebAssembly-Emscripten-purple.svg)](wasm/)
 [![ARM64](https://img.shields.io/badge/ARM64-Cortex--A55%2FA76-orange.svg)](https://developer.android.com/ndk)
+[![RISC-V](https://img.shields.io/badge/RISC--V-RV64GC-orange.svg)](https://riscv.org/)
+[![Android](https://img.shields.io/badge/Android-NDK%20r27-brightgreen.svg)](android/)
+[![iOS](https://img.shields.io/badge/iOS-17%2B%20XCFramework-lightgrey.svg)](cmake/ios.toolchain.cmake)
 [![ESP32-S3](https://img.shields.io/badge/ESP32--S3-Xtensa%20LX7-orange.svg)](https://www.espressif.com/en/products/socs/esp32-s3)
 [![ESP32](https://img.shields.io/badge/ESP32-Xtensa%20LX6-orange.svg)](https://www.espressif.com/en/products/socs/esp32)
 [![STM32](https://img.shields.io/badge/STM32-Cortex--M3-orange.svg)](https://www.st.com/en/microcontrollers-microprocessors/stm32f103ze.html)
-[![WebAssembly](https://img.shields.io/badge/WebAssembly-Emscripten-purple.svg)](wasm/)
-[![iOS](https://img.shields.io/badge/iOS-17%2B%20XCFramework-lightgrey.svg)](cmake/ios.toolchain.cmake)
-[![ROCm](https://img.shields.io/badge/ROCm-6.3%20HIP-red.svg)](cuda/README.md)
-[![Android](https://img.shields.io/badge/Android-NDK%20r27-brightgreen.svg)](android/)
 
 ## ⚠️ Security Notice
 
@@ -47,6 +52,7 @@ Users assume all risks. For production cryptographic systems, prefer audited lib
   - WebAssembly: Emscripten ES6 module with TypeScript declarations
   - Embedded: ESP32-S3 (Xtensa LX7) + ESP32-PICO-D4 (Xtensa LX6) + STM32F103 (ARM Cortex-M3)
   - GPU/CUDA: Batch operations with 4.63M kG/s throughput
+  - GPU/Metal: Apple Silicon (M1/M2/M3/M4) with Comba-accelerated field arithmetic
   - GPU/ROCm (HIP): Portable PTX→__int128 fallbacks for AMD GPUs
   - GPU/OpenCL: PTX inline asm, 3.39M kG/s
 
@@ -67,7 +73,7 @@ Users assume all risks. For production cryptographic systems, prefer audited lib
   - Constant-time (CT) layer for side-channel resistance
   - Public key derivation
 
-### Feature Coverage (v3.2.0)
+### Feature Coverage (v3.3.0)
 
 | Category | Component | Status |
 |----------|-----------|--------|
@@ -94,8 +100,8 @@ Users assume all risks. For production cryptographic systems, prefer audited lib
 | **Custom G** | CurveContext, custom generator/curve | ✅ |
 | **BIP-44** | Coin-type HD, auto-purpose | ✅ |
 | **Self-test** | Known vector verification | ✅ |
-| **GPU** | CUDA kernels, occupancy | ✅ |
-| **Platforms** | x64, ARM64, RISC-V, ESP32, WASM, iOS, Android, ROCm | ✅ |
+| **GPU** | CUDA, Metal, OpenCL, ROCm kernels | ✅ |
+| **Platforms** | x64, ARM64, RISC-V, ESP32, WASM, iOS, Android, Metal, ROCm | ✅ |
 
 ## � Batch Modular Inverse (Montgomery Trick)
 
@@ -1088,7 +1094,7 @@ ctest --test-dir build --output-on-failure
 | macOS ARM64 | Metal GPU | AppleClang | ✅ CI | - | GPU shader tests |
 | iOS ARM64 | CPU | Xcode | ✅ CI | - | Device + Simulator |
 | Android ARM64 | CPU | NDK r27c | ✅ CI | - | arm64-v8a |
-| WebAssembly | CPU | Emscripten | ✅ CI | - | Compile-only |
+| WebAssembly | CPU | Emscripten | ✅ CI | - | Build + WASM benchmark |
 | ROCm/HIP | CPU + GPU | ROCm 6.3 | ✅ CI | - | Compile + CPU test |
 
 > Community-tested platforms: if you run selftest on a new platform, submit the log via PR and we'll add a row.
@@ -1159,6 +1165,7 @@ We offer flexible licensing options for commercial applications.
 
 - Issues: [GitHub Issues](https://github.com/shrec/UltrafastSecp256k1/issues)
 - Discussions: [GitHub Discussions](https://github.com/shrec/UltrafastSecp256k1/discussions)
+- Benchmark Dashboard: [Live Results](https://shrec.github.io/UltrafastSecp256k1/dev/bench/)
 
 ## ☕ Support the Project
 
