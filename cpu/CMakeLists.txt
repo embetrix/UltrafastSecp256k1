@@ -9,7 +9,6 @@ set(SECP256K1_SOURCES
     src/field_asm.cpp  # Tier 2: BMI2 intrinsics (runtime detection)
     src/glv.cpp        # GLV endomorphism optimization
     src/selftest.cpp   # Self-test with known arithmetic vectors
-    src/sorted_ecc_db.cpp  # SortedEccDB - native x86/x64 database
     # Constant-Time (CT) layer — always compiled, no flags
     src/ct_field.cpp   # CT field arithmetic (side-channel resistant)
     src/ct_scalar.cpp  # CT scalar arithmetic

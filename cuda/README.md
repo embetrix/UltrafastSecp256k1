@@ -65,13 +65,6 @@
 - `DeviceBloom` — FNV-1a + SplitMix хეშირებით
 - `test` / `add` device ფუნქციები + batch kernels
 
-### Search Kernels (ექსპერიმენტული)
-> **შენიშვნა**: Search kernels `cuda/app/` დირექტორიაშია (არა ბიბლიოთეკაში).
-> პროდაქშენ search app სეპარატულ რეპოზიტორიაში არის.
-
-- `app/search_simple.cuh` — პროტოტიპი (naive per-thread loop)
-- `app/search_cpu_identical.cuh` — CPU-identical incremental add algorithm (init → add → batch_inv → bloom)
-
 ---
 
 ## ფაილთა სტრუქტურა
@@ -90,9 +83,6 @@ cuda/
 │   ├── hash160.cuh                             # SHA-256 + RIPEMD-160 → Hash160
 │   ├── host_helpers.cuh                        # Host-side wrappers (1-thread kernels, test-only)
 │   └── gpu_compat.h                            # CUDA ↔ HIP (ROCm) compatibility layer
-├── app/
-│   ├── search_simple.cuh                       # Search prototype (experimental, NOT part of library)
-│   └── search_cpu_identical.cuh                # CPU-identical search algorithm (experimental)
 ├── src/
 │   ├── secp256k1.cu                            # Kernel definitions (thin wrappers)
 │   ├── test_suite.cu                           # 30 vector tests

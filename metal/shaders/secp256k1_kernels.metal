@@ -81,11 +81,15 @@ kernel void search_kernel(
     k_offset.limbs[0] = tid;
     for (int i = 1; i < 8; i++) k_offset.limbs[i] = 0;
 
+    // Copy constant-address-space args to thread-local (MSL address space requirement)
+    AffinePoint kg_local = KG_affine;
+    JacobianPoint kq_local = KQ_start;
+
     // Compute tid*KG via scalar_mul (4-bit windowed, efficient for small scalars)
-    JacobianPoint offset_point = scalar_mul(KG_affine, k_offset);
+    JacobianPoint offset_point = scalar_mul(kg_local, k_offset);
 
     // KQ = KQ_start + tid*KG
-    JacobianPoint KQ = jacobian_add(KQ_start, offset_point);
+    JacobianPoint KQ = jacobian_add(kq_local, offset_point);
 
     // Convert to affine X
     AffinePoint kq_aff = jacobian_to_affine(KQ);
@@ -217,19 +221,25 @@ kernel void batch_inverse(
     if (start >= end) return;
     uint count = end - start;
 
-    // Forward pass: prefix products
-    scratch[start] = elements[start];
+    // Forward pass: prefix products (copy device→thread for field_mul)
+    FieldElement acc = elements[start];
+    scratch[start] = acc;
     for (uint i = 1; i < count; i++) {
-        scratch[start + i] = field_mul(scratch[start + i - 1], elements[start + i]);
+        FieldElement el = elements[start + i];
+        acc = field_mul(acc, el);
+        scratch[start + i] = acc;
     }
 
     // Single inversion of the chunk product
-    FieldElement inv = field_inv(scratch[start + count - 1]);
+    FieldElement s_last = scratch[start + count - 1];
+    FieldElement inv = field_inv(s_last);
 
     // Backward pass: recover individual inverses
     for (uint i = count - 1; i > 0; i--) {
-        FieldElement tmp = field_mul(inv, scratch[start + i - 1]);
-        inv = field_mul(inv, elements[start + i]);
+        FieldElement s_prev = scratch[start + i - 1];
+        FieldElement el_i = elements[start + i];
+        FieldElement tmp = field_mul(inv, s_prev);
+        inv = field_mul(inv, el_i);
         elements[start + i] = tmp;
     }
     elements[start] = inv;
@@ -247,9 +257,10 @@ kernel void point_add_kernel(
     uint tid [[thread_position_in_grid]]
 ) {
     if (tid >= count) return;
-    JacobianPoint a = a_arr[tid];
-    JacobianPoint b = b_arr[tid];
-    r_arr[tid] = jacobian_add(a, b);
+    // Copy device→thread for address space compatibility
+    JacobianPoint a_local = a_arr[tid];
+    JacobianPoint b_local = b_arr[tid];
+    r_arr[tid] = jacobian_add(a_local, b_local);
 }
 
 // =============================================================================
@@ -263,6 +274,6 @@ kernel void point_double_kernel(
     uint tid [[thread_position_in_grid]]
 ) {
     if (tid >= count) return;
-    JacobianPoint a = a_arr[tid];
-    r_arr[tid] = jacobian_double(a);
+    JacobianPoint a_local = a_arr[tid];
+    r_arr[tid] = jacobian_double(a_local);
 }

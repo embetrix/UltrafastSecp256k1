@@ -276,6 +276,28 @@ inline JacobianPoint jacobian_add(thread const JacobianPoint &p,
 }
 
 // =============================================================================
+// Jacobian → Affine Conversion
+// (Defined here before scalar_mul which depends on it)
+// =============================================================================
+
+inline AffinePoint jacobian_to_affine(thread const JacobianPoint &p) {
+    AffinePoint r;
+    if (p.infinity != 0) {
+        r.x = field_zero();
+        r.y = field_zero();
+        return r;
+    }
+
+    FieldElement z_inv = field_inv(p.z);
+    FieldElement z_inv2 = field_sqr(z_inv);
+    FieldElement z_inv3 = field_mul(z_inv2, z_inv);
+
+    r.x = field_mul(p.x, z_inv2);
+    r.y = field_mul(p.y, z_inv3);
+    return r;
+}
+
+// =============================================================================
 // Scalar Multiplication: P × k — 4-bit Fixed Window (w=4)
 //
 // ACCELERATION: Instead of simple double-and-add (256 doubles + ~128 adds),
@@ -363,27 +385,6 @@ inline JacobianPoint scalar_mul(thread const AffinePoint &base,
             }
         }
     }
-    return r;
-}
-
-// =============================================================================
-// Jacobian → Affine Conversion
-// =============================================================================
-
-inline AffinePoint jacobian_to_affine(thread const JacobianPoint &p) {
-    AffinePoint r;
-    if (p.infinity != 0) {
-        r.x = field_zero();
-        r.y = field_zero();
-        return r;
-    }
-
-    FieldElement z_inv = field_inv(p.z);
-    FieldElement z_inv2 = field_sqr(z_inv);
-    FieldElement z_inv3 = field_mul(z_inv2, z_inv);
-
-    r.x = field_mul(p.x, z_inv2);
-    r.y = field_mul(p.y, z_inv3);
     return r;
 }
 
