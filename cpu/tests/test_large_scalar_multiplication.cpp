@@ -372,12 +372,7 @@ static void test_edge_cases() {
     CHECK(points_equal(inf_plus_g, G), "inf + G = G");
 }
 
-int main() {
-    if (!secp256k1::fast::Selftest(true)) {
-        std::cerr << "SELFTEST FAILED — aborting test" << std::endl;
-        return 1;
-    }
-
+int test_large_scalar_multiplication_run() {
     // Initialize precompute tables for scalar_mul_generator
     FixedBaseConfig config{};
     config.window_bits = 15;

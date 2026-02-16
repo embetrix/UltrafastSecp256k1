@@ -42,7 +42,8 @@ static constexpr int KECCAK_ROT[25] = {
 // ── Helper ───────────────────────────────────────────────────────────────────
 
 static inline std::uint64_t rotl64(std::uint64_t x, int n) {
-    return (x << n) | (x >> (64 - n));
+    // Mask shift counts to avoid UB when n=0 (KECCAK_ROT[0]=0 → x>>64 is UB)
+    return (x << (n & 63)) | (x >> ((64 - n) & 63));
 }
 
 // ── Keccak-f[1600] Permutation ───────────────────────────────────────────────

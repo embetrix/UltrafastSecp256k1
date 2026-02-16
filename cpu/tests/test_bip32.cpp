@@ -194,7 +194,7 @@ static void test_bip32_seed_validation() {
 
 // ── Main ─────────────────────────────────────────────────────────────────────
 
-int main() {
+int test_bip32_run() {
     printf("=== BIP-32 HD Key Derivation Tests ===\n");
 
     test_hmac_sha512();

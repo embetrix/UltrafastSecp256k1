@@ -665,7 +665,7 @@ static void test_wycheproof_recovery_edge_cases() {
 // Main
 // ═══════════════════════════════════════════════════════════════════════════════
 
-int main() {
+int test_ecdh_recovery_taproot_run() {
     std::printf("═══════════════════════════════════════════════════════════════\n");
     std::printf("  UltrafastSecp256k1 — v3.2.0 Feature Tests\n");
     std::printf("═══════════════════════════════════════════════════════════════\n\n");

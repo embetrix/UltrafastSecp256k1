@@ -103,7 +103,7 @@ inline constexpr CoinParams Bitcoin = {
     .default_encoding   = AddressEncoding::BECH32,
     .xprv_version       = 0x0488ADE4,
     .xpub_version       = 0x0488B21E,
-    .features           = {true, true, true, true, true, false},
+    .features           = {true, true, true, true, false, true},
 };
 
 // ── Litecoin (LTC) ──────────────────────────────────────────────────────────

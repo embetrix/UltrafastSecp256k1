@@ -282,7 +282,7 @@ static void test_edge_cases() {
 
 // ── Main ─────────────────────────────────────────────────────────────────────
 
-int main() {
+int test_musig2_run() {
     printf("=== MuSig2 Multi-Signature Tests ===\n");
 
     test_key_aggregation();

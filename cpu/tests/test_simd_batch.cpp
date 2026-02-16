@@ -197,7 +197,7 @@ static void test_batch_inv_with_scratch() {
     check(all_ok, "Batch inv with scratch: verified");
 }
 
-int main() {
+int test_simd_batch_run() {
     std::printf("═══════════════════════════════════════════════════════════════\n");
     std::printf("  UltrafastSecp256k1 — SIMD + Batch Field Tests\n");
     std::printf("═══════════════════════════════════════════════════════════════\n\n");

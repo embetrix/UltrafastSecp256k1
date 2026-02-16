@@ -211,7 +211,7 @@ static void test_ecdsa_batch_verify() {
 
 // ── Main ─────────────────────────────────────────────────────────────────────
 
-int main() {
+int test_multiscalar_batch_run() {
     printf("=== Multi-Scalar Multiplication & Batch Verification Tests ===\n");
 
     test_shamir_trick();

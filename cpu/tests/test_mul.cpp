@@ -329,12 +329,7 @@ static void test_scalar_encoding() {
     }
 }
 
-int main() {
-    if (!secp256k1::fast::Selftest(true)) {
-        std::cerr << "SELFTEST FAILED — aborting test" << std::endl;
-        return 1;
-    }
-
+int test_mul_run() {
     std::cout << "\n╔══════════════════════════════════════════════════════════╗\n";
     std::cout << "║  Comprehensive Field & Scalar Arithmetic Tests          ║\n";
     std::cout << "╚══════════════════════════════════════════════════════════╝\n\n";

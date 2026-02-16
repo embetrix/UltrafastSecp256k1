@@ -573,7 +573,7 @@ static void test_full_pipeline_multi_coin() {
 // Main
 // ============================================================================
 
-int main() {
+int test_coins_run() {
     printf("=== Coins Layer + Custom Generator Tests ===\n\n");
     
     printf("[CurveContext]\n");

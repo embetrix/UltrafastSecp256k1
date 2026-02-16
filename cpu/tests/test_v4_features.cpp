@@ -621,7 +621,7 @@ static void test_address_consistency() {
 // Main
 // ═══════════════════════════════════════════════════════════════════════════════
 
-int main() {
+int test_v4_features_run() {
     std::printf("===========================================\n");
     std::printf("  v4.0.0 Feature Tests\n");
     std::printf("  Pedersen | FROST | Adaptor | Address | SP\n");

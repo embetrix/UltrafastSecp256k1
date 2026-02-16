@@ -345,6 +345,9 @@ elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|ARM64|arm64")
         # Android NDK: target ARMv8-A with crypto extensions (NEON is implicit)
         set(ARCH_FLAGS "-march=armv8-a+crypto")
         message(STATUS "Secp256k1: Android ARM64 target (ARMv8-A + crypto + NEON)")
+    elseif(APPLE)
+        # Apple Silicon: AppleClang uses -mcpu implicitly, not -march
+        set(ARCH_FLAGS "")
     else()
         set(ARCH_FLAGS "-march=armv8-a+crypto")
     endif()
@@ -383,7 +386,7 @@ target_compile_options(${SECP256K1_LIB_NAME} PRIVATE
     -finline-functions       # Inline everything possible
     -fomit-frame-pointer     # Remove frame pointers for speed
     -fno-stack-protector     # Disable stack canaries (no security)
-    -fno-plt                 # No PLT indirection (faster calls)
+    $<$<NOT:$<PLATFORM_ID:Darwin>>:-fno-plt>  # No PLT (ELF only, not macOS Mach-O)
     -ftree-vectorize         # Auto-vectorization (AVX2/SSE)
     -fno-lto                 # Explicitly disable LTO to avoid linker format errors
 )
@@ -498,69 +501,31 @@ if(BUILD_TESTING)
     # Over-optimizing benchmark code can distort measurements (aggressive inlining, etc.)
 endif()
 
-# Tests
+# Tests — unified test runner
+# Single binary runs library selftest + all test modules.
+# Usage: run_selftest [smoke|ci|stress] [seed_hex]
 if(BUILD_TESTING)
-    # Test: Large scalar multiplication with guaranteed correct results
-    add_executable(test_large_scalar_multiplication tests/test_large_scalar_multiplication.cpp)
-    target_link_libraries(test_large_scalar_multiplication PRIVATE ${SECP256K1_LIB_NAME})
-    add_test(NAME test_large_scalar_multiplication COMMAND test_large_scalar_multiplication)
-    
-    # Test: Simple multiplication for debugging
-    add_executable(test_mul tests/test_mul.cpp)
-    target_link_libraries(test_mul PRIVATE ${SECP256K1_LIB_NAME})
-    add_test(NAME test_mul COMMAND test_mul)
+    add_executable(run_selftest
+        tests/run_selftest.cpp
+        tests/test_large_scalar_multiplication.cpp
+        tests/test_mul.cpp
+        tests/test_arithmetic_correctness.cpp
+        tests/test_ct.cpp
+        tests/test_ecdsa_schnorr.cpp
+        tests/test_multiscalar_batch.cpp
+        tests/test_bip32.cpp
+        tests/test_musig2.cpp
+        tests/test_ecdh_recovery_taproot.cpp
+        tests/test_simd_batch.cpp
+        tests/test_v4_features.cpp
+        tests/test_coins.cpp
+    )
+    target_link_libraries(run_selftest PRIVATE ${SECP256K1_LIB_NAME})
 
-    # Test: Comprehensive arithmetic correctness (K*G, P+Q, K*Q, distributive)
-    add_executable(test_arithmetic_correctness tests/test_arithmetic_correctness.cpp)
-    target_link_libraries(test_arithmetic_correctness PRIVATE ${SECP256K1_LIB_NAME})
-    add_test(NAME test_arithmetic_correctness COMMAND test_arithmetic_correctness)
-
-    # Test: Constant-Time (CT) layer correctness
-    add_executable(test_ct tests/test_ct.cpp)
-    target_link_libraries(test_ct PRIVATE ${SECP256K1_LIB_NAME})
     # CT scalar_mul uses large stack (precomputed table + complete addition locals)
     if(MSVC OR (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND WIN32))
-        target_link_options(test_ct PRIVATE "LINKER:/STACK:8388608")
+        target_link_options(run_selftest PRIVATE "LINKER:/STACK:8388608")
     endif()
-    add_test(NAME test_ct COMMAND test_ct)
 
-    # Test: ECDSA + Schnorr (BIP-340) sign/verify
-    add_executable(test_ecdsa_schnorr tests/test_ecdsa_schnorr.cpp)
-    target_link_libraries(test_ecdsa_schnorr PRIVATE ${SECP256K1_LIB_NAME})
-    add_test(NAME test_ecdsa_schnorr COMMAND test_ecdsa_schnorr)
-
-    # Test: Multi-scalar multiplication + Batch verification
-    add_executable(test_multiscalar_batch tests/test_multiscalar_batch.cpp)
-    target_link_libraries(test_multiscalar_batch PRIVATE ${SECP256K1_LIB_NAME})
-    add_test(NAME test_multiscalar_batch COMMAND test_multiscalar_batch)
-
-    # Test: BIP-32 HD key derivation
-    add_executable(test_bip32 tests/test_bip32.cpp)
-    target_link_libraries(test_bip32 PRIVATE ${SECP256K1_LIB_NAME})
-    add_test(NAME test_bip32 COMMAND test_bip32)
-
-    # Test: MuSig2 multi-signatures
-    add_executable(test_musig2 tests/test_musig2.cpp)
-    target_link_libraries(test_musig2 PRIVATE ${SECP256K1_LIB_NAME})
-    add_test(NAME test_musig2 COMMAND test_musig2)
-
-    # Test: ECDH + Recovery + Taproot + CT Utils + Wycheproof vectors
-    add_executable(test_ecdh_recovery_taproot tests/test_ecdh_recovery_taproot.cpp)
-    target_link_libraries(test_ecdh_recovery_taproot PRIVATE ${SECP256K1_LIB_NAME})
-    add_test(NAME test_ecdh_recovery_taproot COMMAND test_ecdh_recovery_taproot)
-
-    # Test: SIMD batch field operations
-    add_executable(test_simd_batch tests/test_simd_batch.cpp)
-    target_link_libraries(test_simd_batch PRIVATE ${SECP256K1_LIB_NAME})
-    add_test(NAME test_simd_batch COMMAND test_simd_batch)
-
-    # Test: v4.0.0 features — Pedersen, FROST, Adaptor, Address, Silent Payments
-    add_executable(test_v4_features tests/test_v4_features.cpp)
-    target_link_libraries(test_v4_features PRIVATE ${SECP256K1_LIB_NAME})
-    add_test(NAME test_v4_features COMMAND test_v4_features)
-
-    # Test: Coins layer — multi-coin addresses, Keccak-256, Ethereum, BIP-44, custom generator
-    add_executable(test_coins tests/test_coins.cpp)
-    target_link_libraries(test_coins PRIVATE ${SECP256K1_LIB_NAME})
-    add_test(NAME test_coins COMMAND test_coins)
+    add_test(NAME selftest COMMAND run_selftest)
 endif()

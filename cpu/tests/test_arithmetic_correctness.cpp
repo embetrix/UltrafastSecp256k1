@@ -14,7 +14,7 @@
 using namespace secp256k1::fast;
 
 // Helper: Convert hex to bytes
-std::array<uint8_t, 32> hex_to_bytes(const char* hex) {
+static std::array<uint8_t, 32> hex_to_bytes(const char* hex) {
     std::array<uint8_t, 32> bytes{};
     size_t len = strlen(hex);
     if (len > 64) len = 64;
@@ -37,7 +37,7 @@ std::array<uint8_t, 32> hex_to_bytes(const char* hex) {
 }
 
 // Helper: Field element to hex
-std::string field_to_hex(const FieldElement& f) {
+static std::string field_to_hex(const FieldElement& f) {
     std::array<uint8_t, 32> bytes = f.to_bytes();
     std::stringstream ss;
     ss << std::hex << std::setfill('0');
@@ -48,7 +48,7 @@ std::string field_to_hex(const FieldElement& f) {
 }
 
 // Helper: Points equal
-bool points_equal(const Point& p1, const Point& p2) {
+static bool points_equal(const Point& p1, const Point& p2) {
     if (p1.is_infinity() && p2.is_infinity()) return true;
     if (p1.is_infinity() || p2.is_infinity()) return false;
     return field_to_hex(p1.x()) == field_to_hex(p2.x()) && 
@@ -99,7 +99,7 @@ const KnownKG KNOWN_KG[] = {
 // ============================================================
 // TEST 1: K*G Correctness with scalar_mul method
 // ============================================================
-bool test_kg_scalar_mul() {
+static bool test_kg_scalar_mul() {
     std::cout << "\n╔══════════════════════════════════════════════════════════╗" << std::endl;
     std::cout << "║ TEST 1: K*G using scalar_mul() method                   ║" << std::endl;
     std::cout << "╚══════════════════════════════════════════════════════════╝" << std::endl;
@@ -137,7 +137,7 @@ bool test_kg_scalar_mul() {
 // ============================================================
 // TEST 2: K*G using repeated addition (K*G = G+G+...+G)
 // ============================================================
-bool test_kg_repeated_addition() {
+static bool test_kg_repeated_addition() {
     std::cout << "\n╔══════════════════════════════════════════════════════════╗" << std::endl;
     std::cout << "║ TEST 2: K*G using repeated addition (G+G+...+G)         ║" << std::endl;
     std::cout << "╚══════════════════════════════════════════════════════════╝" << std::endl;
@@ -176,7 +176,7 @@ bool test_kg_repeated_addition() {
 // ============================================================
 // TEST 3: K*G using doubling (for powers of 2)
 // ============================================================
-bool test_kg_doubling() {
+static bool test_kg_doubling() {
     std::cout << "\n╔══════════════════════════════════════════════════════════╗" << std::endl;
     std::cout << "║ TEST 3: K*G using doubling (2*G, 4*G, 8*G, etc.)        ║" << std::endl;
     std::cout << "╚══════════════════════════════════════════════════════════╝" << std::endl;
@@ -217,7 +217,7 @@ bool test_kg_doubling() {
 // ============================================================
 // TEST 4: Point Addition Correctness (P1 + P2)
 // ============================================================
-bool test_point_addition() {
+static bool test_point_addition() {
     std::cout << "\n╔══════════════════════════════════════════════════════════╗" << std::endl;
     std::cout << "║ TEST 4: Point Addition P1 + P2 Correctness              ║" << std::endl;
     std::cout << "╚══════════════════════════════════════════════════════════╝" << std::endl;
@@ -274,7 +274,7 @@ bool test_point_addition() {
 // ============================================================
 // TEST 5: K*Q for arbitrary point Q (not generator)
 // ============================================================
-bool test_kq_arbitrary() {
+static bool test_kq_arbitrary() {
     std::cout << "\n╔══════════════════════════════════════════════════════════╗" << std::endl;
     std::cout << "║ TEST 5: K*Q for arbitrary point Q (K*Q correctness)     ║" << std::endl;
     std::cout << "╚══════════════════════════════════════════════════════════╝" << std::endl;
@@ -331,7 +331,7 @@ bool test_kq_arbitrary() {
 // ============================================================
 // TEST 6: K*Q with random scalars
 // ============================================================
-bool test_kq_random() {
+static bool test_kq_random() {
     std::cout << "\n╔══════════════════════════════════════════════════════════╗" << std::endl;
     std::cout << "║ TEST 6: K*Q with random large scalars                   ║" << std::endl;
     std::cout << "╚══════════════════════════════════════════════════════════╝" << std::endl;
@@ -377,7 +377,7 @@ bool test_kq_random() {
 // ============================================================
 // TEST 7: Distributive property: k*(P1+P2) = k*P1 + k*P2
 // ============================================================
-bool test_distributive() {
+static bool test_distributive() {
     std::cout << "\n╔══════════════════════════════════════════════════════════╗" << std::endl;
     std::cout << "║ TEST 7: Distributive: k*(P1+P2) = k*P1 + k*P2           ║" << std::endl;
     std::cout << "╚══════════════════════════════════════════════════════════╝" << std::endl;
@@ -423,21 +423,9 @@ bool test_distributive() {
 // ============================================================
 // MAIN
 // ============================================================
-int main() {
-    if (!secp256k1::fast::Selftest(true)) {
-        std::cerr << "SELFTEST FAILED — aborting test" << std::endl;
-        return 1;
-    }
-
+int test_arithmetic_correctness_run() {
     std::cout << "\n╔══════════════════════════════════════════════════════════╗" << std::endl;
-    std::cout << "║                                                          ║" << std::endl;
     std::cout << "║  COMPREHENSIVE ARITHMETIC CORRECTNESS TESTS              ║" << std::endl;
-    std::cout << "║                                                          ║" << std::endl;
-    std::cout << "║  Testing ALL methods for:                               ║" << std::endl;
-    std::cout << "║  • K*G (generator multiplication)                       ║" << std::endl;
-    std::cout << "║  • P1 + P2 (point addition)                             ║" << std::endl;
-    std::cout << "║  • K*Q (arbitrary point multiplication)                 ║" << std::endl;
-    std::cout << "║                                                          ║" << std::endl;
     std::cout << "╚══════════════════════════════════════════════════════════╝" << std::endl;
     
     bool all_passed = true;

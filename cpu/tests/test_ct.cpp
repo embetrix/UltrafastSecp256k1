@@ -462,7 +462,7 @@ static void test_mixing() {
 
 // ─── Main ────────────────────────────────────────────────────────────────────
 
-int main() {
+int test_ct_run() {
     std::cout << "=== CT (Constant-Time) Layer Tests ===\n\n";
 
     // Field
