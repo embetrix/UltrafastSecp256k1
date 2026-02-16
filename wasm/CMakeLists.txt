@@ -79,8 +79,8 @@ target_link_options(secp256k1_wasm PRIVATE
     "SHELL:-s EXPORTED_FUNCTIONS=[${EXPORTED_FUNCTIONS_STR}]"
     "SHELL:-s EXPORTED_RUNTIME_METHODS=[ccall,cwrap,getValue,setValue,UTF8ToString,stackAlloc,stackSave,stackRestore]"
     "SHELL:-s ALLOW_MEMORY_GROWTH=1"
-    "SHELL:-s INITIAL_MEMORY=1048576"      # 1 MB initial
-    "SHELL:-s STACK_SIZE=262144"           # 256 KB stack
+    "SHELL:-s INITIAL_MEMORY=4194304"      # 4 MB initial (selftest uses vectors)
+    "SHELL:-s STACK_SIZE=524288"            # 512 KB stack
     "SHELL:-s WASM=1"
     "SHELL:-s NO_EXIT_RUNTIME=1"
     "SHELL:-s FILESYSTEM=0"               # No FS needed
@@ -90,11 +90,11 @@ target_link_options(secp256k1_wasm PRIVATE
 
 # Release optimizations
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
-    target_compile_options(secp256k1_wasm PRIVATE -O3 -flto)
+    target_compile_options(secp256k1_wasm PRIVATE -O3 -flto -fno-exceptions)
     target_link_options(secp256k1_wasm PRIVATE
         -O3 -flto
         "SHELL:-s ASSERTIONS=0"
-        "SHELL:--closure 1"
+        # NOTE: --closure 1 removed — it breaks atexit/exception runtime
     )
 else()
     target_link_options(secp256k1_wasm PRIVATE
