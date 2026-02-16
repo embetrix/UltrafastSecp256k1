@@ -33,6 +33,12 @@
     #else
         #include <cpuid.h>
     #endif
+    // immintrin.h MUST be included at file scope (before any namespace).
+    // On Linux GCC/Clang, immintrin.h transitively includes <stdlib.h>
+    // via mm_malloc.h. Including it inside a namespace block causes
+    // stdlib symbols (malloc, calloc, etc.) to be declared in the wrong
+    // namespace, breaking <cstdlib> later.
+    #include <immintrin.h>
 #endif
 
 namespace secp256k1::hash {
@@ -387,7 +393,8 @@ void hash160_33(const std::uint8_t* pubkey33, std::uint8_t* out20) noexcept {
 // SHA-NI requires SSE4.1 + SHA instructions
 // MSVC: intrinsics always available
 // GCC/Clang: __attribute__((target("sha,sse4.1"))) enables per-function
-#include <immintrin.h>
+// NOTE: <immintrin.h> is included at file scope (top of file) to avoid
+// namespace pollution on Linux where it transitively includes <stdlib.h>.
 
 namespace shani {
 
