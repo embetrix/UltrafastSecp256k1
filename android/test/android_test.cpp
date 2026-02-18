@@ -13,6 +13,7 @@
 #include <algorithm>
 
 #include <secp256k1/field.hpp>
+#include <secp256k1/field_26.hpp>
 #include <secp256k1/field_asm.hpp>
 #include <secp256k1/scalar.hpp>
 #include <secp256k1/point.hpp>
@@ -26,6 +27,7 @@
 
 using namespace secp256k1;
 using FE = fast::FieldElement;
+using FE26 = fast::FieldElement26;
 using SC = fast::Scalar;
 using PT = fast::Point;
 
@@ -305,7 +307,7 @@ static void run_benchmarks() {
 
     // ---- Summary ----
     printf("\n=============================================\n");
-    printf("SUMMARY — ARM64 Performance\n");
+    printf("SUMMARY — ARM64 Performance (4x64)\n");
     printf("=============================================\n");
     printf("  field_mul:       %6lld ns/op\n", mul_ns);
     printf("  field_sqr:       %6lld ns/op\n", sqr_ns);
@@ -320,6 +322,115 @@ static void run_benchmarks() {
 #else
     printf("  Backend: Generic C++ (portable)\n");
 #endif
+    printf("=============================================\n");
+
+    // ============================================================================
+    // 10×26 Field Element Benchmark (Lazy-Reduction for 32-bit targets)
+    // ============================================================================
+    printf("\n=============================================\n");
+    printf("BENCHMARK — FieldElement26 (10x26 Lazy-Reduction)\n");
+    printf("  4x64 vs 10x26 comparison on ARM64\n");
+    printf("=============================================\n\n");
+
+    FE26 fe26_a = FE26::from_fe(FE::from_uint64(0xDEADBEEF12345678ULL));
+    FE26 fe26_b = FE26::from_fe(FE::from_uint64(0xCAFEBABE87654321ULL));
+    FE fe_ref_a = FE::from_uint64(0xDEADBEEF12345678ULL);
+    FE fe_ref_b = FE::from_uint64(0xCAFEBABE87654321ULL);
+
+    // ── Correctness check ──
+    {
+        FE26 prod26 = fe26_a * fe26_b;
+        FE prod64 = fe_ref_a * fe_ref_b;
+        FE prod26_back = prod26.to_fe();
+        bool ok = (prod26_back == prod64);
+        printf("  10x26 mul correctness: %s\n", ok ? "PASS" : "FAIL");
+        if (!ok) { printf("    ERROR: 10x26 multiplication mismatch on device!\n"); }
+
+        FE26 sqr26 = fe26_a.square();
+        FE sqr64 = fe_ref_a.square();
+        FE sqr26_back = sqr26.to_fe();
+        ok = (sqr26_back == sqr64);
+        printf("  10x26 sqr correctness: %s\n", ok ? "PASS" : "FAIL");
+        if (!ok) { printf("    ERROR: 10x26 squaring mismatch on device!\n"); }
+    }
+    printf("\n");
+
+    printf("--- 10x26 Single Operations ---\n");
+
+    long long mul26_ns = bench("10x26 field_mul", 100000, [&]() {
+        fe26_a = fe26_a * fe26_b;
+        g_sink ^= fe26_a.n[0];
+    });
+    fe26_a = FE26::from_fe(FE::from_uint64(0xDEADBEEF12345678ULL));
+
+    long long sqr26_ns = bench("10x26 field_sqr", 100000, [&]() {
+        fe26_a = fe26_a.square();
+        g_sink ^= fe26_a.n[0];
+    });
+    fe26_a = FE26::from_fe(FE::from_uint64(0xDEADBEEF12345678ULL));
+
+    long long add26_ns = bench("10x26 field_add (lazy)", 100000, [&]() {
+        fe26_a = fe26_a + fe26_b;
+        g_sink ^= fe26_a.n[0];
+    });
+    fe26_a = FE26::from_fe(FE::from_uint64(0xDEADBEEF12345678ULL));
+
+    long long neg26_ns = bench("10x26 field_negate", 100000, [&]() {
+        fe26_a = fe26_a.negate(1);
+        g_sink ^= fe26_a.n[0];
+    });
+    fe26_a = FE26::from_fe(FE::from_uint64(0xDEADBEEF12345678ULL));
+
+    long long half26_ns = bench("10x26 field_half", 100000, [&]() {
+        fe26_a = fe26_a.half();
+        g_sink ^= fe26_a.n[0];
+    });
+    fe26_a = FE26::from_fe(FE::from_uint64(0xDEADBEEF12345678ULL));
+
+    printf("\n--- 10x26 Lazy Add Chains ---\n");
+    for (int chain : {4, 8, 16, 32, 64}) {
+        char name[64];
+        std::snprintf(name, sizeof(name), "10x26 add chain (%d + norm)", chain);
+        bench(name, 50000, [&]() {
+            FE26 acc = fe26_a;
+            for (int i = 0; i < chain; ++i) acc.add_assign(fe26_b);
+            acc.normalize_weak();
+            g_sink ^= acc.n[0];
+        });
+    }
+
+    printf("\n--- 10x26 Mixed Chain (Point-Add Sim) ---\n");
+    bench("10x26 point-add sim (12M+4S+7A)", 50000, [&]() {
+        FE26 t0 = fe26_a, t1 = fe26_b;
+        FE26 u1 = t0 * t1;
+        FE26 u2 = t1.square();
+        FE26 s1 = u1 + u2;
+        FE26 s2 = t0.square();
+        FE26 h  = s1 + s2 + u1;
+        FE26 r  = h * s1;
+        FE26 rx = r.square() + h.negate(1);
+        FE26 ry = rx * h + r.negate(1);
+        FE26 rz = ry.square();
+        FE26 w  = (rz + rx) * ry;
+        FE26 v  = (w + rz.negate(1)).square();
+        FE26 out = v * w;
+        g_sink ^= out.n[0];
+    });
+
+    // ── 10x26 vs 4x64 Summary ──
+    printf("\n=============================================\n");
+    printf("COMPARISON — 4x64 vs 10x26 on ARM64\n");
+    printf("=============================================\n");
+    printf("  Operation       4x64 (ns)   10x26 (ns)   Ratio\n");
+    printf("  ──────────────  ─────────   ──────────   ─────\n");
+    printf("  Multiplication  %6lld       %6lld        %.2fx\n", mul_ns, mul26_ns, (double)mul_ns / mul26_ns);
+    printf("  Squaring        %6lld       %6lld        %.2fx\n", sqr_ns, sqr26_ns, (double)sqr_ns / sqr26_ns);
+    printf("  Addition        %6lld       %6lld        %.2fx\n", add_ns, add26_ns, (double)add_ns / add26_ns);
+    printf("  Negation        %6lld       %6lld        %.2fx\n", sub_ns, neg26_ns, (double)sub_ns / neg26_ns);
+    printf("  Half            %6s       %6lld        N/A\n", "N/A", half26_ns);
+    printf("\n  Ratio >1 = 10x26 faster, <1 = 4x64 faster\n");
+    printf("  On ARM64 (64-bit), 4x64 should win at mul.\n");
+    printf("  10x26 wins at lazy add chains.\n");
     printf("=============================================\n");
 }
 

@@ -15,6 +15,8 @@
 
 // secp256k1 library
 #include "secp256k1/field.hpp"
+#include "secp256k1/field_26.hpp"
+#include "secp256k1/field_optimal.hpp"
 #include "secp256k1/scalar.hpp"
 #include "secp256k1/point.hpp"
 #include "secp256k1/selftest.hpp"
@@ -202,9 +204,162 @@ int main() {
         (void)sink;
     }
 
+    // ═══════════════════════════════════════════════════════════════════
+    // 10×26 Field Element Benchmark
+    // ═══════════════════════════════════════════════════════════════════
+    printf("\n");
+    printf("==============================================\n");
+    printf("  10x26 Field Element Benchmark\n");
+    printf("  (Lazy-Reduction for 32-bit Platforms)\n");
+    printf("==============================================\n");
+
+    {
+        FieldElement fe_x = FieldElement::from_limbs({0xDEADBEEF12345678ULL, 0xCAFEBABE87654321ULL, 0x1122334455667788ULL, 0x99AABBCCDDEEFF00ULL});
+        FieldElement fe_y = FieldElement::from_limbs({0xFEDCBA9876543210ULL, 0x0123456789ABCDEFULL, 0xAABBCCDDEEFF0011ULL, 0x2233445566778899ULL});
+
+        FieldElement26 f26_x = FieldElement26::from_fe(fe_x);
+        FieldElement26 f26_y = FieldElement26::from_fe(fe_y);
+
+        // Correctness
+        FieldElement mul64 = fe_x * fe_y;
+        FieldElement26 mul26 = f26_x * f26_y;
+        printf("  10x26 mul OK: %s\n", (mul26.to_fe() == mul64) ? "PASS" : "FAIL");
+
+        FieldElement sqr64 = fe_x.square();
+        FieldElement26 sqr26 = f26_x.square();
+        printf("  10x26 sqr OK: %s\n", (sqr26.to_fe() == sqr64) ? "PASS" : "FAIL");
+
+        FieldElement add64 = fe_x + fe_y;
+        FieldElement26 add26 = f26_x + f26_y;
+        add26.normalize();
+        printf("  10x26 add OK: %s\n", (add26.to_fe() == add64) ? "PASS" : "FAIL");
+
+        printf("  10x26 roundtrip: %s\n", (f26_x.to_fe() == fe_x) ? "PASS" : "FAIL");
+    }
+
+    {
+        FieldElement26 fa26 = FieldElement26::from_fe(a);
+        FieldElement26 fb26 = FieldElement26::from_fe(b);
+
+        // 10x26 Mul
+        {
+            uint32_t start = micros();
+            FieldElement26 result = fa26;
+            for (int i = 0; i < iterations; i++) {
+                result = result * fb26;
+            }
+            uint32_t elapsed = micros() - start;
+            printf("  10x26 Mul:    %5lu ns/op\n", (unsigned long)(elapsed * 1000UL) / iterations);
+            if (result.n[0] == 0xDEAD) printf("!");
+        }
+
+        // 10x26 Sqr
+        {
+            uint32_t start = micros();
+            FieldElement26 result = fa26;
+            for (int i = 0; i < iterations; i++) {
+                result.square_inplace();
+            }
+            uint32_t elapsed = micros() - start;
+            printf("  10x26 Sqr:    %5lu ns/op\n", (unsigned long)(elapsed * 1000UL) / iterations);
+            if (result.n[0] == 0xDEAD) printf("!");
+        }
+
+        // 10x26 Add (lazy)
+        {
+            uint32_t start = micros();
+            FieldElement26 result = fa26;
+            for (int i = 0; i < iterations; i++) {
+                result.add_assign(fb26);
+            }
+            result.normalize_weak();
+            uint32_t elapsed = micros() - start;
+            printf("  10x26 Add:    %5lu ns/op  (LAZY)\n", (unsigned long)(elapsed * 1000UL) / iterations);
+            if (result.n[0] == 0xDEAD) printf("!");
+        }
+
+        // 10x26 Neg
+        {
+            uint32_t start = micros();
+            FieldElement26 result = fa26;
+            for (int i = 0; i < iterations; i++) {
+                result = result.negate(1);
+            }
+            uint32_t elapsed = micros() - start;
+            printf("  10x26 Neg:    %5lu ns/op\n", (unsigned long)(elapsed * 1000UL) / iterations);
+            if (result.n[0] == 0xDEAD) printf("!");
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Optimal Field Element (compile-time dispatch)
+    // ═══════════════════════════════════════════════════════════════════
+    printf("\n");
+    printf("==============================================\n");
+    printf("  Optimal Field Element (Auto-Dispatch)\n");
+    printf("  Selected: %s\n", secp256k1::fast::kOptimalTierName);
+    printf("==============================================\n");
+
+    {
+        using OFE = secp256k1::fast::OptimalFieldElement;
+        OFE oa = secp256k1::fast::to_optimal(a);
+        OFE ob = secp256k1::fast::to_optimal(b);
+
+        // Correctness
+        OFE ofe_mul = oa * ob;
+        FieldElement rt_mul = secp256k1::fast::from_optimal(ofe_mul);
+        FieldElement ref_mul = a * b;
+        printf("  Optimal Mul OK: %s\n", (rt_mul == ref_mul) ? "PASS" : "FAIL");
+
+        OFE ofe_sqr = oa.square();
+        FieldElement rt_sqr = secp256k1::fast::from_optimal(ofe_sqr);
+        FieldElement ref_sqr = a.square();
+        printf("  Optimal Sqr OK: %s\n", (rt_sqr == ref_sqr) ? "PASS" : "FAIL");
+
+        // Benchmark Optimal Mul
+        {
+            uint32_t start = micros();
+            OFE result = oa;
+            for (int i = 0; i < iterations; i++) {
+                result = result * ob;
+            }
+            uint32_t elapsed = micros() - start;
+            printf("  Optimal Mul:  %5lu ns/op\n", (unsigned long)(elapsed * 1000UL) / iterations);
+            volatile auto sink = result;
+            (void)sink;
+        }
+
+        // Benchmark Optimal Sqr
+        {
+            uint32_t start = micros();
+            OFE result = oa;
+            for (int i = 0; i < iterations; i++) {
+                result = result.square();
+            }
+            uint32_t elapsed = micros() - start;
+            printf("  Optimal Sqr:  %5lu ns/op\n", (unsigned long)(elapsed * 1000UL) / iterations);
+            volatile auto sink = result;
+            (void)sink;
+        }
+
+        // Benchmark Optimal Add
+        {
+            uint32_t start = micros();
+            OFE result = oa;
+            for (int i = 0; i < iterations; i++) {
+                result = result + ob;
+            }
+            uint32_t elapsed = micros() - start;
+            printf("  Optimal Add:  %5lu ns/op\n", (unsigned long)(elapsed * 1000UL) / iterations);
+            volatile auto sink = result;
+            (void)sink;
+        }
+    }
+
     printf("\n");
     printf("============================================================\n");
     printf("   UltrafastSecp256k1 on STM32F103ZET6 - Test Complete\n");
+    printf("   Optimal Tier: %s\n", secp256k1::fast::kOptimalTierName);
     printf("============================================================\n");
 
     // Halt (no RTOS)
