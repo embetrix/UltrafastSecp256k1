@@ -1,7 +1,7 @@
 [package]
 name = "ultrafast-secp256k1"
 version = "1.0.0"
-edition = "2024"
+edition = "2021"
 license = "MIT"
 description = "Safe Rust bindings to UltrafastSecp256k1 — high-performance secp256k1 elliptic curve library"
 repository = "https://github.com/UltrafastSecp256k1/UltrafastSecp256k1"

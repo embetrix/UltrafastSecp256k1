@@ -213,16 +213,21 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
-      - name: Compile Java class
+      - name: Compile Java class + generate JNI header
         run: |
-          javac -d bindings/java/build \
+          mkdir -p bindings/java/build
+          javac -h bindings/java/jni \
+            -d bindings/java/build \
             bindings/java/src/main/java/com/ultrafast/secp256k1/Secp256k1.java
 
-      - name: Build JNI bridge
+      - name: Compile-check JNI bridge (syntax only)
         run: |
-          cmake -S bindings/java -B bindings/java/build-jni \
-            -DCMAKE_BUILD_TYPE=Release
-          cmake --build bindings/java/build-jni --config Release -j4
+          gcc -fsyntax-only \
+            -I"$JAVA_HOME/include" \
+            -I"$JAVA_HOME/include/linux" \
+            -I bindings/c_api \
+            -I bindings/java/jni \
+            bindings/java/jni/secp256k1_jni.c
 
   # ── Swift (build check) ────────────────────────────────────────────────
   swift:

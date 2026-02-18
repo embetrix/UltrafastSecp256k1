@@ -9,7 +9,6 @@ import ctypes
 import ctypes.util
 import os
 import platform
-import sys
 from pathlib import Path
 from typing import Optional, Tuple
 
@@ -416,8 +415,6 @@ class Secp256k1:
     def _setup_prototypes(self):
         """Declare C API function signatures for type safety."""
         lib = self._lib
-        c = ctypes.c_char_p
-        p = ctypes.POINTER(ctypes.c_uint8)
         u8p = ctypes.c_char_p  # uint8_t*
         sz = ctypes.c_size_t
         i = ctypes.c_int
