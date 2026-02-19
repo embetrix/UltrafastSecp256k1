@@ -120,10 +120,31 @@ inline void scalar_to_bytes_impl(const Scalar* s, uchar out[32]) {
     }
 }
 
-// FieldElement → BE 32 bytes
+// FieldElement → BE 32 bytes (normalizes mod p before serialization)
 inline void field_to_bytes_impl(const FieldElement* f, uchar out[32]) {
+    // p = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F
+    const ulong P[4] = {
+        0xFFFFFFFEFFFFFC2FUL, 0xFFFFFFFFFFFFFFFFUL,
+        0xFFFFFFFFFFFFFFFFUL, 0xFFFFFFFFFFFFFFFFUL
+    };
+    // Branchless: subtract p, keep result only if no borrow (fe >= p)
+    ulong tmp[4];
+    ulong borrow = 0;
     for (int i = 0; i < 4; i++) {
-        ulong limb = f->limbs[3 - i];
+        ulong a = f->limbs[i];
+        ulong b = P[i] + borrow;
+        ulong underflow = (borrow && b == 0) ? 1UL : 0UL;
+        tmp[i] = a - b;
+        borrow = (a < b || underflow) ? 1UL : 0UL;
+    }
+    // borrow==0 → fe >= p → use tmp; borrow==1 → fe < p → use original
+    ulong mask = (borrow == 0) ? ~0UL : 0UL;
+    ulong norm[4];
+    for (int i = 0; i < 4; i++)
+        norm[i] = (tmp[i] & mask) | (f->limbs[i] & ~mask);
+
+    for (int i = 0; i < 4; i++) {
+        ulong limb = norm[3 - i];
         for (int j = 0; j < 8; j++)
             out[i * 8 + j] = (uchar)(limb >> (56 - j * 8));
     }
@@ -786,11 +807,15 @@ inline int lift_x_impl(const uchar x_bytes[32], JacobianPoint* p) {
 
     field_sqrt_impl(&y2, &y);
 
+    // Verify: y² == y2 (compare via normalized bytes to handle unreduced limbs)
     FieldElement y_check;
     field_sqr_impl(&y_check, &y);
+    uchar yc_bytes[32], y2_bytes[32];
+    field_to_bytes_impl(&y_check, yc_bytes);
+    field_to_bytes_impl(&y2, y2_bytes);
     int valid = 1;
-    for (int i = 0; i < 4; i++)
-        if (y_check.limbs[i] != y2.limbs[i]) valid = 0;
+    for (int i = 0; i < 32; i++)
+        if (yc_bytes[i] != y2_bytes[i]) valid = 0;
     if (!valid) return 0;
 
     // Ensure even Y
@@ -841,7 +866,7 @@ inline int schnorr_sign_impl(const Scalar* priv, const uchar msg[32],
 
     // t = d XOR tagged_hash("BIP0340/aux", aux_rand)
     uchar t_hash[32];
-    tagged_hash_impl((const uchar*)"BIP0340/aux", 12, aux_rand, 32, t_hash);
+    tagged_hash_impl((const uchar*)"BIP0340/aux", 11, aux_rand, 32, t_hash);
 
     uchar d_bytes[32];
     scalar_to_bytes_impl(&d, d_bytes);
@@ -888,7 +913,7 @@ inline int schnorr_sign_impl(const Scalar* priv, const uchar msg[32],
     for (int i = 0; i < 32; i++) challenge_input[64+i] = msg[i];
 
     uchar e_hash[32];
-    tagged_hash_impl((const uchar*)"BIP0340/challenge", 19, challenge_input, 96, e_hash);
+    tagged_hash_impl((const uchar*)"BIP0340/challenge", 17, challenge_input, 96, e_hash);
 
     Scalar e;
     scalar_from_bytes_impl(e_hash, &e);
@@ -914,7 +939,7 @@ inline int schnorr_verify_impl(const uchar pubkey_x[32], const uchar msg[32],
     for (int i = 0; i < 32; i++) challenge_input[64+i] = msg[i];
 
     uchar e_hash[32];
-    tagged_hash_impl((const uchar*)"BIP0340/challenge", 19, challenge_input, 96, e_hash);
+    tagged_hash_impl((const uchar*)"BIP0340/challenge", 17, challenge_input, 96, e_hash);
 
     Scalar e;
     scalar_from_bytes_impl(e_hash, &e);
@@ -1082,11 +1107,15 @@ inline int lift_x_field_impl(const FieldElement* x_fe, int parity, JacobianPoint
     field_add_impl(&y2, &x3, &seven);
     field_sqrt_impl(&y2, &y);
 
+    // Verify: y² == y2 (compare via normalized bytes to handle unreduced limbs)
     FieldElement y_check;
     field_sqr_impl(&y_check, &y);
+    uchar yc_bytes2[32], y2_bytes2[32];
+    field_to_bytes_impl(&y_check, yc_bytes2);
+    field_to_bytes_impl(&y2, y2_bytes2);
     int valid = 1;
-    for (int i = 0; i < 4; i++)
-        if (y_check.limbs[i] != y2.limbs[i]) valid = 0;
+    for (int i = 0; i < 32; i++)
+        if (yc_bytes2[i] != y2_bytes2[i]) valid = 0;
     if (!valid) return 0;
 
     uchar y_bytes[32];

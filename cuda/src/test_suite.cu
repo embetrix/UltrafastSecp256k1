@@ -1883,7 +1883,8 @@ static bool test_generator_mul_windowed_op(bool verbose) {
         cudaMemcpy(&h_std, d_std, sizeof(JacobianPoint), cudaMemcpyDeviceToHost);
         cudaMemcpy(&h_win, d_win, sizeof(JacobianPoint), cudaMemcpyDeviceToHost);
 
-        HostPoint p_std(h_std), p_win(h_win);
+        HostPoint p_std = HostPoint::from_device(h_std);
+        HostPoint p_win = HostPoint::from_device(h_win);
 
         bool match = (p_std.x().to_hex() == p_win.x().to_hex()) &&
                      (p_std.y().to_hex() == p_win.y().to_hex());
@@ -2098,30 +2099,28 @@ __global__ void kernel_schnorr_sign_verify(
     bool* d_sign_ok,
     bool* d_verify_ok)
 {
-    // Sign
+    // Sign into local memory first, then copy to global
+    SchnorrSignatureGPU local_sig;
     uint8_t aux_rand[32] = {};  // deterministic (zeros)
-    *d_sign_ok = schnorr_sign(d_priv, d_msg, aux_rand, d_sig);
+    bool sign_ok = schnorr_sign(d_priv, d_msg, aux_rand, &local_sig);
+    *d_sign_ok = sign_ok;
 
-    if (*d_sign_ok) {
+    if (sign_ok) {
+        // Copy to global
+        *d_sig = local_sig;
+
         // Compute pubkey x-only
         JacobianPoint P;
         scalar_mul(&GENERATOR_JACOBIAN, d_priv, &P);
-        FieldElement z_inv, z_inv2, z_inv3, px, py;
+        FieldElement z_inv, z_inv2, px;
         field_inv(&P.z, &z_inv);
         field_sqr(&z_inv, &z_inv2);
-        field_mul(&z_inv, &z_inv2, &z_inv3);
         field_mul(&P.x, &z_inv2, &px);
-        field_mul(&P.y, &z_inv3, &py);
-
-        // Ensure even Y for X-only pubkey
-        uint8_t py_bytes[32];
-        field_to_bytes(&py, py_bytes);
-        // (We just need px as bytes)
         uint8_t pk_bytes[32];
         field_to_bytes(&px, pk_bytes);
 
-        // Verify
-        *d_verify_ok = schnorr_verify(pk_bytes, d_msg, d_sig);
+        // Verify using local copy
+        *d_verify_ok = schnorr_verify(pk_bytes, d_msg, &local_sig);
     } else {
         *d_verify_ok = false;
     }

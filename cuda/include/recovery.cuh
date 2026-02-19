@@ -48,12 +48,15 @@ __device__ inline bool lift_x_field(
     // y = sqrt(y²) = y2^((p+1)/4)
     field_sqrt(&y2, &y);
 
-    // Verify: y² == y2
+    // Verify: y² == y2 (compare via normalized bytes to handle unreduced limbs)
     FieldElement y_check;
     field_sqr(&y, &y_check);
+    uint8_t y_check_bytes[32], y2_bytes_cmp[32];
+    field_to_bytes(&y_check, y_check_bytes);
+    field_to_bytes(&y2, y2_bytes_cmp);
     bool valid = true;
-    for (int i = 0; i < 4; i++) {
-        if (y_check.limbs[i] != y2.limbs[i]) valid = false;
+    for (int i = 0; i < 32; i++) {
+        if (y_check_bytes[i] != y2_bytes_cmp[i]) valid = false;
     }
     if (!valid) return false;
 

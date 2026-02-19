@@ -79,12 +79,15 @@ __device__ inline bool lift_x(
     // y = sqrt(y²) = y2^((p+1)/4)
     field_sqrt(&y2, &y);
 
-    // Verify: y² == y2
+    // Verify: y² == y2 (compare via normalized bytes to handle unreduced limbs)
     FieldElement y_check;
     field_sqr(&y, &y_check);
+    uint8_t y_check_bytes[32], y2_bytes[32];
+    field_to_bytes(&y_check, y_check_bytes);
+    field_to_bytes(&y2, y2_bytes);
     bool valid = true;
-    for (int i = 0; i < 4; i++) {
-        if (y_check.limbs[i] != y2.limbs[i]) valid = false;
+    for (int i = 0; i < 32; i++) {
+        if (y_check_bytes[i] != y2_bytes[i]) valid = false;
     }
     if (!valid) return false;
 
@@ -154,7 +157,7 @@ __device__ inline bool schnorr_sign(
 
     // t = d XOR tagged_hash("BIP0340/aux", aux_rand)
     uint8_t t_hash[32];
-    tagged_hash("BIP0340/aux", 12, aux_rand, 32, t_hash);
+    tagged_hash("BIP0340/aux", 11, aux_rand, 32, t_hash);
 
     uint8_t d_bytes[32];
     scalar_to_bytes(&d, d_bytes);
@@ -207,7 +210,7 @@ __device__ inline bool schnorr_sign(
     for (int i = 0; i < 32; i++) challenge_input[64 + i] = msg[i];
 
     uint8_t e_hash[32];
-    tagged_hash("BIP0340/challenge", 19, challenge_input, 96, e_hash);
+    tagged_hash("BIP0340/challenge", 17, challenge_input, 96, e_hash);
 
     Scalar e;
     scalar_from_bytes(e_hash, &e);
@@ -260,7 +263,7 @@ __device__ inline bool schnorr_verify(
     for (int i = 0; i < 32; i++) challenge_input[64 + i] = msg[i];
 
     uint8_t e_hash[32];
-    tagged_hash("BIP0340/challenge", 19, challenge_input, 96, e_hash);
+    tagged_hash("BIP0340/challenge", 17, challenge_input, 96, e_hash);
 
     Scalar e;
     scalar_from_bytes(e_hash, &e);

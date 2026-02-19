@@ -60,9 +60,30 @@ __device__ inline void scalar_to_bytes(const Scalar* s, uint8_t bytes[32]) {
 }
 
 // Convert FieldElement to 32 big-endian bytes.
+// Normalizes (fully reduces mod p) before serialization so byte comparisons
+// are always consistent, regardless of internal carry state.
 __device__ inline void field_to_bytes(const FieldElement* fe, uint8_t bytes[32]) {
+    // p = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F
+    constexpr uint64_t P[4] = {
+        0xFFFFFFFEFFFFFC2FULL, 0xFFFFFFFFFFFFFFFFULL,
+        0xFFFFFFFFFFFFFFFFULL, 0xFFFFFFFFFFFFFFFFULL
+    };
+    // Branchless: try subtracting p; keep result only if no borrow
+    uint64_t tmp[4];
+    uint64_t borrow = 0;
     for (int i = 0; i < 4; i++) {
-        uint64_t limb = fe->limbs[3 - i];
+        unsigned __int128 diff = (unsigned __int128)fe->limbs[i] - P[i] - borrow;
+        tmp[i] = (uint64_t)diff;
+        borrow = (uint64_t)(-(int64_t)(diff >> 64));  // 1 if borrow, 0 otherwise
+    }
+    // If borrow==0: fe >= p → use tmp (reduced). If borrow==1: fe < p → use fe.
+    uint64_t mask = -(uint64_t)(borrow == 0);  // all-1s if no borrow, all-0s if borrow
+    uint64_t norm[4];
+    for (int i = 0; i < 4; i++)
+        norm[i] = (tmp[i] & mask) | (fe->limbs[i] & ~mask);
+
+    for (int i = 0; i < 4; i++) {
+        uint64_t limb = norm[3 - i];
         for (int j = 0; j < 8; j++) {
             bytes[i * 8 + j] = (uint8_t)(limb >> (56 - j * 8));
         }

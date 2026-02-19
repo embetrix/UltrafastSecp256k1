@@ -100,10 +100,33 @@ inline void scalar_to_bytes(thread const Scalar256 &s, thread uchar out[32]) {
     }
 }
 
-// FieldElement → big-endian 32 bytes
+// FieldElement → big-endian 32 bytes (normalizes mod p before serialization)
 inline void field_to_bytes(thread const FieldElement &f, thread uchar out[32]) {
+    // p = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F
+    // In 8×32-bit limbs (little-endian limb order):
+    // limbs[0..7] = {0xFFFFFC2F, 0xFFFFFFFE, 0xFFFFFFFF, 0xFFFFFFFF,
+    //                0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF}
+    const uint P[8] = {
+        0xFFFFFC2Fu, 0xFFFFFFFEu, 0xFFFFFFFFu, 0xFFFFFFFFu,
+        0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu
+    };
+    // Branchless: subtract p, keep result only if no borrow (fe >= p)
+    uint tmp[8];
+    uint borrow = 0;
     for (int i = 0; i < 8; i++) {
-        uint limb = f.limbs[7 - i];
+        uint a = f.limbs[i];
+        uint b = P[i] + borrow;
+        uint underflow = (borrow && b == 0) ? 1u : 0u;
+        tmp[i] = a - b;
+        borrow = (a < b || underflow) ? 1u : 0u;
+    }
+    uint mask = (borrow == 0) ? 0xFFFFFFFFu : 0u;
+    uint norm[8];
+    for (int i = 0; i < 8; i++)
+        norm[i] = (tmp[i] & mask) | (f.limbs[i] & ~mask);
+
+    for (int i = 0; i < 8; i++) {
+        uint limb = norm[7 - i];
         out[i*4+0] = uchar(limb >> 24);
         out[i*4+1] = uchar(limb >> 16);
         out[i*4+2] = uchar(limb >> 8);
@@ -653,8 +676,15 @@ inline bool lift_x(thread const uchar x_bytes[32], thread JacobianPoint &p) {
     FieldElement y2 = field_add(x3, seven);
     FieldElement y = field_sqrt(y2);
 
+    // Verify: y² == y2 (compare via normalized bytes to handle unreduced limbs)
     FieldElement y_check = field_sqr(y);
-    if (!field_eq(y_check, y2)) return false;
+    uchar yc_bytes[32], y2_bytes[32];
+    field_to_bytes(y_check, yc_bytes);
+    field_to_bytes(y2, y2_bytes);
+    bool valid = true;
+    for (int i = 0; i < 32; i++)
+        if (yc_bytes[i] != y2_bytes[i]) valid = false;
+    if (!valid) return false;
 
     // Ensure even Y
     uchar y_bytes[32];
@@ -825,8 +855,15 @@ inline bool lift_x_field(thread const FieldElement &x_fe, int parity, thread Jac
     FieldElement y2 = field_add(x3, seven);
     FieldElement y = field_sqrt(y2);
 
+    // Verify: y² == y2 (compare via normalized bytes to handle unreduced limbs)
     FieldElement y_check = field_sqr(y);
-    if (!field_eq(y_check, y2)) return false;
+    uchar yc_bytes2[32], y2_bytes2[32];
+    field_to_bytes(y_check, yc_bytes2);
+    field_to_bytes(y2, y2_bytes2);
+    bool valid = true;
+    for (int i = 0; i < 32; i++)
+        if (yc_bytes2[i] != y2_bytes2[i]) valid = false;
+    if (!valid) return false;
 
     uchar y_bytes[32];
     field_to_bytes(y, y_bytes);
