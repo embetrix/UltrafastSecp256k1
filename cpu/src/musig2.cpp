@@ -32,20 +32,8 @@ Point decompress_point(const std::array<uint8_t, 33>& compressed) {
     auto x3 = x.square() * x;
     auto y2 = x3 + FieldElement::from_uint64(7);
 
-    // sqrt: y = y2^((p+1)/4)
-    auto exp = FieldElement::from_hex(
-        "3fffffffffffffffffffffffffffffffffffffffffffffffffffffffbfffff0c");
-    auto y = FieldElement::one();
-    auto base = y2;
-    auto exp_bytes = exp.to_bytes();
-    for (int i = 0; i < 256; ++i) {
-        y = y.square();
-        int byte_idx = i / 8;
-        int bit_idx = 7 - (i % 8);
-        if ((exp_bytes[byte_idx] >> bit_idx) & 1) {
-            y = y * base;
-        }
-    }
+    // Optimized sqrt via addition chain
+    auto y = y2.sqrt();
 
     if (y.square() != y2) return Point::infinity();
 

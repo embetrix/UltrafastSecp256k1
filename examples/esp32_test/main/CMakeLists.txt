@@ -1,6 +1,7 @@
 idf_component_register(
     SRCS "main.cpp"
            "../../../cpu/src/field.cpp"
+           "../../../cpu/src/field_26.cpp"
            "../../../cpu/src/scalar.cpp"
            "../../../cpu/src/point.cpp"
            "../../../cpu/src/glv.cpp"
@@ -19,13 +20,16 @@ target_compile_definitions(${COMPONENT_LIB} PUBLIC
     SECP256K1_PLATFORM_ESP32=1
     SECP256K1_NO_INT128=1
     SECP256K1_NO_ASM=1
+    NDEBUG=1
 )
 
-# ESP32-specific compiler flags
+# ESP32-specific compiler flags — RELEASE ONLY, no debug overhead
 target_compile_options(${COMPONENT_LIB} PRIVATE
     -O3
     -fno-exceptions
     -fno-rtti
+    -fomit-frame-pointer
+    -fno-stack-protector
     -Wno-error=return-type
     -Wno-unused-variable
     -Wno-unused-function

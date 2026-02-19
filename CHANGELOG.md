@@ -5,7 +5,59 @@ All notable changes to UltrafastSecp256k1 are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [3.6.0] - 2026-02-20
+
+### Added — GPU Signature Operations (CUDA)
+- **ECDSA Sign on GPU** — `ecdsa_sign_batch_kernel` with RFC 6979 deterministic nonces, low-S normalization. **204.8 ns / 4.88 M/s** per signature.
+- **ECDSA Verify on GPU** — `ecdsa_verify_batch_kernel` with Shamir's trick + GLV endomorphism. **410.1 ns / 2.44 M/s** per verification.
+- **ECDSA Sign Recoverable on GPU** — `ecdsa_sign_recoverable_batch_kernel` with recovery ID computation. **311.5 ns / 3.21 M/s**.
+- **ECDSA Recover on GPU** — `ecdsa_recover_batch_kernel` for public key recovery from signature + recid.
+- **Schnorr Sign (BIP-340) on GPU** — `schnorr_sign_batch_kernel` with tagged hash midstates. **273.4 ns / 3.66 M/s**.
+- **Schnorr Verify (BIP-340) on GPU** — `schnorr_verify_batch_kernel` with x-only pubkey verification. **354.6 ns / 2.82 M/s**.
+- **6 new batch kernel wrappers** in `secp256k1.cu` — all with `__launch_bounds__(128, 2)` matching scalar_mul kernels.
+- **5 GPU signature benchmarks** in `bench_cuda.cu` — ECDSA sign, verify, sign+recid, Schnorr sign, Schnorr verify.
+- **`prepare_ecdsa_test_data()`** helper — generates valid signatures on GPU for verify benchmark correctness.
+
+> **No other open-source GPU library provides secp256k1 ECDSA + Schnorr sign/verify.** This is the only production-ready multi-backend (CUDA + OpenCL + Metal) GPU secp256k1 library.
+
+### Changed
+- **CUDA benchmark numbers updated** — Scalar Mul improved to 225.8 ns (was 266.5 ns), Field Inv to 10.2 ns (was 12.1 ns) from `__launch_bounds__` thread count fix (128 vs 256 mismatch).
+- **README** — Added blockchain coin badges (Bitcoin, Ethereum, +25), GPU signature benchmark tables, 27-coin supported coins section, SEO metadata footer, updated performance headline.
+- **BENCHMARKS.md** — Split CUDA section into Core ECC + GPU Signature Operations; updated all comparison tables.
+
+### Fixed
+- **CUDA benchmark thread mismatch** — Benchmarks used 256 threads/block but kernels declared `__launch_bounds__(128, 2)`, causing 0.0 ns results. Fixed to use 128 threads.
+
+---
+
+## [3.4.0] - 2026-02-19
+
+### Added — Stable C ABI (`ufsecp`)
+- **Complete C ABI library** — `ufsecp.dll` / `libufsecp.so` / `libufsecp.dylib` with 45 exported symbols, opaque `ufsecp_ctx` handle, and structured error model (11 error codes)
+- **Headers**: `ufsecp.h` (main API, 37 functions), `ufsecp_version.h` (ABI versioning), `ufsecp_error.h` (error codes)
+- **Implementation**: `ufsecp_impl.cpp` wrapping C++ core into C-linkage with zero heap allocations on hot paths
+- **Build system**: `include/ufsecp/CMakeLists.txt` — shared + static build, standalone or sub-project mode, pkg-config template (`ufsecp.pc.in`)
+- **API coverage**: key generation, ECDSA sign/verify/recover, Schnorr BIP-340 sign/verify, SHA-256, ECDH (compressed/xonly/raw), BIP-32 HD derivation, Bitcoin addresses (P2PKH/P2WPKH/P2TR), WIF encode/decode, DER serialization, public key tweak (add/mul), selftest
+- **`SUPPORTED_GUARANTEES.md`** — Tier 1/2/3 stability guarantees documentation
+- **`examples/hello_world.c`** — Minimal usage example
+
+### Added — Dual-Layer Constant-Time Architecture
+- **Always-on dual layers** — `secp256k1::fast::*` (public operations) and `secp256k1::ct::*` (secret-key operations) are always active simultaneously; no flag-based selection
+- **CT layer** — Complete addition formula (12M+2S), fixed-trace scalar multiplication, constant-time table lookup
+- **Valgrind/MSAN markers** — `SECP256K1_CLASSIFY()` / `SECP256K1_DECLASSIFY()` for verifiable constant-time guarantees
+
+### Added — SHA-256 Hardware Acceleration
+- **SHA-NI hardware dispatch** — Runtime CPUID detection for Intel SHA Extensions; transparent fallback to software implementation
+- **Zero-overhead dispatch** — Function pointer set once at init, no branching in hot path
+
+### Added — C# P/Invoke Bindings & Benchmarks
+- **`bindings/csharp/UfsepcBenchmark/`** — .NET 8.0 project with complete P/Invoke declarations for all 45 `ufsecp` functions
+- **68 correctness tests** — 12 categories covering key ops, ECDSA, Schnorr, SHA-256, ECDH, BIP-32, addresses, DER round-trip, recovery, WIF, tweaks, selftest
+- **19 benchmarks** — SHA-256: 137ns, ECDSA Sign: 11.89μs, Verify: 47.95μs, Schnorr Sign: 10.68μs, KeyGen: 1.22μs
+- **P/Invoke overhead measured** — ~10–40ns per call (negligible)
+
+### Changed
+- `ufsecp_ctx_create()` takes no flags parameter — dual-layer CT architecture is always active
 
 ---
 

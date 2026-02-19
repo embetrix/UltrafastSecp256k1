@@ -593,6 +593,7 @@ void hash160_33(const std::uint8_t* pubkey33, std::uint8_t* out20) noexcept {
 // ============================================================================
 
 // Cached tier detection (initialized on first call)
+[[maybe_unused]]
 static HashTier cached_tier() noexcept {
     static const HashTier tier = detect_hash_tier();
     return tier;
@@ -751,3 +752,26 @@ void hash160_33_batch(
 }
 
 } // namespace secp256k1::hash
+
+// ============================================================================
+// SHA256 class compress dispatch (used by secp256k1::SHA256 in sha256.hpp)
+// ============================================================================
+// Runtime-selects SHA-NI or scalar compress. Called from the public SHA256
+// class so that all SHA-256 users (ECDSA, Schnorr, tagged hashes, etc.)
+// automatically benefit from hardware acceleration.
+// Must be OUTSIDE secp256k1::hash namespace.
+
+namespace secp256k1::detail {
+
+void sha256_compress_dispatch(const std::uint8_t block[64],
+                              std::uint32_t state[8]) noexcept {
+#ifdef SECP256K1_X86_TARGET
+    if (secp256k1::hash::sha_ni_available()) {
+        secp256k1::hash::shani::sha256_compress(block, state);
+        return;
+    }
+#endif
+    secp256k1::hash::scalar::sha256_compress(block, state);
+}
+
+} // namespace secp256k1::detail

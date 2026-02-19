@@ -5,7 +5,11 @@
 
 # ── Desktop example ──────────────────────────────────────────────────────────
 if(NOT CMAKE_SYSTEM_PROCESSOR MATCHES "xtensa|Xtensa" AND NOT SECP256K1_PLATFORM_STM32)
-    add_executable(example_basic_usage basic_usage/main.cpp)
-    target_link_libraries(example_basic_usage PRIVATE fastsecp256k1)
-    message(STATUS "Examples: basic_usage enabled")
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/basic_usage/main.cpp")
+        add_executable(example_basic_usage basic_usage/main.cpp)
+        target_link_libraries(example_basic_usage PRIVATE fastsecp256k1)
+        message(STATUS "Examples: basic_usage enabled")
+    else()
+        message(STATUS "Examples: basic_usage skipped (main.cpp not found)")
+    endif()
 endif()

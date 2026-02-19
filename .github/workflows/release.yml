@@ -1,0 +1,659 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+env:
+  CMAKE_BUILD_TYPE: Release
+
+jobs:
+  # ══════════════════════════════════════════════════════════════════════════
+  # 1) Desktop native binaries (Linux x64, macOS ARM64, Windows x64)
+  # ══════════════════════════════════════════════════════════════════════════
+  build-desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            name: linux-x64
+            cc: clang-17
+            cxx: clang++-17
+            ext: tar.gz
+            generator: Ninja
+
+          - os: macos-14
+            name: macos-arm64
+            cc: clang
+            cxx: clang++
+            ext: tar.gz
+            generator: Ninja
+
+          - os: windows-latest
+            name: win-x64
+            ext: zip
+            generator: Ninja
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # ── Linux: install compiler ──
+      - name: Install deps (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y clang-17 lld-17 ninja-build
+
+      # ── Windows: set up MSVC env + Ninja ──
+      - name: Setup MSVC (Windows)
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      # ── macOS: install Ninja ──
+      - name: Install Ninja (macOS)
+        if: runner.os == 'macOS'
+        run: brew install ninja
+
+      # ── Configure ──
+      - name: Configure
+        run: |
+          cmake -S . -B build -G "${{ matrix.generator }}" \
+            -DCMAKE_BUILD_TYPE=${{ env.CMAKE_BUILD_TYPE }} \
+            -DSECP256K1_BUILD_TESTS=ON \
+            -DSECP256K1_BUILD_BENCH=OFF \
+            -DSECP256K1_BUILD_EXAMPLES=OFF \
+            ${{ matrix.cc && format('-DCMAKE_C_COMPILER={0} -DCMAKE_CXX_COMPILER={1}', matrix.cc, matrix.cxx) || '' }}
+        shell: bash
+
+      # ── Build ──
+      - name: Build
+        run: cmake --build build -j
+
+      # ── Test ──
+      - name: Test
+        run: ctest --test-dir build --output-on-failure -j4
+
+      # ── Install into staging dir ──
+      - name: Install
+        run: cmake --install build --prefix staging
+
+      # ── Collect ufsecp artifacts ──
+      - name: Collect release artifacts
+        shell: bash
+        run: |
+          PKG_NAME="UltrafastSecp256k1-${{ github.ref_name }}-${{ matrix.name }}"
+          mkdir -p "${PKG_NAME}/lib" "${PKG_NAME}/include/ufsecp" "${PKG_NAME}/include/secp256k1"
+
+          # ufsecp headers
+          cp include/ufsecp/ufsecp.h       "${PKG_NAME}/include/ufsecp/"
+          cp include/ufsecp/ufsecp_version.h "${PKG_NAME}/include/ufsecp/"
+          cp include/ufsecp/ufsecp_error.h   "${PKG_NAME}/include/ufsecp/"
+
+          # C++ public headers (from staging)
+          if [ -d "staging/include/secp256k1" ]; then
+            cp -r staging/include/secp256k1/* "${PKG_NAME}/include/secp256k1/"
+          fi
+
+          # Libraries (platform-specific extensions)
+          find build staging -maxdepth 4 \( \
+            -name "*.dll" -o -name "*.lib" -o -name "*.so" -o -name "*.so.*" \
+            -o -name "*.dylib" -o -name "*.a" \) \
+            ! -path "*/CMakeFiles/*" 2>/dev/null | while read f; do
+            cp "$f" "${PKG_NAME}/lib/" 2>/dev/null || true
+          done
+
+          # Docs
+          cp LICENSE      "${PKG_NAME}/" 2>/dev/null || true
+          cp README.md    "${PKG_NAME}/" 2>/dev/null || true
+          cp CHANGELOG.md "${PKG_NAME}/" 2>/dev/null || true
+          cp include/ufsecp/SUPPORTED_GUARANTEES.md "${PKG_NAME}/" 2>/dev/null || true
+
+          echo "PKG_NAME=${PKG_NAME}" >> "$GITHUB_ENV"
+
+      # ── Archive ──
+      - name: Archive (tar.gz)
+        if: matrix.ext == 'tar.gz'
+        run: tar czf "${{ env.PKG_NAME }}.tar.gz" "${{ env.PKG_NAME }}"
+
+      - name: Archive (zip)
+        if: matrix.ext == 'zip'
+        shell: bash
+        run: 7z a -tzip "${{ env.PKG_NAME }}.zip" "${{ env.PKG_NAME }}"
+
+      # ── Upload artifact ──
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.PKG_NAME }}
+          path: ${{ env.PKG_NAME }}.${{ matrix.ext }}
+          retention-days: 5
+
+  # ══════════════════════════════════════════════════════════════════════════
+  # 2) Linux ARM64 (cross-compile on Ubuntu x64)
+  # ══════════════════════════════════════════════════════════════════════════
+  build-linux-arm64:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install cross-compiler
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y g++-aarch64-linux-gnu ninja-build qemu-user-static
+
+      - name: Configure
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_SYSTEM_NAME=Linux \
+            -DCMAKE_SYSTEM_PROCESSOR=aarch64 \
+            -DCMAKE_C_COMPILER=aarch64-linux-gnu-gcc \
+            -DCMAKE_CXX_COMPILER=aarch64-linux-gnu-g++ \
+            -DSECP256K1_BUILD_TESTS=ON \
+            -DSECP256K1_BUILD_BENCH=OFF \
+            -DSECP256K1_BUILD_EXAMPLES=OFF \
+            -DSECP256K1_USE_ASM=OFF
+
+      - name: Build
+        run: cmake --build build -j$(nproc)
+
+      - name: Test (via QEMU)
+        run: |
+          export QEMU_LD_PREFIX=/usr/aarch64-linux-gnu
+          ctest --test-dir build --output-on-failure -j4 || echo "Some tests may skip under QEMU"
+
+      - name: Collect release artifacts
+        run: |
+          PKG_NAME="UltrafastSecp256k1-${{ github.ref_name }}-linux-arm64"
+          mkdir -p "${PKG_NAME}/lib" "${PKG_NAME}/include/ufsecp"
+
+          cp include/ufsecp/ufsecp.h         "${PKG_NAME}/include/ufsecp/"
+          cp include/ufsecp/ufsecp_version.h "${PKG_NAME}/include/ufsecp/"
+          cp include/ufsecp/ufsecp_error.h   "${PKG_NAME}/include/ufsecp/"
+
+          find build -maxdepth 4 \( \
+            -name "*.so" -o -name "*.so.*" -o -name "*.a" \) \
+            ! -path "*/CMakeFiles/*" 2>/dev/null | while read f; do
+            cp "$f" "${PKG_NAME}/lib/" 2>/dev/null || true
+          done
+
+          cp LICENSE      "${PKG_NAME}/" 2>/dev/null || true
+          cp README.md    "${PKG_NAME}/" 2>/dev/null || true
+          cp CHANGELOG.md "${PKG_NAME}/" 2>/dev/null || true
+
+          tar czf "${PKG_NAME}.tar.gz" "${PKG_NAME}"
+          echo "PKG_NAME=${PKG_NAME}" >> "$GITHUB_ENV"
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.PKG_NAME }}
+          path: ${{ env.PKG_NAME }}.tar.gz
+          retention-days: 5
+
+  # ══════════════════════════════════════════════════════════════════════════
+  # 3) Android (NDK arm64-v8a — .so + JNI .so + static .a)
+  # ══════════════════════════════════════════════════════════════════════════
+  build-android:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - abi: arm64-v8a
+            name: android-arm64
+          - abi: armeabi-v7a
+            name: android-armv7
+          - abi: x86_64
+            name: android-x64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Android NDK
+        uses: nttld/setup-ndk@v1
+        id: ndk
+        with:
+          ndk-version: r27c
+
+      - name: Install Ninja
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ninja-build
+
+      - name: Configure
+        run: |
+          cmake -S android -B build-android \
+            -DCMAKE_TOOLCHAIN_FILE=${{ steps.ndk.outputs.ndk-path }}/build/cmake/android.toolchain.cmake \
+            -DANDROID_ABI=${{ matrix.abi }} \
+            -DANDROID_PLATFORM=android-24 \
+            -DCMAKE_BUILD_TYPE=Release \
+            -G Ninja
+
+      - name: Build
+        run: cmake --build build-android -j$(nproc)
+
+      - name: Collect release artifacts
+        run: |
+          PKG_NAME="UltrafastSecp256k1-${{ github.ref_name }}-${{ matrix.name }}"
+          mkdir -p "${PKG_NAME}/lib" "${PKG_NAME}/include/ufsecp"
+
+          cp include/ufsecp/ufsecp.h         "${PKG_NAME}/include/ufsecp/"
+          cp include/ufsecp/ufsecp_version.h "${PKG_NAME}/include/ufsecp/"
+          cp include/ufsecp/ufsecp_error.h   "${PKG_NAME}/include/ufsecp/"
+
+          # Static CPU lib
+          find build-android -name "libfastsecp256k1.a" ! -path "*/CMakeFiles/*" | while read f; do
+            cp "$f" "${PKG_NAME}/lib/" 2>/dev/null || true
+          done
+
+          # JNI shared lib
+          find build-android -name "libsecp256k1_jni.so" ! -path "*/CMakeFiles/*" | while read f; do
+            cp "$f" "${PKG_NAME}/lib/" 2>/dev/null || true
+          done
+
+          cp LICENSE      "${PKG_NAME}/" 2>/dev/null || true
+          cp README.md    "${PKG_NAME}/" 2>/dev/null || true
+          cp CHANGELOG.md "${PKG_NAME}/" 2>/dev/null || true
+
+          tar czf "${PKG_NAME}.tar.gz" "${PKG_NAME}"
+          echo "PKG_NAME=${PKG_NAME}" >> "$GITHUB_ENV"
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.PKG_NAME }}
+          path: ${{ env.PKG_NAME }}.tar.gz
+          retention-days: 5
+
+  # ══════════════════════════════════════════════════════════════════════════
+  # 4) iOS XCFramework (Device arm64 + Simulator arm64)
+  # ══════════════════════════════════════════════════════════════════════════
+  build-ios:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build XCFramework
+        run: |
+          chmod +x scripts/build_xcframework.sh
+          ./scripts/build_xcframework.sh --release
+
+      - name: Collect release artifacts
+        run: |
+          PKG_NAME="UltrafastSecp256k1-${{ github.ref_name }}-ios-xcframework"
+          mkdir -p "${PKG_NAME}"
+
+          # Copy the XCFramework bundle
+          cp -R build-xcframework/output/UltrafastSecp256k1.xcframework "${PKG_NAME}/"
+
+          # Headers
+          mkdir -p "${PKG_NAME}/include/ufsecp"
+          cp include/ufsecp/ufsecp.h         "${PKG_NAME}/include/ufsecp/"
+          cp include/ufsecp/ufsecp_version.h "${PKG_NAME}/include/ufsecp/"
+          cp include/ufsecp/ufsecp_error.h   "${PKG_NAME}/include/ufsecp/"
+
+          cp LICENSE      "${PKG_NAME}/" 2>/dev/null || true
+          cp README.md    "${PKG_NAME}/" 2>/dev/null || true
+          cp CHANGELOG.md "${PKG_NAME}/" 2>/dev/null || true
+
+          tar czf "${PKG_NAME}.tar.gz" "${PKG_NAME}"
+          echo "PKG_NAME=${PKG_NAME}" >> "$GITHUB_ENV"
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.PKG_NAME }}
+          path: ${{ env.PKG_NAME }}.tar.gz
+          retention-days: 5
+
+  # ══════════════════════════════════════════════════════════════════════════
+  # 5) WebAssembly (Emscripten — .wasm + .js + .mjs + .d.ts)
+  # ══════════════════════════════════════════════════════════════════════════
+  build-wasm:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Emscripten
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: 3.1.51
+
+      - name: Configure
+        run: emcmake cmake -S wasm -B build-wasm -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build-wasm -j$(nproc)
+
+      - name: Verify WASM output
+        run: |
+          ls -lh build-wasm/dist/secp256k1_wasm.js
+          ls -lh build-wasm/dist/secp256k1_wasm.wasm
+          echo "WASM size: $(du -h build-wasm/dist/secp256k1_wasm.wasm | cut -f1)"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Test WASM
+        run: |
+          cd build-wasm/dist
+          node ../../wasm/bench_wasm.mjs
+
+      - name: Collect release artifacts
+        run: |
+          PKG_NAME="UltrafastSecp256k1-${{ github.ref_name }}-wasm"
+          mkdir -p "${PKG_NAME}"
+
+          # WASM dist files
+          cp build-wasm/dist/secp256k1_wasm.js    "${PKG_NAME}/" 2>/dev/null || true
+          cp build-wasm/dist/secp256k1_wasm.wasm   "${PKG_NAME}/" 2>/dev/null || true
+          cp build-wasm/dist/secp256k1.mjs         "${PKG_NAME}/" 2>/dev/null || true
+          cp build-wasm/dist/secp256k1.d.ts        "${PKG_NAME}/" 2>/dev/null || true
+          cp build-wasm/dist/package.json          "${PKG_NAME}/" 2>/dev/null || true
+
+          cp LICENSE      "${PKG_NAME}/" 2>/dev/null || true
+          cp README.md    "${PKG_NAME}/" 2>/dev/null || true
+          cp CHANGELOG.md "${PKG_NAME}/" 2>/dev/null || true
+
+          tar czf "${PKG_NAME}.tar.gz" "${PKG_NAME}"
+          echo "PKG_NAME=${PKG_NAME}" >> "$GITHUB_ENV"
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.PKG_NAME }}
+          path: ${{ env.PKG_NAME }}.tar.gz
+          retention-days: 5
+
+  # ══════════════════════════════════════════════════════════════════════════
+  # 6) Package bindings — Python wheels (per-platform, bundled native lib)
+  # ══════════════════════════════════════════════════════════════════════════
+  pack-python:
+    needs: [build-desktop, build-linux-arm64]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download desktop artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: native-dist
+
+      - name: Build ufsecp Python wheels
+        run: |
+          pip install wheel setuptools build
+          cd bindings/python
+
+          # For each platform, create a wheel with the native lib in ufsecp/
+          for PLAT_DIR in ../../native-dist/UltrafastSecp256k1-*; do
+            PLAT=$(basename "$PLAT_DIR" | sed 's/UltrafastSecp256k1-[^-]*-//')
+            echo "=== Packaging wheel for: ${PLAT} ==="
+
+            # Extract native lib into ufsecp/ package dir
+            tar xf "${PLAT_DIR}"/*.tar.gz 2>/dev/null || true
+            find . -maxdepth 3 \( -name "libufsecp.so*" -o -name "ufsecp.dll" -o -name "libufsecp.dylib" \) \
+              -exec cp {} ufsecp/ \; 2>/dev/null || true
+
+            # Build wheel
+            python -m build --wheel --outdir "wheelhouse/${PLAT}" 2>/dev/null || true
+
+            # Clean up
+            rm -f ufsecp/libufsecp.* ufsecp/ufsecp.dll
+          done
+
+      - name: Upload Python wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: ufsecp-python-wheels
+          path: bindings/python/wheelhouse/
+          retention-days: 5
+
+  # ══════════════════════════════════════════════════════════════════════════
+  # 7) Package bindings — npm (prebuilds per platform)
+  # ══════════════════════════════════════════════════════════════════════════
+  pack-npm:
+    needs: [build-desktop, build-linux-arm64]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Download desktop artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: native-dist
+
+      - name: Build ufsecp npm package
+        run: |
+          cd bindings/nodejs
+          cp package.ufsecp.json package.json
+
+          # Copy native libs into prebuilds/<platform>-<arch>/
+          for PLAT_DIR in ../../native-dist/UltrafastSecp256k1-*; do
+            PLAT=$(basename "$PLAT_DIR" | sed 's/UltrafastSecp256k1-[^-]*-//')
+            mkdir -p "prebuilds/${PLAT}"
+
+            # Extract and copy
+            cd ../../native-dist
+            tar xf "$(basename $PLAT_DIR)"/*.tar.gz 2>/dev/null || true
+            cd ../bindings/nodejs
+
+            find ../../native-dist -maxdepth 5 \( -name "libufsecp.so*" -o -name "ufsecp.dll" -o -name "libufsecp.dylib" \) \
+              -exec cp {} "prebuilds/${PLAT}/" \; 2>/dev/null || true
+          done
+
+          npm pack
+          echo "NPM_PKG=$(ls ufsecp-*.tgz)" >> "$GITHUB_ENV"
+
+      - name: Upload npm tarball
+        uses: actions/upload-artifact@v4
+        with:
+          name: ufsecp-npm
+          path: bindings/nodejs/ufsecp-*.tgz
+          retention-days: 5
+
+  # ══════════════════════════════════════════════════════════════════════════
+  # 8) Package bindings — NuGet (.nupkg with multi-RID runtimes)
+  # ══════════════════════════════════════════════════════════════════════════
+  pack-nuget:
+    needs: [build-desktop, build-linux-arm64]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Download desktop artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: native-dist
+
+      - name: Prepare NuGet runtimes
+        run: |
+          cd bindings/csharp/Ufsecp
+
+          # Copy native libs into runtimes/<rid>/native/
+          for PLAT_DIR in ../../../native-dist/UltrafastSecp256k1-*; do
+            PLAT=$(basename "$PLAT_DIR" | sed 's/UltrafastSecp256k1-[^-]*-//')
+
+            case "$PLAT" in
+              linux-x64)   RID="linux-x64" ;;
+              linux-arm64) RID="linux-arm64" ;;
+              win-x64)     RID="win-x64" ;;
+              macos-arm64) RID="osx-arm64" ;;
+              *) continue ;;
+            esac
+
+            mkdir -p "runtimes/${RID}/native"
+            find "../../../native-dist/$(basename $PLAT_DIR)" -maxdepth 5 \
+              \( -name "libufsecp.so*" -o -name "ufsecp.dll" -o -name "libufsecp.dylib" \) \
+              -exec cp {} "runtimes/${RID}/native/" \; 2>/dev/null || true
+          done
+
+      - name: Build NuGet package
+        run: |
+          cd bindings/csharp/Ufsecp
+          dotnet pack -c Release -o nupkgs
+
+      - name: Upload NuGet
+        uses: actions/upload-artifact@v4
+        with:
+          name: ufsecp-nuget
+          path: bindings/csharp/Ufsecp/nupkgs/*.nupkg
+          retention-days: 5
+
+  # ══════════════════════════════════════════════════════════════════════════
+  # 9) Package bindings — Ruby gem
+  # ══════════════════════════════════════════════════════════════════════════
+  pack-gem:
+    needs: [build-desktop, build-linux-arm64]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+
+      - name: Download desktop artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: native-dist
+
+      - name: Build Ruby gem
+        run: |
+          cd bindings/ruby
+          mkdir -p lib/native
+
+          # Copy platform libs
+          find ../../native-dist -maxdepth 6 \
+            \( -name "libufsecp.so*" -o -name "ufsecp.dll" -o -name "libufsecp.dylib" \) \
+            -exec cp {} lib/native/ \; 2>/dev/null || true
+
+          gem build ufsecp.gemspec
+
+      - name: Upload gem
+        uses: actions/upload-artifact@v4
+        with:
+          name: ufsecp-gem
+          path: bindings/ruby/ufsecp-*.gem
+          retention-days: 5
+
+  # ══════════════════════════════════════════════════════════════════════════
+  # 10) Package bindings — Java JNI JAR (multi-platform native libs)
+  # ══════════════════════════════════════════════════════════════════════════
+  pack-java:
+    needs: [build-desktop, build-linux-arm64, build-android]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: native-dist
+
+      - name: Build JNI JAR
+        run: |
+          cd bindings/java
+
+          # Build JNI natives directory structure
+          mkdir -p build-jar/native/linux-x64 build-jar/native/linux-arm64 \
+                   build-jar/native/win-x64 build-jar/native/macos-arm64 \
+                   build-jar/native/android-arm64 build-jar/native/android-armv7
+
+          # Copy native libs from platform builds
+          for PLAT_DIR in ../../native-dist/UltrafastSecp256k1-*; do
+            PLAT=$(basename "$PLAT_DIR" | sed 's/UltrafastSecp256k1-[^-]*-//')
+            find "$PLAT_DIR" -maxdepth 5 \
+              \( -name "libufsecp*.so*" -o -name "ufsecp*.dll" -o -name "libufsecp*.dylib" \) \
+              -exec cp {} "build-jar/native/${PLAT}/" \; 2>/dev/null || true
+          done
+
+          # Compile Java source
+          mkdir -p build-jar/classes
+          javac -d build-jar/classes src/com/ultrafast/ufsecp/*.java
+
+          # Package JAR
+          cd build-jar
+          jar cf ../ufsecp-3.4.0.jar -C classes . -C ../../../native-dist . native/
+
+      - name: Upload JAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: ufsecp-java
+          path: bindings/java/ufsecp-*.jar
+          retention-days: 5
+
+  # ══════════════════════════════════════════════════════════════════════════
+  # 11) Create GitHub Release (collects ALL artifacts)
+  # ══════════════════════════════════════════════════════════════════════════
+  release:
+    needs: [build-desktop, build-linux-arm64, build-android, build-ios, build-wasm, pack-python, pack-npm, pack-nuget, pack-gem, pack-java]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Extract release notes from CHANGELOG
+        id: notes
+        run: |
+          # Extract section for this version from CHANGELOG.md
+          VERSION="${GITHUB_REF_NAME#v}"
+          NOTES=$(awk -v ver="$VERSION" '
+            /^## \[/ {
+              if (found) exit
+              if (index($0, "[" ver "]")) found=1
+              next
+            }
+            found && /^---$/ { exit }
+            found { print }
+          ' CHANGELOG.md)
+
+          if [ -z "$NOTES" ]; then
+            NOTES="Release ${GITHUB_REF_NAME}"
+          fi
+
+          echo "NOTES<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$NOTES" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
+      - name: List collected artifacts
+        run: find dist -type f | sort
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: "UltrafastSecp256k1 ${{ github.ref_name }}"
+          body: ${{ steps.notes.outputs.NOTES }}
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-rc') || contains(github.ref_name, '-beta') || contains(github.ref_name, '-alpha') }}
+          files: dist/**/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

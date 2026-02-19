@@ -3,6 +3,9 @@
 #include "secp256k1/precompute.hpp"
 #endif
 #include "secp256k1/glv.hpp"
+#if defined(__SIZEOF_INT128__)
+#include "secp256k1/field_52.hpp"
+#endif
 
 #include <algorithm>
 #include <array>
@@ -175,7 +178,7 @@ JacobianPoint jacobian_double(const JacobianPoint& p) {
 #endif
 // Mixed Jacobian-Affine addition: P (Jacobian) + Q (Affine) -> Result (Jacobian)
 // Optimized with dbl-2007-mix formula (7M + 4S for a=0)
-[[nodiscard]] JacobianPoint jacobian_add_mixed(const JacobianPoint& p, const AffinePoint& q) {
+[[nodiscard]] [[maybe_unused]] JacobianPoint jacobian_add_mixed(const JacobianPoint& p, const AffinePoint& q) {
     if (SECP256K1_UNLIKELY(p.infinity)) {
         // Convert affine to Jacobian: (x, y) -> (x, y, 1, false)
         return {q.x, q.y, FieldElement::one(), false};
@@ -216,6 +219,128 @@ JacobianPoint jacobian_double(const JacobianPoint& p) {
     z3 -= z1z1 + hh;                           // Z3 = (Z1+H)² - Z1² - HH [1S: total 7M + 4S]
 
     return {x3, y3, z3, false};
+}
+
+// Fast z==1 check for 4×64 FieldElement: raw limb comparison, no allocation
+// Valid for z values set from FieldElement::one() or fe_from_uint(1) which are already canonical
+[[maybe_unused]]
+static inline bool fe_is_one_raw(const FieldElement& z) noexcept {
+    const auto& l = z.limbs();
+    return static_cast<bool>(static_cast<int>(l[0] == 1) & static_cast<int>(l[1] == 0) & static_cast<int>(l[2] == 0) & static_cast<int>(l[3] == 0));
+}
+
+// ── In-Place Point Doubling (4×64) ──────────────────────────────────────
+// Same formula as jacobian_double but overwrites input in-place.
+// Eliminates 100-byte return-value copy per call.
+SECP256K1_HOT_FUNCTION
+static inline void jacobian_double_inplace(JacobianPoint& p) {
+    if (SECP256K1_UNLIKELY(p.infinity || p.y == FieldElement::zero())) {
+        p = {FieldElement::zero(), FieldElement::one(), FieldElement::zero(), true};
+        return;
+    }
+
+    FieldElement A = p.x; A.square_inplace();
+    FieldElement B = p.y; B.square_inplace();
+    FieldElement C = B;   C.square_inplace();
+
+    FieldElement temp = p.x + B;
+    temp.square_inplace();
+    temp = temp - A - C;
+    FieldElement D = temp + temp;
+
+    FieldElement E = A + A; E = E + A;
+    FieldElement F = E; F.square_inplace();
+
+    FieldElement two_D = D + D;
+    FieldElement x3 = F - two_D;
+
+    FieldElement y3 = E * (D - x3);
+    FieldElement eight_C = C + C; eight_C = eight_C + eight_C; eight_C = eight_C + eight_C;
+    y3 = y3 - eight_C;
+
+    FieldElement z3 = p.y * p.z;  // reads p.y, p.z BEFORE overwrite
+    z3 = z3 + z3;
+
+    p.x = x3; p.y = y3; p.z = z3;
+    p.infinity = false;
+}
+
+// ── In-Place Mixed Addition (4×64): Jacobian + Affine → Jacobian ────────
+// Same formula as jacobian_add_mixed but overwrites p in-place.
+[[maybe_unused]] SECP256K1_HOT_FUNCTION
+static inline void jacobian_add_mixed_inplace(JacobianPoint& p, const AffinePoint& q) {
+    if (SECP256K1_UNLIKELY(p.infinity)) {
+        p = {q.x, q.y, FieldElement::one(), false};
+        return;
+    }
+
+    FieldElement z1z1 = p.z; z1z1.square_inplace();
+    FieldElement u2 = q.x * z1z1;
+    FieldElement s2 = q.y * p.z * z1z1;
+
+    if (SECP256K1_UNLIKELY(p.x == u2)) {
+        if (p.y == s2) {
+            jacobian_double_inplace(p);
+            return;
+        }
+        p = {FieldElement::zero(), FieldElement::one(), FieldElement::zero(), true};
+        return;
+    }
+
+    FieldElement h = u2 - p.x;
+    FieldElement hh = h; hh.square_inplace();
+    FieldElement i = hh + hh + hh + hh;
+    FieldElement j = h * i;
+    FieldElement r = (s2 - p.y) + (s2 - p.y);
+    FieldElement v = p.x * i;
+
+    FieldElement x3 = r; x3.square_inplace();
+    x3 -= j + v + v;
+
+    FieldElement y1j = p.y * j;
+    FieldElement y3 = r * (v - x3) - (y1j + y1j);
+
+    FieldElement z3 = p.z + h; z3.square_inplace(); z3 -= z1z1 + hh;
+
+    p.x = x3; p.y = y3; p.z = z3;
+    p.infinity = false;
+}
+
+// ── In-Place Full Jacobian Addition (4×64): p += q ──────────────────────
+// Same formula as jacobian_add but overwrites p in-place.
+SECP256K1_HOT_FUNCTION
+static inline void jacobian_add_inplace(JacobianPoint& p, const JacobianPoint& q) {
+    if (SECP256K1_UNLIKELY(p.infinity)) { p = q; return; }
+    if (SECP256K1_UNLIKELY(q.infinity)) return;
+
+    FieldElement z1z1 = p.z; z1z1.square_inplace();
+    FieldElement z2z2 = q.z; z2z2.square_inplace();
+    FieldElement u1 = p.x * z2z2;
+    FieldElement u2 = q.x * z1z1;
+    FieldElement s1 = p.y * q.z * z2z2;
+    FieldElement s2 = q.y * p.z * z1z1;
+
+    if (u1 == u2) {
+        if (s1 == s2) { jacobian_double_inplace(p); return; }
+        p = {FieldElement::zero(), FieldElement::one(), FieldElement::zero(), true};
+        return;
+    }
+
+    FieldElement h = u2 - u1;
+    FieldElement i = h + h; i.square_inplace();
+    FieldElement j = h * i;
+    FieldElement r = (s2 - s1) + (s2 - s1);
+    FieldElement v = u1 * i;
+
+    FieldElement x3 = r; x3.square_inplace();
+    x3 -= j + v + v;
+    FieldElement s1j = s1 * j;
+    FieldElement y3 = r * (v - x3) - (s1j + s1j);
+    FieldElement temp_z = p.z + q.z; temp_z.square_inplace();
+    FieldElement z3 = (temp_z - z1z1 - z2z2) * h;
+
+    p.x = x3; p.y = y3; p.z = z3;
+    p.infinity = false;
 }
 
 [[nodiscard]] JacobianPoint jacobian_add(const JacobianPoint& p, const JacobianPoint& q) {
@@ -260,6 +385,576 @@ JacobianPoint jacobian_double(const JacobianPoint& p) {
 
     return {x3, y3, z3, false};
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  5×52 FIELD — FAST POINT OPERATIONS
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+// On 64-bit platforms with __int128, use FieldElement52 (5×52-bit limbs) for
+// ECC point operations. Advantages:
+//   - Multiplication 2.7× faster (22 ns vs 50 ns)
+//   - Squaring 2.4× faster (17 ns vs 39 ns)
+//   - Addition nearly free (no carry propagation, just 5 plain adds)
+//   - Subtraction via negate + add (still cheaper than 4×64 borrow chain)
+//
+// This gives ~2.5–3× speedup to point double/add/mixed-add.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+#if defined(__SIZEOF_INT128__)
+#define SECP256K1_FAST_52BIT 1
+
+struct JacobianPoint52 {
+    FieldElement52 x;
+    FieldElement52 y;
+    FieldElement52 z;
+    bool infinity{true};
+};
+
+struct AffinePoint52 {
+    FieldElement52 x;
+    FieldElement52 y;
+};
+
+// Convert Point → 5×52 JacobianPoint52
+// With FE52 storage: zero-cost (direct member copy)
+// Without FE52 storage: 3× from_fe conversions
+static inline JacobianPoint52 to_jac52(const Point& p) {
+#if defined(SECP256K1_FAST_52BIT)
+    return {p.X52(), p.Y52(), p.Z52(), p.is_infinity()};
+#else
+    return {
+        FieldElement52::from_fe(p.X()),
+        FieldElement52::from_fe(p.Y()),
+        FieldElement52::from_fe(p.z()),
+        p.is_infinity()
+    };
+#endif
+}
+
+// Fast z==1 check: raw limb comparison, no normalization
+// Valid only for z values set directly from FieldElement52::one() (already canonical)
+static inline bool fe52_is_one_raw(const FieldElement52& z) noexcept {
+    return (z.n[0] == 1) & (z.n[1] == 0) & (z.n[2] == 0) & (z.n[3] == 0) & (z.n[4] == 0);
+}
+
+// Convert 5×52 JacobianPoint52 → Point (zero conversion on FE52 path)
+static inline Point from_jac52(const JacobianPoint52& j) {
+#if defined(SECP256K1_FAST_52BIT)
+    return Point::from_jacobian52(j.x, j.y, j.z, j.infinity);
+#else
+    return Point::from_jacobian_coords(j.x.to_fe(), j.y.to_fe(), j.z.to_fe(), j.infinity);
+#endif
+}
+
+// ── Point Doubling (5×52) ────────────────────────────────────────────────────
+// Formula: dbl-2009-l (a=0 specialization)
+// Cost: 2M + 5S + ~11A (additions near-free in 5×52)
+SECP256K1_HOT_FUNCTION __attribute__((noinline))
+static JacobianPoint52 jac52_double(const JacobianPoint52& p) {
+    if (SECP256K1_UNLIKELY(p.infinity)) {
+        return {FieldElement52::zero(), FieldElement52::one(), FieldElement52::zero(), true};
+    }
+    // Magnitudes after mul/sqr = 1.  Safe bounds for uint128 accumulation:
+    //   5 × m1 × m2 × 2^104 < 2^128  ⟹  m1·m2 < 3,355,443
+    //   max per-limb addition: mag × 2^52 < 2^64  ⟹  mag < 4096
+    //
+    // Output magnitudes (no normalization): x≤23, y≤10, z≤2
+
+    FieldElement52 A = p.x.square();                          // mag 1
+    FieldElement52 B = p.y.square();                          // mag 1
+    FieldElement52 C = B.square();                            // mag 1
+
+    FieldElement52 xpb = p.x + B;                            // mag ≤24
+    FieldElement52 xpb_sq = xpb.square();                    // mag 1  (24²·5 = 2880 < 3.3M ✓)
+    FieldElement52 negA = A.negate(1);                        // mag 2
+    FieldElement52 negC = C.negate(1);                        // mag 2
+    FieldElement52 D_half = xpb_sq + negA + negC;             // mag 5
+    FieldElement52 D = D_half + D_half;                       // mag 10
+
+    FieldElement52 E = A + A + A;                             // mag 3
+    FieldElement52 F = E.square();                            // mag 1  (3²·5 = 45 < 3.3M ✓)
+
+    FieldElement52 negD2 = D.negate(10);                      // mag 11
+    FieldElement52 x3 = F + negD2 + negD2;                    // mag 23  (23·2^52 < 2^57 < 2^64 ✓)
+
+    FieldElement52 negX3 = x3.negate(23);                     // mag 24
+    FieldElement52 dx = D + negX3;                            // mag 34  (34·2^52 < 2^58 < 2^64 ✓)
+    FieldElement52 y3 = E * dx;                               // mag 1  (3·34 = 102 < 3.3M ✓)
+    FieldElement52 C2 = C + C;                                // mag 2
+    FieldElement52 C4 = C2 + C2;                              // mag 4
+    FieldElement52 C8 = C4 + C4;                              // mag 8
+    FieldElement52 negC8 = C8.negate(8);                      // mag 9
+    y3 = y3 + negC8;                                          // mag 10
+
+    FieldElement52 z3 = p.y * p.z;                            // mag 1  (10·5 = 50 < 3.3M ✓)
+    z3 = z3 + z3;                                             // mag 2
+
+    return {x3, y3, z3, false};
+}
+
+// ── In-Place Point Doubling (5×52) ────────────────────────────────────────
+// Same formula as jac52_double but overwrites the input point in-place.
+// Eliminates the 128-byte return value copy on every call.
+SECP256K1_HOT_FUNCTION __attribute__((always_inline))
+static inline void jac52_double_inplace(JacobianPoint52& p) {
+    if (SECP256K1_UNLIKELY(p.infinity)) return;   // p stays infinity
+
+    FieldElement52 A = p.x.square();
+    FieldElement52 B = p.y.square();
+    FieldElement52 C = B.square();
+
+    FieldElement52 xpb = p.x + B;
+    FieldElement52 xpb_sq = xpb.square();
+    FieldElement52 negA = A.negate(1);
+    FieldElement52 negC = C.negate(1);
+    FieldElement52 D_half = xpb_sq + negA + negC;
+    FieldElement52 D = D_half + D_half;
+
+    FieldElement52 E = A + A + A;
+    FieldElement52 F = E.square();
+
+    FieldElement52 negD2 = D.negate(10);
+    FieldElement52 x3 = F + negD2 + negD2;
+
+    FieldElement52 negX3 = x3.negate(23);
+    FieldElement52 dx = D + negX3;
+    FieldElement52 y3 = E * dx;
+    FieldElement52 C2 = C + C;
+    FieldElement52 C4 = C2 + C2;
+    FieldElement52 C8 = C4 + C4;
+    FieldElement52 negC8 = C8.negate(8);
+    y3 = y3 + negC8;
+
+    FieldElement52 z3 = p.y * p.z;          // reads p.y, p.z BEFORE overwrite
+    z3 = z3 + z3;
+
+    p.x = x3;
+    p.y = y3;
+    p.z = z3;
+    // p.infinity stays false (we returned early for infinity)
+}
+
+// ── Mixed Addition (5×52): Jacobian + Affine → Jacobian ──────────────────────
+// Formula: madd-2007-bl (a=0 specialization)
+// Cost: 7M + 4S + ~12A (additions near-free in 5×52)
+[[maybe_unused]] SECP256K1_HOT_FUNCTION __attribute__((noinline))
+static JacobianPoint52 jac52_add_mixed(const JacobianPoint52& p, const AffinePoint52& q) {
+    if (SECP256K1_UNLIKELY(p.infinity)) {
+        return {q.x, q.y, FieldElement52::one(), false};
+    }
+
+    // Z1Z1 = Z1² [1S]
+    FieldElement52 z1z1 = p.z.square();
+
+    // U2 = X2 * Z1Z1 [1M]
+    FieldElement52 u2 = q.x * z1z1;
+
+    // S2 = Y2 * Z1 * Z1Z1 [2M]
+    FieldElement52 z1_z1z1 = p.z * z1z1;
+    FieldElement52 s2 = q.y * z1_z1z1;
+
+    // H = U2 - X1 [sub via negate]
+    // p.x magnitude: ≤23 (from jac52_double) or ≤7 (from add_mixed). Use 23.
+    FieldElement52 negX1 = p.x.negate(23);     // mag 24
+    FieldElement52 h = u2 + negX1;             // mag 25
+
+    // Check for point equality/inverse (rare — fast normalizes_to_zero)
+    if (SECP256K1_UNLIKELY(h.normalizes_to_zero())) {
+        FieldElement52 negY1 = p.y.negate(10);
+        FieldElement52 diff = s2 + negY1;
+        if (diff.normalizes_to_zero()) {
+            return jac52_double(p);
+        }
+        return {FieldElement52::zero(), FieldElement52::one(), FieldElement52::zero(), true};
+    }
+
+    // HH = H² [1S]
+    FieldElement52 hh = h.square();            // mag 1  (25²·5 = 3125 < 3.3M ✓)
+
+    // I = 4*HH [3A]
+    FieldElement52 I = hh + hh;                // mag 2
+    I = I + I;                                  // mag 4
+
+    // J = H*I [1M]
+    FieldElement52 j = h * I;                  // mag 1  (25·4 = 100 < 3.3M ✓)
+
+    // r = 2*(S2 - Y1) [sub + double]
+    // p.y magnitude: ≤10 (from dbl) or ≤4 (from add_mixed). Use 10.
+    FieldElement52 negY1 = p.y.negate(10);     // mag 11
+    FieldElement52 r = s2 + negY1;             // mag 12
+    r = r + r;                                 // mag 24
+
+    // V = X1*I [1M]
+    FieldElement52 v = p.x * I;                // mag 1  (23·4 = 92 < 3.3M ✓)
+
+    // X3 = r² - J - 2*V [1S + sub]
+    FieldElement52 r_sq = r.square();          // mag 1  (24²·5 = 2880 < 3.3M ✓)
+    FieldElement52 negJ = j.negate(1);         // mag 2
+    FieldElement52 negV = v.negate(1);         // mag 2
+    FieldElement52 x3 = r_sq + negJ + negV + negV;  // mag 7
+
+    // Y3 = r*(V - X3) - 2*Y1*J [1M + sub]
+    FieldElement52 negX3 = x3.negate(7);       // mag 8
+    FieldElement52 vx3 = v + negX3;            // mag 9
+    FieldElement52 y3 = r * vx3;               // mag 1  (24·9 = 216 < 3.3M ✓)
+    FieldElement52 y1j = p.y * j;              // mag 1  (10·1 = 10 < 3.3M ✓)
+    FieldElement52 y1j2 = y1j + y1j;           // mag 2
+    FieldElement52 negY1J2 = y1j2.negate(2);   // mag 3
+    y3 = y3 + negY1J2;                         // mag 4
+
+    // Z3 = (Z1+H)² - Z1Z1 - HH [1S + sub]
+    // p.z magnitude: ≤2 (from dbl) or ≤5 (from add_mixed). Use 5.
+    FieldElement52 zh = p.z + h;               // mag 30  (5+25)
+    FieldElement52 zh_sq = zh.square();        // mag 1  (30²·5 = 4500 < 3.3M ✓)
+    FieldElement52 negZ1Z1 = z1z1.negate(1);   // mag 2
+    FieldElement52 negHH = hh.negate(1);       // mag 2
+    FieldElement52 z3 = zh_sq + negZ1Z1 + negHH;  // mag 5
+
+    return {x3, y3, z3, false};
+}
+
+// ── In-Place Mixed Addition (5×52): Jacobian + Affine → Jacobian ─────────────
+// Same formula as jac52_add_mixed but overwrites p in-place.
+// always_inline: lets compiler eliminate JacobianPoint52↔Point member copies
+SECP256K1_HOT_FUNCTION __attribute__((always_inline))
+static inline void jac52_add_mixed_inplace(JacobianPoint52& p, const AffinePoint52& q) {
+    if (SECP256K1_UNLIKELY(p.infinity)) {
+        p.x = q.x; p.y = q.y; p.z = FieldElement52::one(); p.infinity = false;
+        return;
+    }
+
+    FieldElement52 z1z1 = p.z.square();
+    FieldElement52 u2 = q.x * z1z1;
+    FieldElement52 z1_z1z1 = p.z * z1z1;
+    FieldElement52 s2 = q.y * z1_z1z1;
+
+    FieldElement52 negX1 = p.x.negate(23);
+    FieldElement52 h = u2 + negX1;
+
+    if (SECP256K1_UNLIKELY(h.normalizes_to_zero())) {
+        FieldElement52 negY1 = p.y.negate(10);
+        FieldElement52 diff = s2 + negY1;
+        if (diff.normalizes_to_zero()) {
+            jac52_double_inplace(p);
+            return;
+        }
+        p = {FieldElement52::zero(), FieldElement52::one(), FieldElement52::zero(), true};
+        return;
+    }
+
+    FieldElement52 hh = h.square();
+    FieldElement52 I = hh + hh;
+    I = I + I;
+    FieldElement52 j = h * I;
+    FieldElement52 negY1 = p.y.negate(10);
+    FieldElement52 r = s2 + negY1;
+    r = r + r;
+    FieldElement52 v = p.x * I;
+    FieldElement52 r_sq = r.square();
+    FieldElement52 negJ = j.negate(1);
+    FieldElement52 negV = v.negate(1);
+    FieldElement52 x3 = r_sq + negJ + negV + negV;
+    FieldElement52 negX3 = x3.negate(7);
+    FieldElement52 vx3 = v + negX3;
+    FieldElement52 y3 = r * vx3;
+    FieldElement52 y1j = p.y * j;           // reads p.y BEFORE overwrite
+    FieldElement52 y1j2 = y1j + y1j;
+    FieldElement52 negY1J2 = y1j2.negate(2);
+    y3 = y3 + negY1J2;
+
+    FieldElement52 zh = p.z + h;            // reads p.z BEFORE overwrite
+    FieldElement52 zh_sq = zh.square();
+    FieldElement52 negZ1Z1 = z1z1.negate(1);
+    FieldElement52 negHH = hh.negate(1);
+    FieldElement52 z3 = zh_sq + negZ1Z1 + negHH;
+
+    p.x = x3;
+    p.y = y3;
+    p.z = z3;
+    p.infinity = false;
+}
+
+// ── In-Place Full Jacobian Addition (5×52): p += q ──────────────────────────
+// Formula: add-2007-bl (a=0)
+// Cost: 12M + 5S + ~11A.  Eliminates 128-byte return copy.
+SECP256K1_HOT_FUNCTION __attribute__((always_inline))
+static inline void jac52_add_inplace(JacobianPoint52& p, const JacobianPoint52& q) {
+    if (SECP256K1_UNLIKELY(p.infinity)) { p = q; return; }
+    if (SECP256K1_UNLIKELY(q.infinity)) return;
+
+    FieldElement52 z1z1 = p.z.square();
+    FieldElement52 z2z2 = q.z.square();
+    FieldElement52 u1 = p.x * z2z2;
+    FieldElement52 u2 = q.x * z1z1;
+    FieldElement52 s1 = p.y * q.z * z2z2;
+    FieldElement52 s2 = q.y * p.z * z1z1;
+
+    FieldElement52 negU1 = u1.negate(1);
+    FieldElement52 h = u2 + negU1;
+
+    if (SECP256K1_UNLIKELY(h.normalizes_to_zero())) {
+        FieldElement52 negS1 = s1.negate(1);
+        FieldElement52 diff = s2 + negS1;
+        if (diff.normalizes_to_zero()) { jac52_double_inplace(p); return; }
+        p = {FieldElement52::zero(), FieldElement52::one(), FieldElement52::zero(), true};
+        return;
+    }
+
+    FieldElement52 h2 = h + h;
+    FieldElement52 i = h2.square();
+    FieldElement52 j_val = h * i;
+    FieldElement52 negS1 = s1.negate(1);
+    FieldElement52 r = s2 + negS1;
+    r = r + r;
+    FieldElement52 v = u1 * i;
+    FieldElement52 r_sq = r.square();
+    FieldElement52 negJ = j_val.negate(1);
+    FieldElement52 negV = v.negate(1);
+    FieldElement52 x3 = r_sq + negJ + negV + negV;
+    FieldElement52 negX3 = x3.negate(7);
+    FieldElement52 vx3 = v + negX3;
+    FieldElement52 y3 = r * vx3;
+    FieldElement52 s1j = s1 * j_val;
+    FieldElement52 s1j2 = s1j + s1j;
+    FieldElement52 negS1J2 = s1j2.negate(2);
+    y3 = y3 + negS1J2;
+    FieldElement52 zpz = p.z + q.z;
+    FieldElement52 zpz_sq = zpz.square();
+    FieldElement52 negZ1Z1 = z1z1.negate(1);
+    FieldElement52 negZ2Z2 = z2z2.negate(1);
+    FieldElement52 z3 = (zpz_sq + negZ1Z1 + negZ2Z2) * h;
+
+    p.x = x3; p.y = y3; p.z = z3; p.infinity = false;
+}
+
+// ── Full Jacobian Addition (5×52): Jacobian + Jacobian → Jacobian ────────────
+// Formula: add-2007-bl (a=0)
+// Cost: 12M + 5S + ~11A
+SECP256K1_HOT_FUNCTION __attribute__((noinline))
+static JacobianPoint52 jac52_add(const JacobianPoint52& p, const JacobianPoint52& q) {
+    if (SECP256K1_UNLIKELY(p.infinity)) return q;
+    if (SECP256K1_UNLIKELY(q.infinity)) return p;
+
+    FieldElement52 z1z1 = p.z.square();
+    FieldElement52 z2z2 = q.z.square();
+    FieldElement52 u1 = p.x * z2z2;
+    FieldElement52 u2 = q.x * z1z1;
+    FieldElement52 s1 = p.y * q.z * z2z2;
+    FieldElement52 s2 = q.y * p.z * z1z1;
+
+    FieldElement52 negU1 = u1.negate(1);                    // mag 2
+    FieldElement52 h = u2 + negU1;                          // mag 3
+
+    if (SECP256K1_UNLIKELY(h.normalizes_to_zero())) {
+        FieldElement52 negS1 = s1.negate(1);
+        FieldElement52 diff = s2 + negS1;
+        if (diff.normalizes_to_zero()) return jac52_double(p);
+        return {FieldElement52::zero(), FieldElement52::one(), FieldElement52::zero(), true};
+    }
+
+    FieldElement52 h2 = h + h;                              // mag 6
+    FieldElement52 i = h2.square();                         // mag 1 (6²·5=180 < 3.3M ✓)
+    FieldElement52 j_val = h * i;                           // mag 1 (3·1=3 < 3.3M ✓)
+
+    FieldElement52 negS1 = s1.negate(1);                    // mag 2
+    FieldElement52 r = s2 + negS1;                          // mag 3
+    r = r + r;                                              // mag 6
+
+    FieldElement52 v = u1 * i;                              // mag 1
+
+    FieldElement52 r_sq = r.square();                       // mag 1 (6²·5=180 < 3.3M ✓)
+    FieldElement52 negJ = j_val.negate(1);                  // mag 2
+    FieldElement52 negV = v.negate(1);                      // mag 2
+    FieldElement52 x3 = r_sq + negJ + negV + negV;          // mag 7
+
+    FieldElement52 negX3 = x3.negate(7);                    // mag 8
+    FieldElement52 vx3 = v + negX3;                         // mag 9
+    FieldElement52 y3 = r * vx3;                            // mag 1 (6·9=54 < 3.3M ✓)
+    FieldElement52 s1j = s1 * j_val;                        // mag 1
+    FieldElement52 s1j2 = s1j + s1j;                        // mag 2
+    FieldElement52 negS1J2 = s1j2.negate(2);                // mag 3
+    y3 = y3 + negS1J2;                                      // mag 4
+
+    FieldElement52 zpz = p.z + q.z;                         // mag ≤3
+    FieldElement52 zpz_sq = zpz.square();                   // mag 1 (3²·5=45 < 3.3M ✓)
+    FieldElement52 negZ1Z1 = z1z1.negate(1);                // mag 2
+    FieldElement52 negZ2Z2 = z2z2.negate(1);                // mag 2
+    FieldElement52 z3 = (zpz_sq + negZ1Z1 + negZ2Z2);       // mag 5
+    z3 = z3 * h;                                            // mag 1 (5·3=15 < 3.3M ✓)
+
+    return {x3, y3, z3, false};
+}
+
+// Negate a JacobianPoint52: (X, Y, Z) → (X, -Y, Z)
+[[maybe_unused]]
+static inline JacobianPoint52 jac52_negate(const JacobianPoint52& p) {
+    JacobianPoint52 r = p;
+    r.y.normalize_weak();
+    r.y.negate_assign(1);
+    r.y.normalize_weak();
+    return r;
+}
+
+// ── GLV + Shamir + 5×52 scalar multiplication (isolated stack frame) ─────
+// Kept as a separate noinline function so the ~5 KB of local arrays
+// live in their own stack frame, preventing GS-cookie corruption that
+// occurs when Clang 21 inlines all jac52 helpers into Point::scalar_mul.
+// The try/catch is required: it forces Clang to emit an SEH frame on
+// Windows, without which the large stack frame triggers a GS-cookie fault.
+__attribute__((noinline))
+static Point scalar_mul_glv52(const Point& base, const Scalar& scalar) {
+    try {
+    // ── GLV decomposition ────────────────────────────────────────────
+    GLVDecomposition decomp = glv_decompose(scalar);
+
+    // ── Convert base point to 5×52 domain ────────────────────────────
+    JacobianPoint52 P52 = decomp.k1_neg
+        ? to_jac52(base.negate())
+        : to_jac52(base);
+
+    // ── Compute wNAF for both half-scalars ───────────────────────────
+    constexpr unsigned glv_window = 5;
+    constexpr int glv_table_size = (1 << (glv_window - 2));  // 8
+
+    std::array<int32_t, 260> wnaf1_buf{}, wnaf2_buf{};
+    std::size_t wnaf1_len = 0, wnaf2_len = 0;
+    compute_wnaf_into(decomp.k1, glv_window,
+                      wnaf1_buf.data(), wnaf1_buf.size(), wnaf1_len);
+    compute_wnaf_into(decomp.k2, glv_window,
+                      wnaf2_buf.data(), wnaf2_buf.size(), wnaf2_len);
+
+    // Trim trailing zeros — GLV half-scalars are ~128 bits but wNAF
+    // always outputs 256+ positions. This halves the doubling count.
+    while (wnaf1_len > 0 && wnaf1_buf[wnaf1_len - 1] == 0) --wnaf1_len;
+    while (wnaf2_len > 0 && wnaf2_buf[wnaf2_len - 1] == 0) --wnaf2_len;
+
+    // ── Precompute odd multiples [1P, 3P, 5P, …, 15P] in 5×52 ──────
+    std::array<AffinePoint52, glv_table_size> tbl_P;
+    std::array<AffinePoint52, glv_table_size> tbl_phiP;
+
+    // Build Jacobian table, then batch-convert to affine
+    std::array<JacobianPoint52, glv_table_size> jtbl;
+    jtbl[0] = P52;
+    JacobianPoint52 dbl52 = jac52_double(P52);
+    for (int i = 1; i < glv_table_size; i++) {
+        jtbl[i] = jac52_add(jtbl[i - 1], dbl52);
+    }
+
+    // Batch-convert to affine: 1 inverse + (3n-3) muls (Montgomery's trick)
+    {
+        std::array<FieldElement52, glv_table_size> zs;
+        std::array<FieldElement52, glv_table_size> prods;
+        prods[0] = jtbl[0].z;
+        for (int i = 1; i < glv_table_size; i++) {
+            prods[i] = prods[i - 1] * jtbl[i].z;
+        }
+        FieldElement inv_fe = prods[glv_table_size - 1].to_fe().inverse();
+        FieldElement52 inv = FieldElement52::from_fe(inv_fe);
+        for (int i = glv_table_size - 1; i > 0; --i) {
+            zs[i] = prods[i - 1] * inv;
+            inv = inv * jtbl[i].z;
+        }
+        zs[0] = inv;
+        for (int i = 0; i < glv_table_size; i++) {
+            FieldElement52 zinv2 = zs[i].square();
+            FieldElement52 zinv3 = zinv2 * zs[i];
+            tbl_P[i].x = jtbl[i].x * zinv2;
+            tbl_P[i].y = jtbl[i].y * zinv3;
+        }
+    }
+
+    // ── Derive φ(P) table: φ(x,y) = (β·x, y) ───────────────────────
+    static const FieldElement52 beta52 = FieldElement52::from_fe(
+        FieldElement::from_bytes(glv_constants::BETA));
+
+    const bool flip_phi = (decomp.k1_neg != decomp.k2_neg);
+    for (int i = 0; i < glv_table_size; i++) {
+        tbl_phiP[i].x = tbl_P[i].x * beta52;
+        if (flip_phi) {
+            tbl_phiP[i].y = tbl_P[i].y.negate(1);
+            tbl_phiP[i].y.normalize_weak();
+        } else {
+            tbl_phiP[i].y = tbl_P[i].y;
+        }
+    }
+
+    // ── Pre-compute negated tables (avoid negate+normalize_weak in hot loop)
+    std::array<AffinePoint52, glv_table_size> neg_tbl_P;
+    std::array<AffinePoint52, glv_table_size> neg_tbl_phiP;
+    for (int i = 0; i < glv_table_size; i++) {
+        neg_tbl_P[i].x = tbl_P[i].x;
+        neg_tbl_P[i].y = tbl_P[i].y.negate(1);
+        neg_tbl_P[i].y.normalize_weak();
+        neg_tbl_phiP[i].x = tbl_phiP[i].x;
+        neg_tbl_phiP[i].y = tbl_phiP[i].y.negate(1);
+        neg_tbl_phiP[i].y.normalize_weak();
+    }
+
+    // ── Shamir's trick — single doubling chain, dual lookups ─────────
+    JacobianPoint52 result52 = {
+        FieldElement52::zero(), FieldElement52::one(),
+        FieldElement52::zero(), true
+    };
+
+    const std::size_t max_len = (wnaf1_len > wnaf2_len) ? wnaf1_len : wnaf2_len;
+
+    for (int i = static_cast<int>(max_len) - 1; i >= 0; --i) {
+        jac52_double_inplace(result52);
+
+        // k1 contribution (wnaf bufs are zero-init; d==0 is a no-op)
+        {
+            int32_t d = wnaf1_buf[static_cast<std::size_t>(i)];
+            if (d > 0) {
+                jac52_add_mixed_inplace(result52, tbl_P[(d - 1) >> 1]);
+            } else if (d < 0) {
+                jac52_add_mixed_inplace(result52, neg_tbl_P[(-d - 1) >> 1]);
+            }
+        }
+
+        // k2 contribution
+        {
+            int32_t d = wnaf2_buf[static_cast<std::size_t>(i)];
+            if (d > 0) {
+                jac52_add_mixed_inplace(result52, tbl_phiP[(d - 1) >> 1]);
+            } else if (d < 0) {
+                jac52_add_mixed_inplace(result52, neg_tbl_phiP[(-d - 1) >> 1]);
+            }
+        }
+    }
+
+    return from_jac52(result52);
+    } catch (...) {
+        // 5×52 path failed — fall through to 4×64
+        constexpr unsigned window_width = 5;
+        std::array<int32_t, 260> wnaf_buf{};
+        std::size_t wnaf_len = 0;
+        compute_wnaf_into(scalar, window_width, wnaf_buf.data(), wnaf_buf.size(), wnaf_len);
+        constexpr int table_size = (1 << (window_width - 1));
+        std::array<Point, table_size> precomp;
+        precomp[0] = base;
+        Point double_p = base;
+        double_p.dbl_inplace();
+        for (int i = 1; i < table_size; i++) {
+            precomp[i] = precomp[i-1];
+            precomp[i].add_inplace(double_p);
+        }
+        Point result = Point::infinity();
+        for (int i = static_cast<int>(wnaf_len) - 1; i >= 0; --i) {
+            result.dbl_inplace();
+            int32_t digit = wnaf_buf[static_cast<std::size_t>(i)];
+            if (digit > 0) {
+                result.add_inplace(precomp[(digit - 1) / 2]);
+            } else if (digit < 0) {
+                Point neg_point = precomp[(-digit - 1) / 2];
+                neg_point.negate_inplace();
+                result.add_inplace(neg_point);
+            }
+        }
+        return result;
+    }
+}
+
+#endif // SECP256K1_FAST_52BIT
 
 // Batch inversion: Convert multiple Jacobian points to Affine using Montgomery's trick
 // Cost: 1 inversion + (3*n - 1) multiplications for n points
@@ -328,6 +1023,7 @@ std::vector<AffinePoint> batch_to_affine(const std::vector<JacobianPoint>& jacob
 }
 
 // No-alloc batch conversion: jacobian -> affine written into out[0..n)
+[[maybe_unused]]
 static void batch_to_affine_into(const JacobianPoint* jacobian_points,
                                  std::size_t n,
                                  AffinePoint* out) {
@@ -427,12 +1123,26 @@ KPlan KPlan::from_scalar(const Scalar& k, uint8_t w) {
 }
 #endif
 
+#if defined(SECP256K1_FAST_52BIT)
+Point::Point() : x_(FieldElement52::zero()), y_(FieldElement52::one()), z_(FieldElement52::zero()), 
+                 infinity_(true), is_generator_(false) {}
+
+Point::Point(const FieldElement& x, const FieldElement& y, const FieldElement& z, bool infinity)
+    : x_(FieldElement52::from_fe(x)), y_(FieldElement52::from_fe(y)), z_(FieldElement52::from_fe(z)), 
+      infinity_(infinity), is_generator_(false) {}
+
+// Zero-conversion FE52 constructor — used by from_jac52 to avoid FE52→FE→FE52 round-trip
+Point::Point(const FieldElement52& x, const FieldElement52& y, const FieldElement52& z, bool infinity, bool is_gen)
+    : x_(x), y_(y), z_(z), 
+      infinity_(infinity), is_generator_(is_gen) {}
+#else
 Point::Point() : x_(FieldElement::zero()), y_(FieldElement::one()), z_(FieldElement::zero()), 
                  infinity_(true), is_generator_(false) {}
 
 Point::Point(const FieldElement& x, const FieldElement& y, const FieldElement& z, bool infinity)
     : x_(x), y_(y), z_(z), 
       infinity_(infinity), is_generator_(false) {}
+#endif
 
 Point Point::from_jacobian_coords(const FieldElement& x, const FieldElement& y, const FieldElement& z, bool infinity) {
     if (infinity || z == FieldElement::zero()) {
@@ -440,6 +1150,13 @@ Point Point::from_jacobian_coords(const FieldElement& x, const FieldElement& y, 
     }
     return Point(x, y, z, false);
 }
+
+#if defined(SECP256K1_FAST_52BIT)
+Point Point::from_jacobian52(const FieldElement52& x, const FieldElement52& y, const FieldElement52& z, bool infinity) {
+    if (infinity) return Point::infinity();
+    return Point(x, y, z, false, false);
+}
+#endif
 
 // Precomputed generator point G in affine coordinates (for fast mixed addition)
 static const FieldElement kGeneratorX = FieldElement::from_bytes({
@@ -489,22 +1206,48 @@ FieldElement Point::x() const {
     if (infinity_) {
         return FieldElement::zero();
     }
+#if defined(SECP256K1_FAST_52BIT)
+    FieldElement z_fe = z_.to_fe();
+    FieldElement z_inv = z_fe.inverse();
+    FieldElement z_inv2 = z_inv;
+    z_inv2.square_inplace();
+    return x_.to_fe() * z_inv2;
+#else
     FieldElement z_inv = z_.inverse();
-    FieldElement z_inv2 = z_inv;         // Copy for in-place
-    z_inv2.square_inplace();             // z_inv^2 in-place!
+    FieldElement z_inv2 = z_inv;
+    z_inv2.square_inplace();
     return x_ * z_inv2;
+#endif
 }
 
 FieldElement Point::y() const {
     if (infinity_) {
         return FieldElement::zero();
     }
+#if defined(SECP256K1_FAST_52BIT)
+    FieldElement z_fe = z_.to_fe();
+    FieldElement z_inv = z_fe.inverse();
+    FieldElement z_inv3 = z_inv;
+    z_inv3.square_inplace();
+    z_inv3 *= z_inv;
+    return y_.to_fe() * z_inv3;
+#else
     FieldElement z_inv = z_.inverse();
-    FieldElement z_inv3 = z_inv;         // Copy for in-place
-    z_inv3.square_inplace();             // z_inv^2 in-place!
-    z_inv3 *= z_inv;                     // z_inv^3
+    FieldElement z_inv3 = z_inv;
+    z_inv3.square_inplace();
+    z_inv3 *= z_inv;
     return y_ * z_inv3;
+#endif
 }
+
+#if defined(SECP256K1_FAST_52BIT)
+FieldElement Point::X() const noexcept { return x_.to_fe(); }
+FieldElement Point::Y() const noexcept { return y_.to_fe(); }
+FieldElement Point::z() const noexcept { return z_.to_fe(); }
+FieldElement Point::x_raw() const noexcept { return x_.to_fe(); }
+FieldElement Point::y_raw() const noexcept { return y_.to_fe(); }
+FieldElement Point::z_raw() const noexcept { return z_.to_fe(); }
+#endif
 
 std::array<uint8_t, 16> Point::x_first_half() const {
     // Convert to affine once and reuse
@@ -527,53 +1270,108 @@ std::array<uint8_t, 16> Point::x_second_half() const {
 }
 
 Point Point::add(const Point& other) const {
+#if defined(SECP256K1_FAST_52BIT)
+    JacobianPoint52 p52{x_, y_, z_, infinity_};
+    JacobianPoint52 q52{other.x_, other.y_, other.z_, other.infinity_};
+    JacobianPoint52 r52 = jac52_add(p52, q52);
+    Point result;
+    result.x_ = r52.x; result.y_ = r52.y; result.z_ = r52.z;
+    result.infinity_ = r52.infinity;
+    result.is_generator_ = false;
+    return result;
+#else
     JacobianPoint p{x_, y_, z_, infinity_};
     JacobianPoint q{other.x_, other.y_, other.z_, other.infinity_};
     JacobianPoint r = jacobian_add(p, q);
     Point result = from_jacobian_coords(r.x, r.y, r.z, r.infinity);
     result.is_generator_ = false;
     return result;
+#endif
 }
 
 Point Point::dbl() const {
+#if defined(SECP256K1_FAST_52BIT)
+    JacobianPoint52 p52{x_, y_, z_, infinity_};
+    JacobianPoint52 r52 = jac52_double(p52);
+    Point result;
+    result.x_ = r52.x; result.y_ = r52.y; result.z_ = r52.z;
+    result.infinity_ = r52.infinity;
+    result.is_generator_ = false;
+    return result;
+#else
     JacobianPoint p{x_, y_, z_, infinity_};
     JacobianPoint r = jacobian_double(p);
     Point result = from_jacobian_coords(r.x, r.y, r.z, r.infinity);
     result.is_generator_ = false;
     return result;
+#endif
 }
 
 Point Point::negate() const {
     if (infinity_) {
         return *this;  // Infinity is its own negation
     }
-    
-    // Negate in Jacobian coordinates: (x, y, z) → (x, -y, z)
-    // This is much cheaper than converting to affine, negating, and converting back
+#if defined(SECP256K1_FAST_52BIT)
+    Point result;
+    result.x_ = x_;
+    result.y_ = y_;
+    result.y_.normalize_weak();
+    result.y_.negate_assign(1);
+    result.y_.normalize_weak();
+    result.z_ = z_;
+    result.infinity_ = false;
+    result.is_generator_ = false;
+    return result;
+#else
     FieldElement neg_y = FieldElement::zero() - y_;
     Point result(x_, neg_y, z_, false);
     result.is_generator_ = false;
     return result;
+#endif
 }
 
 Point Point::next() const {
-    // Optimized: this + G using mixed Jacobian-Affine addition (8 muls vs 12)
+#if defined(SECP256K1_FAST_52BIT)
+    static const FieldElement52 kGenX52 = FieldElement52::from_fe(kGeneratorX);
+    static const FieldElement52 kGenY52 = FieldElement52::from_fe(kGeneratorY);
+    JacobianPoint52 p52{x_, y_, z_, infinity_};
+    AffinePoint52 g52{kGenX52, kGenY52};
+    jac52_add_mixed_inplace(p52, g52);
+    Point result;
+    result.x_ = p52.x; result.y_ = p52.y; result.z_ = p52.z;
+    result.infinity_ = p52.infinity;
+    result.is_generator_ = false;
+    return result;
+#else
     JacobianPoint p{x_, y_, z_, infinity_};
     AffinePoint g_affine{kGeneratorX, kGeneratorY};
     JacobianPoint r = jacobian_add_mixed(p, g_affine);
     Point result = from_jacobian_coords(r.x, r.y, r.z, r.infinity);
     result.is_generator_ = false;
     return result;
+#endif
 }
 
 Point Point::prev() const {
-    // Optimized: this - G = this + (-G) using mixed addition (8 muls vs 12)
+#if defined(SECP256K1_FAST_52BIT)
+    static const FieldElement52 kGenX52 = FieldElement52::from_fe(kGeneratorX);
+    static const FieldElement52 kNegGenY52 = FieldElement52::from_fe(kNegGeneratorY);
+    JacobianPoint52 p52{x_, y_, z_, infinity_};
+    AffinePoint52 ng52{kGenX52, kNegGenY52};
+    jac52_add_mixed_inplace(p52, ng52);
+    Point result;
+    result.x_ = p52.x; result.y_ = p52.y; result.z_ = p52.z;
+    result.infinity_ = p52.infinity;
+    result.is_generator_ = false;
+    return result;
+#else
     JacobianPoint p{x_, y_, z_, infinity_};
     AffinePoint neg_g_affine{kGeneratorX, kNegGeneratorY};
     JacobianPoint r = jacobian_add_mixed(p, neg_g_affine);
     Point result = from_jacobian_coords(r.x, r.y, r.z, r.infinity);
     result.is_generator_ = false;
     return result;
+#endif
 }
 
 // Mutable in-place addition: *this += G (no allocation overhead)
@@ -582,19 +1380,24 @@ void Point::next_inplace() {
         *this = Point::generator();
         return;
     }
-    
-    // Mixed Jacobian-Affine addition with G
-    AffinePoint g{kGeneratorX, kGeneratorY};
-    
-    // Use proven formula from jacobian_add_mixed
-    JacobianPoint self{x_, y_, z_, infinity_};
-    JacobianPoint r = jacobian_add_mixed(self, g);
-    
-    x_ = r.x;
-    y_ = r.y;
-    z_ = r.z;
-    infinity_ = r.infinity;
+#if defined(SECP256K1_FAST_52BIT)
+    static const FieldElement52 kGenX52 = FieldElement52::from_fe(kGeneratorX);
+    static const FieldElement52 kGenY52 = FieldElement52::from_fe(kGeneratorY);
+    JacobianPoint52 p52{x_, y_, z_, infinity_};
+    AffinePoint52 g52{kGenX52, kGenY52};
+    jac52_add_mixed_inplace(p52, g52);
+    x_ = p52.x; y_ = p52.y; z_ = p52.z;
+    infinity_ = p52.infinity;
     is_generator_ = false;
+#else
+    // In-place: no return-value copy
+    JacobianPoint self{x_, y_, z_, infinity_};
+    AffinePoint g{kGeneratorX, kGeneratorY};
+    jacobian_add_mixed_inplace(self, g);
+    x_ = self.x; y_ = self.y; z_ = self.z;
+    infinity_ = self.infinity;
+    is_generator_ = false;
+#endif
 }
 
 // Mutable in-place subtraction: *this -= G (no allocation overhead)
@@ -603,64 +1406,95 @@ void Point::prev_inplace() {
         *this = Point::generator().negate();
         return;
     }
-    
-    // Mixed Jacobian-Affine addition with -G
-    AffinePoint neg_g{kGeneratorX, kNegGeneratorY};
-    
-    // Use proven formula from jacobian_add_mixed
-    JacobianPoint self{x_, y_, z_, infinity_};
-    JacobianPoint r = jacobian_add_mixed(self, neg_g);
-    
-    x_ = r.x;
-    y_ = r.y;
-    z_ = r.z;
-    infinity_ = r.infinity;
+#if defined(SECP256K1_FAST_52BIT)
+    static const FieldElement52 kGenX52 = FieldElement52::from_fe(kGeneratorX);
+    static const FieldElement52 kNegGenY52 = FieldElement52::from_fe(kNegGeneratorY);
+    JacobianPoint52 p52{x_, y_, z_, infinity_};
+    AffinePoint52 ng52{kGenX52, kNegGenY52};
+    jac52_add_mixed_inplace(p52, ng52);
+    x_ = p52.x; y_ = p52.y; z_ = p52.z;
+    infinity_ = p52.infinity;
     is_generator_ = false;
+#else
+    // In-place: no return-value copy
+    JacobianPoint self{x_, y_, z_, infinity_};
+    AffinePoint neg_g{kGeneratorX, kNegGeneratorY};
+    jacobian_add_mixed_inplace(self, neg_g);
+    x_ = self.x; y_ = self.y; z_ = self.z;
+    infinity_ = self.infinity;
+    is_generator_ = false;
+#endif
 }
 
 // Mutable in-place addition: *this += other (no allocation overhead)
-// ~12% faster than add() due to no memory allocation/copying
+// Routes through 5×52 path on x64 for inlined field ops (zero call overhead)
 void Point::add_inplace(const Point& other) {
+#if defined(SECP256K1_FAST_52BIT)
     // Fast path: if other is affine (z = 1), use mixed addition
-    if (!other.infinity_ && other.z_ == FieldElement::one()) {
-        JacobianPoint p{x_, y_, z_, infinity_};
-        AffinePoint q{other.x_, other.y_};
-        JacobianPoint r = jacobian_add_mixed(p, q);
-
-        x_ = r.x;
-        y_ = r.y;
-        z_ = r.z;
-        infinity_ = r.infinity;
+    // Raw limb check — no normalization, z_ from affine construction is already canonical {1,0,0,0,0}
+    if (!other.infinity_ && fe52_is_one_raw(other.z_)) {
+        // Direct: members are already FE52
+        JacobianPoint52 p52{x_, y_, z_, infinity_};
+        AffinePoint52 q52{other.x_, other.y_};
+        jac52_add_mixed_inplace(p52, q52);
+        x_ = p52.x; y_ = p52.y; z_ = p52.z;
+        infinity_ = p52.infinity;
         is_generator_ = false;
         return;
     }
 
-    // General case: full Jacobian-Jacobian addition
+    // General case: full Jacobian-Jacobian addition via 5×52 (in-place, zero copy)
+    JacobianPoint52 p52{x_, y_, z_, infinity_};
+    JacobianPoint52 q52{other.x_, other.y_, other.z_, other.infinity_};
+    jac52_add_inplace(p52, q52);
+    x_ = p52.x; y_ = p52.y; z_ = p52.z;
+    infinity_ = p52.infinity;
+    is_generator_ = false;
+#else
+    // Fast path: if other is affine (z = 1), use mixed addition
+    // Raw limb check — no temp allocation, z_ from affine construction is canonical {1,0,0,0}
+    if (!other.infinity_ && fe_is_one_raw(other.z_)) {
+        JacobianPoint p{x_, y_, z_, infinity_};
+        AffinePoint q{other.x_, other.y_};
+        jacobian_add_mixed_inplace(p, q);
+        x_ = p.x; y_ = p.y; z_ = p.z;
+        infinity_ = p.infinity;
+        is_generator_ = false;
+        return;
+    }
+
+    // General case: full Jacobian-Jacobian addition (in-place, no return copy)
     JacobianPoint p{x_, y_, z_, infinity_};
     JacobianPoint q{other.x_, other.y_, other.z_, other.infinity_};
-    JacobianPoint r = jacobian_add(p, q);
-
-    x_ = r.x;
-    y_ = r.y;
-    z_ = r.z;
-    infinity_ = r.infinity;
+    jacobian_add_inplace(p, q);
+    x_ = p.x; y_ = p.y; z_ = p.z;
+    infinity_ = p.infinity;
     is_generator_ = false;
+#endif
 }
 
 // Mutable in-place subtraction: *this -= other (no allocation overhead)
 void Point::sub_inplace(const Point& other) {
-    // In-place subtraction without allocating a temporary Point
-    // this -= other  => this + (-other)
+#if defined(SECP256K1_FAST_52BIT)
+    // 5×52 path: negate other.y, then add in-place
+    JacobianPoint52 p52{x_, y_, z_, infinity_};
+    JacobianPoint52 q52{other.x_, other.y_, other.z_, other.infinity_};
+    q52.y.normalize_weak();
+    q52.y.negate_assign(1);
+    q52.y.normalize_weak();
+    jac52_add_inplace(p52, q52);
+    x_ = p52.x; y_ = p52.y; z_ = p52.z;
+    infinity_ = p52.infinity;
+    is_generator_ = false;
+#else
+    // In-place: negate other.y, then add in-place (no return-value copy)
     JacobianPoint p{x_, y_, z_, infinity_};
     JacobianPoint q{other.x_, FieldElement::zero() - other.y_, other.z_, other.infinity_};
-    JacobianPoint r = jacobian_add(p, q);
-
-    // Update in-place
-    x_ = r.x;
-    y_ = r.y;
-    z_ = r.z;
-    infinity_ = r.infinity;
+    jacobian_add_inplace(p, q);
+    x_ = p.x; y_ = p.y; z_ = p.z;
+    infinity_ = p.infinity;
     is_generator_ = false;
+#endif
 }
 
 // Mutable in-place doubling: *this = 2*this (no allocation overhead)
@@ -698,13 +1532,21 @@ void Point::dbl_inplace() {
 
     z_ = z3;
     is_generator_ = false;
+#elif defined(SECP256K1_FAST_52BIT)
+    // 5×52 path: direct FE52 members, no conversion needed
+    if (SECP256K1_UNLIKELY(infinity_)) return;
+    JacobianPoint52 p52{x_, y_, z_, infinity_};
+    jac52_double_inplace(p52);
+    x_ = p52.x; y_ = p52.y; z_ = p52.z;
+    is_generator_ = false;
 #else
+    // In-place: no return-value copy (eliminates 100B struct copy per call)
     JacobianPoint p{x_, y_, z_, infinity_};
-    JacobianPoint r = jacobian_double(p);
-    x_ = r.x;
-    y_ = r.y;
-    z_ = r.z;
-    infinity_ = r.infinity;
+    jacobian_double_inplace(p);
+    x_ = p.x;
+    y_ = p.y;
+    z_ = p.z;
+    infinity_ = p.infinity;
     is_generator_ = false;
 #endif
 }
@@ -712,12 +1554,34 @@ void Point::dbl_inplace() {
 // Mutable in-place negation: *this = -this (no allocation overhead)
 void Point::negate_inplace() {
     // Negation in Jacobian: (X, Y, Z) → (X, -Y, Z)
+#if defined(SECP256K1_FAST_52BIT)
+    y_.normalize_weak();
+    y_.negate_assign(1);
+    y_.normalize_weak();
+#else
     y_ = FieldElement::zero() - y_;
+#endif
 }
 
 // Explicit mixed-add with affine input: this += (ax, ay)
-// OPTIMIZED: Inline implementation to avoid 6 FieldElement struct copies per call
+// Routes through 5×52 path on x64 for inlined field ops
 void Point::add_mixed_inplace(const FieldElement& ax, const FieldElement& ay) {
+#if defined(SECP256K1_FAST_52BIT)
+    if (SECP256K1_UNLIKELY(infinity_)) {
+        x_ = FieldElement52::from_fe(ax);
+        y_ = FieldElement52::from_fe(ay);
+        z_ = FieldElement52::one();
+        infinity_ = false;
+        is_generator_ = false;
+        return;
+    }
+    JacobianPoint52 p52{x_, y_, z_, infinity_};
+    AffinePoint52 q52{FieldElement52::from_fe(ax), FieldElement52::from_fe(ay)};
+    jac52_add_mixed_inplace(p52, q52);
+    x_ = p52.x; y_ = p52.y; z_ = p52.z;
+    infinity_ = p52.infinity;
+    is_generator_ = false;
+#else
     if (SECP256K1_UNLIKELY(infinity_)) {
         // Convert affine to Jacobian: (x, y) -> (x, y, 1, false)
         x_ = ax;
@@ -775,6 +1639,7 @@ void Point::add_mixed_inplace(const FieldElement& ax, const FieldElement& ay) {
     z_ = z3;
     infinity_ = false;
     is_generator_ = false;
+#endif
 }
 
 // Explicit mixed-sub with affine input: this -= (ax, ay) == this + (ax, -ay)
@@ -789,6 +1654,10 @@ void Point::sub_mixed_inplace(const FieldElement& ax, const FieldElement& ay) {
 // Changed from CRITICAL_FUNCTION to HOT_FUNCTION - flatten breaks this!
 SECP256K1_HOT_FUNCTION
 void Point::add_affine_constant_inplace(const FieldElement& ax, const FieldElement& ay) {
+#if defined(SECP256K1_FAST_52BIT)
+    // Delegate to add_mixed_inplace which uses the FE52 path
+    add_mixed_inplace(ax, ay);
+#else
     if (infinity_) {
         x_ = ax;
         y_ = ay;
@@ -828,6 +1697,7 @@ void Point::add_affine_constant_inplace(const FieldElement& ax, const FieldEleme
     FieldElement z3 = (z_ + h); z3.square_inplace(); z3 -= z1z1 + hh; // (Z1+H)^2 - Z1^2 - H^2
 
     x_ = x3; y_ = y3; z_ = z3; infinity_ = false; is_generator_ = false;
+#endif
 }
 
 // ============================================================================
@@ -982,11 +1852,13 @@ Point Point::scalar_mul(const Scalar& scalar) const {
     Point P_base = decomp.k1_neg ? this->negate() : *this;
 
     // Step 3: Compute wNAF for both half-scalars (stack-allocated)
-    // w=4 for ~128-bit scalars: table_size=8, ~32 additions per stream
-    constexpr unsigned glv_window = 4;
-    constexpr int glv_table_size = (1 << (glv_window - 1));  // 8
+    // w=5 for ~128-bit scalars: table_size=8, ~21 additions per stream
+    constexpr unsigned glv_window = 5;
+    constexpr int glv_table_size = (1 << (glv_window - 2));  // 8
 
-    std::array<int32_t, 140> wnaf1_buf{}, wnaf2_buf{};
+    // Note: compute_wnaf_into always processes full 256-bit Scalar even
+    // though GLV half-scalars are ~128 bits, so buffer must be 260.
+    std::array<int32_t, 260> wnaf1_buf{}, wnaf2_buf{};
     std::size_t wnaf1_len = 0, wnaf2_len = 0;
     compute_wnaf_into(decomp.k1, glv_window,
                       wnaf1_buf.data(), wnaf1_buf.size(), wnaf1_len);
@@ -995,6 +1867,7 @@ Point Point::scalar_mul(const Scalar& scalar) const {
 
     // Step 4: Precompute odd multiples [1, 3, 5, …, 15] for P
     std::array<Point, glv_table_size> tbl_P, tbl_phiP;
+    std::array<Point, glv_table_size> neg_tbl_P, neg_tbl_phiP;
 
     tbl_P[0] = P_base;
     Point dbl_P = P_base;
@@ -1002,6 +1875,12 @@ Point Point::scalar_mul(const Scalar& scalar) const {
     for (int i = 1; i < glv_table_size; i++) {
         tbl_P[i] = tbl_P[i - 1];
         tbl_P[i].add_inplace(dbl_P);
+    }
+
+    // Pre-negate P table (eliminates copy+negate in hot loop)
+    for (int i = 0; i < glv_table_size; i++) {
+        neg_tbl_P[i] = tbl_P[i];
+        neg_tbl_P[i].negate_inplace();
     }
 
     // Derive φ(P) table from P table using the endomorphism: φ(X:Y:Z) = (β·X:Y:Z)
@@ -1013,6 +1892,12 @@ Point Point::scalar_mul(const Scalar& scalar) const {
         if (flip_phi) tbl_phiP[i].negate_inplace();
     }
 
+    // Pre-negate φ(P) table
+    for (int i = 0; i < glv_table_size; i++) {
+        neg_tbl_phiP[i] = tbl_phiP[i];
+        neg_tbl_phiP[i].negate_inplace();
+    }
+
     // Step 5: Shamir's trick — one doubling per iteration, two lookups
     Point result = Point::infinity();
     std::size_t max_len = (wnaf1_len > wnaf2_len) ? wnaf1_len : wnaf2_len;
@@ -1020,27 +1905,23 @@ Point Point::scalar_mul(const Scalar& scalar) const {
     for (int i = static_cast<int>(max_len) - 1; i >= 0; --i) {
         result.dbl_inplace();
 
-        // k1 contribution
+        // k1 contribution (no copy needed: pre-negated table)
         if (static_cast<std::size_t>(i) < wnaf1_len) {
             int32_t d = wnaf1_buf[static_cast<std::size_t>(i)];
             if (d > 0) {
                 result.add_inplace(tbl_P[(d - 1) / 2]);
             } else if (d < 0) {
-                Point neg = tbl_P[(-d - 1) / 2];
-                neg.negate_inplace();
-                result.add_inplace(neg);
+                result.add_inplace(neg_tbl_P[(-d - 1) / 2]);
             }
         }
 
-        // k2 contribution
+        // k2 contribution (no copy needed: pre-negated table)
         if (static_cast<std::size_t>(i) < wnaf2_len) {
             int32_t d = wnaf2_buf[static_cast<std::size_t>(i)];
             if (d > 0) {
                 result.add_inplace(tbl_phiP[(d - 1) / 2]);
             } else if (d < 0) {
-                Point neg = tbl_phiP[(-d - 1) / 2];
-                neg.negate_inplace();
-                result.add_inplace(neg);
+                result.add_inplace(neg_tbl_phiP[(-d - 1) / 2]);
             }
         }
     }
@@ -1048,51 +1929,55 @@ Point Point::scalar_mul(const Scalar& scalar) const {
     return result;
 
 #else
-    // Desktop: wNAF with w=5 (GLV handled at higher level)
-    // w=5 means 16 precomputed points, ~51 additions for 256-bit scalar
+    // ─────────────────────────────────────────────────────────────────
+    // Desktop: GLV decomposition + Shamir's trick + 5×52 field ops
+    // ─────────────────────────────────────────────────────────────────
+    // Splits 256-bit scalar into two ~128-bit half-scalars:
+    //   k*P = sign1·|k1|*P + sign2·|k2|*φ(P)
+    // Uses 5×52 FieldElement52 for all point arithmetic (~2.5× faster).
+    // Combined GLV + 5×52 gives ~3× improvement over plain wNAF w=5.
+    //
+    // Fallback: If __int128 is unavailable, falls back to plain wNAF w=5.
+    // ─────────────────────────────────────────────────────────────────
+
+#ifdef SECP256K1_FAST_52BIT
+    return scalar_mul_glv52(*this, scalar);
+#else
+    // Fallback (no __int128): plain wNAF w=5 (original code path)
     constexpr unsigned window_width = 5;
-    // No-alloc wNAF: write into stack buffer
     std::array<int32_t, 260> wnaf_buf{};
     std::size_t wnaf_len = 0;
     compute_wnaf_into(scalar, window_width, wnaf_buf.data(), wnaf_buf.size(), wnaf_len);
-    
-    // Precompute odd multiples: [1P, 3P, 5P, ..., 31P]
-    constexpr int table_size = (1 << (window_width - 1)); // 2^4 = 16
+
+    constexpr int table_size = (1 << (window_width - 1));
     std::array<Point, table_size> precomp;
-    
-    precomp[0] = *this;  // 1P
-    Point double_p = *this;        // Copy for in-place
-    double_p.dbl_inplace();        // 2P in-place!
-    
+    std::array<Point, table_size> neg_precomp;
+    precomp[0] = *this;
+    Point double_p = *this;
+    double_p.dbl_inplace();
     for (int i = 1; i < table_size; i++) {
-        precomp[i] = precomp[i-1];          // Copy previous into slot
-        precomp[i].add_inplace(double_p);   // Make it next odd multiple in-place
+        precomp[i] = precomp[i-1];
+        precomp[i].add_inplace(double_p);
     }
-    
+    // Pre-negate table (eliminates copy+negate in hot loop)
+    for (int i = 0; i < table_size; i++) {
+        neg_precomp[i] = precomp[i];
+        neg_precomp[i].negate_inplace();
+    }
+
     Point result = Point::infinity();
-    
-    // Process wNAF digits from most significant to least significant
     for (int i = static_cast<int>(wnaf_len) - 1; i >= 0; --i) {
-        result.dbl_inplace();  // Double in-place!
-        
+        result.dbl_inplace();
         int32_t digit = wnaf_buf[static_cast<std::size_t>(i)];
         if (digit > 0) {
-            // Positive odd digit: 1, 3, 5, ..., 31
-            int idx = (digit - 1) / 2;
-            result.add_inplace(precomp[idx]);  // Add in-place!
+            result.add_inplace(precomp[(digit - 1) / 2]);
         } else if (digit < 0) {
-            // Negative odd digit: -1, -3, -5, ..., -31
-            int idx = (-digit - 1) / 2;
-            // Original faster path: temp copy + negate (O(1)) then mixed addition (7M)
-            Point neg_point = precomp[idx];
-            neg_point.negate_inplace();
-            result.add_inplace(neg_point);
+            result.add_inplace(neg_precomp[(-digit - 1) / 2]);
         }
-        // digit == 0: skip (no addition needed)
     }
-    
     return result;
-#endif
+#endif // SECP256K1_FAST_52BIT
+#endif // ESP32/STM32
 }
 
 // Step 1: Use existing GLV decomposition from K*G implementation
@@ -1145,11 +2030,19 @@ Point Point::scalar_mul_precomputed_wnaf(const std::vector<int32_t>& wnaf1,
                                           const std::vector<int32_t>& wnaf2,
                                           bool neg1, bool neg2) const {
     // Convert this point to Jacobian for internal operations
+#if defined(SECP256K1_FAST_52BIT)
+    JacobianPoint p = {x_.to_fe(), y_.to_fe(), z_.to_fe(), infinity_};
+#else
     JacobianPoint p = {x_, y_, z_, infinity_};
+#endif
     
     // Compute φ(Q) - endomorphism (1 field multiplication)
     Point phi_Q = apply_endomorphism(*this);
+#if defined(SECP256K1_FAST_52BIT)
+    JacobianPoint phi_p = {phi_Q.X(), phi_Q.Y(), phi_Q.z(), phi_Q.infinity_};
+#else
     JacobianPoint phi_p = {phi_Q.x_, phi_Q.y_, phi_Q.z_, phi_Q.infinity_};
+#endif
     
     // Determine table size from wNAF digits
     // For window w: digits are in range [-2^w+1, 2^w-1] odd
@@ -1173,7 +2066,7 @@ Point Point::scalar_mul_precomputed_wnaf(const std::vector<int32_t>& wnaf1,
     // Build precomputation tables for odd multiples in Jacobian (no heap alloc)
     constexpr int kMaxWindowBits = 7;
     constexpr int kMaxTableSize = (1 << (kMaxWindowBits - 1)); // 64
-    constexpr int kMaxAll = kMaxTableSize * 2;                 // 128
+    (void)sizeof(char[kMaxTableSize * 2]); // kMaxAll=128, used for static_assert sizing
     if (table_size > kMaxTableSize) {
         // Safety fallback: clamp to max supported table; digits beyond won't occur for w<=7
         table_size = kMaxTableSize;
@@ -1181,6 +2074,9 @@ Point Point::scalar_mul_precomputed_wnaf(const std::vector<int32_t>& wnaf1,
 
     std::array<JacobianPoint, kMaxTableSize> table_Q_jac{};
     std::array<JacobianPoint, kMaxTableSize> table_phi_Q_jac{};
+    // Pre-negated tables (eliminates copy+negate in hot loop)
+    std::array<JacobianPoint, kMaxTableSize> neg_table_Q_jac{};
+    std::array<JacobianPoint, kMaxTableSize> neg_table_phi_Q_jac{};
 
     // Generate tables: [P, 3P, 5P, 7P, ...]
     table_Q_jac[0] = p;            // 1*Q
@@ -1194,47 +2090,50 @@ Point Point::scalar_mul_precomputed_wnaf(const std::vector<int32_t>& wnaf1,
         table_phi_Q_jac[static_cast<std::size_t>(i)] = jacobian_add(table_phi_Q_jac[static_cast<std::size_t>(i-1)], double_phi_Q);
     }
 
-    // Note: For maximum correctness parity with the slow path, use Jacobian-Jacobian addition
-    // with the Jacobian precomputation tables directly (slightly slower than mixed-add but robust).
-    
-    // Shamir's trick: process both wNAF streams simultaneously
-    // This is the key optimization - one doubling per iteration, not two
+    // Build pre-negated tables for sign-flipped lookups (no per-iteration copy)
+    // Sign handling: neg1/neg2 flags flip global sign for k1/k2; pre-compute both orientations
+    for (int i = 0; i < table_size; i++) {
+        // For k1: positive lookup uses table, negative uses neg_table
+        // If neg1, swap them (XOR logic: neg1 flips which table to use)
+        neg_table_Q_jac[static_cast<std::size_t>(i)] = table_Q_jac[static_cast<std::size_t>(i)];
+        neg_table_Q_jac[static_cast<std::size_t>(i)].y = FieldElement::zero() - neg_table_Q_jac[static_cast<std::size_t>(i)].y;
+        neg_table_phi_Q_jac[static_cast<std::size_t>(i)] = table_phi_Q_jac[static_cast<std::size_t>(i)];
+        neg_table_phi_Q_jac[static_cast<std::size_t>(i)].y = FieldElement::zero() - neg_table_phi_Q_jac[static_cast<std::size_t>(i)].y;
+    }
+
+    // If global sign flags are set, swap positive/negative tables
+    if (neg1) { std::swap(table_Q_jac, neg_table_Q_jac); }
+    if (neg2) { std::swap(table_phi_Q_jac, neg_table_phi_Q_jac); }
+
+    // Shamir's trick: process both wNAF streams simultaneously (inplace ops)
     JacobianPoint result = {FieldElement::zero(), FieldElement::one(), FieldElement::zero(), true};
     
     size_t max_len = std::max(wnaf1.size(), wnaf2.size());
     
     for (int i = static_cast<int>(max_len) - 1; i >= 0; --i) {
-        result = jacobian_double(result);
+        jacobian_double_inplace(result);
         
-        // Add φ(Q) * k2 contribution using Jacobian-Jacobian addition
+        // Add φ(Q) * k2 contribution (no copy: pre-negated tables)
         if (i < static_cast<int>(wnaf2.size())) {
             int32_t digit2 = wnaf2[i];
-            if (digit2 != 0) {
-                bool is_neg = (digit2 < 0);
-                // Apply global sign for k2 via XOR on per-digit sign
-                if (neg2) is_neg = !is_neg;
-                int idx = ((is_neg ? -digit2 : digit2) - 1) / 2;
-                JacobianPoint add_p = table_phi_Q_jac[static_cast<std::size_t>(idx)];
-                if (is_neg) {
-                    add_p.y = FieldElement::zero() - add_p.y;
-                }
-                result = jacobian_add(result, add_p);
+            if (digit2 > 0) {
+                int idx = (digit2 - 1) / 2;
+                jacobian_add_inplace(result, table_phi_Q_jac[static_cast<std::size_t>(idx)]);
+            } else if (digit2 < 0) {
+                int idx = (-digit2 - 1) / 2;
+                jacobian_add_inplace(result, neg_table_phi_Q_jac[static_cast<std::size_t>(idx)]);
             }
         }
 
-        // Add Q * k1 contribution using Jacobian-Jacobian addition
+        // Add Q * k1 contribution (no copy: pre-negated tables)
         if (i < static_cast<int>(wnaf1.size())) {
             int32_t digit1 = wnaf1[i];
-            if (digit1 != 0) {
-                bool is_neg = (digit1 < 0);
-                // Apply global sign for k1 via XOR on per-digit sign
-                if (neg1) is_neg = !is_neg;
-                int idx = ((is_neg ? -digit1 : digit1) - 1) / 2;
-                JacobianPoint add_p = table_Q_jac[static_cast<std::size_t>(idx)];
-                if (is_neg) {
-                    add_p.y = FieldElement::zero() - add_p.y;
-                }
-                result = jacobian_add(result, add_p);
+            if (digit1 > 0) {
+                int idx = (digit1 - 1) / 2;
+                jacobian_add_inplace(result, table_Q_jac[static_cast<std::size_t>(idx)]);
+            } else if (digit1 < 0) {
+                int idx = (-digit1 - 1) / 2;
+                jacobian_add_inplace(result, neg_table_Q_jac[static_cast<std::size_t>(idx)]);
             }
         }
     }
@@ -1262,11 +2161,20 @@ std::array<std::uint8_t, 33> Point::to_compressed() const {
         return out;
     }
     // Compute affine coordinates with a single inversion
+#if defined(SECP256K1_FAST_52BIT)
+    FieldElement z_fe = z_.to_fe();
+    FieldElement z_inv = z_fe.inverse();
+    FieldElement z_inv2 = z_inv;
+    z_inv2.square_inplace();
+    FieldElement x_aff = x_.to_fe() * z_inv2;
+    FieldElement y_aff = y_.to_fe() * z_inv2 * z_inv;
+#else
     FieldElement z_inv = z_.inverse();
-    FieldElement z_inv2 = z_inv; // copy for in-place square
+    FieldElement z_inv2 = z_inv;
     z_inv2.square_inplace();
     FieldElement x_aff = x_ * z_inv2;
-    FieldElement y_aff = y_ * z_inv2 * z_inv; // z_inv^3
+    FieldElement y_aff = y_ * z_inv2 * z_inv;
+#endif
     auto x_bytes = x_aff.to_bytes();
     auto y_bytes = y_aff.to_bytes();
     out[0] = (y_bytes[31] & 1U) ? 0x03 : 0x02;
@@ -1281,11 +2189,20 @@ std::array<std::uint8_t, 65> Point::to_uncompressed() const {
         return out;
     }
     // Compute affine coordinates with a single inversion
+#if defined(SECP256K1_FAST_52BIT)
+    FieldElement z_fe = z_.to_fe();
+    FieldElement z_inv = z_fe.inverse();
+    FieldElement z_inv2 = z_inv;
+    z_inv2.square_inplace();
+    FieldElement x_aff = x_.to_fe() * z_inv2;
+    FieldElement y_aff = y_.to_fe() * z_inv2 * z_inv;
+#else
     FieldElement z_inv = z_.inverse();
-    FieldElement z_inv2 = z_inv; // copy for in-place square
+    FieldElement z_inv2 = z_inv;
     z_inv2.square_inplace();
     FieldElement x_aff = x_ * z_inv2;
-    FieldElement y_aff = y_ * z_inv2 * z_inv; // z_inv^3
+    FieldElement y_aff = y_ * z_inv2 * z_inv;
+#endif
     auto x_bytes = x_aff.to_bytes();
     auto y_bytes = y_aff.to_bytes();
     out[0] = 0x04;
@@ -1293,5 +2210,289 @@ std::array<std::uint8_t, 65> Point::to_uncompressed() const {
     std::copy(y_bytes.begin(), y_bytes.end(), out.begin() + 33);
     return out;
 }
+
+// ── Y-parity check (single inversion) ───────────────────────────────────────
+bool Point::has_even_y() const {
+    if (infinity_) return false;
+#if defined(SECP256K1_FAST_52BIT)
+    FieldElement z_fe = z_.to_fe();
+    FieldElement z_inv = z_fe.inverse();
+    FieldElement z_inv2 = z_inv;
+    z_inv2.square_inplace();
+    FieldElement y_aff = y_.to_fe() * z_inv2 * z_inv;
+#else
+    FieldElement z_inv = z_.inverse();
+    FieldElement z_inv2 = z_inv;
+    z_inv2.square_inplace();
+    FieldElement y_aff = y_ * z_inv2 * z_inv;
+#endif
+    auto y_bytes = y_aff.to_bytes();
+    return (y_bytes[31] & 1) == 0;
+}
+
+// ── Combined x-bytes + Y-parity (single inversion) ──────────────────────────
+std::pair<std::array<uint8_t, 32>, bool> Point::x_bytes_and_parity() const {
+    if (infinity_) return {std::array<uint8_t,32>{}, false};
+#if defined(SECP256K1_FAST_52BIT)
+    FieldElement z_fe = z_.to_fe();
+    FieldElement z_inv = z_fe.inverse();
+    FieldElement z_inv2 = z_inv;
+    z_inv2.square_inplace();
+    FieldElement x_aff = x_.to_fe() * z_inv2;
+    FieldElement y_aff = y_.to_fe() * z_inv2 * z_inv;
+#else
+    FieldElement z_inv = z_.inverse();
+    FieldElement z_inv2 = z_inv;
+    z_inv2.square_inplace();
+    FieldElement x_aff = x_ * z_inv2;
+    FieldElement y_aff = y_ * z_inv2 * z_inv;
+#endif
+    auto y_bytes = y_aff.to_bytes();
+    return {x_aff.to_bytes(), (y_bytes[31] & 1) != 0};
+}
+
+// ── 4-stream GLV Shamir: a*G + b*P ──────────────────────────────────────────
+// Computes a*G + b*P using a single ~128-bit doubling chain with 4 wNAF streams.
+// GLV decomposes both scalars: a = a1 + a2·λ, b = b1 + b2·λ
+// Then: a1*G + a2*ψ(G) + b1*P + b2*ψ(P) in one interleaved pass.
+// G/ψ(G) affine tables are cached statically (computed once).
+#if defined(SECP256K1_FAST_52BIT)
+__attribute__((noinline))
+Point Point::dual_scalar_mul_gen_point(const Scalar& a, const Scalar& b, const Point& P) {
+    try {
+    // ── GLV decompose both scalars ───────────────────────────────────
+    GLVDecomposition decomp_a = glv_decompose(a);
+    GLVDecomposition decomp_b = glv_decompose(b);
+
+    // ── Static generator tables (computed once) ──────────────────────
+    // G and ψ(G) affine tables for wNAF window=5 (8 entries each)
+    constexpr unsigned glv_window = 5;
+    constexpr int glv_table_size = (1 << (glv_window - 2));  // 8
+
+    static const auto gen_tables = []() {
+        struct GenTables {
+            std::array<AffinePoint52, 8> tbl_G;
+            std::array<AffinePoint52, 8> tbl_psiG;
+            std::array<AffinePoint52, 8> neg_tbl_G;
+            std::array<AffinePoint52, 8> neg_tbl_psiG;
+        };
+        GenTables t;
+
+        Point G = Point::generator();
+        JacobianPoint52 G52 = to_jac52(G);
+
+        // Build Jacobian table for G: [G, 3G, 5G, ..., 15G]
+        std::array<JacobianPoint52, 8> jtbl;
+        jtbl[0] = G52;
+        JacobianPoint52 dbl_G = jac52_double(G52);
+        for (int i = 1; i < 8; i++) {
+            jtbl[i] = jac52_add(jtbl[i - 1], dbl_G);
+        }
+
+        // Batch affine conversion
+        {
+            std::array<FieldElement52, 8> prods;
+            prods[0] = jtbl[0].z;
+            for (int i = 1; i < 8; i++) {
+                prods[i] = prods[i - 1] * jtbl[i].z;
+            }
+            FieldElement inv_fe = prods[7].to_fe().inverse();
+            FieldElement52 inv = FieldElement52::from_fe(inv_fe);
+            std::array<FieldElement52, 8> zs;
+            for (int i = 7; i > 0; --i) {
+                zs[i] = prods[i - 1] * inv;
+                inv = inv * jtbl[i].z;
+            }
+            zs[0] = inv;
+            for (int i = 0; i < 8; i++) {
+                FieldElement52 zinv2 = zs[i].square();
+                FieldElement52 zinv3 = zinv2 * zs[i];
+                t.tbl_G[i].x = jtbl[i].x * zinv2;
+                t.tbl_G[i].y = jtbl[i].y * zinv3;
+            }
+        }
+
+        // ψ(G) table: ψ(x,y) = (β·x, y)
+        static const FieldElement52 beta52 = FieldElement52::from_fe(
+            FieldElement::from_bytes(glv_constants::BETA));
+        for (int i = 0; i < 8; i++) {
+            t.tbl_psiG[i].x = t.tbl_G[i].x * beta52;
+            t.tbl_psiG[i].y = t.tbl_G[i].y;
+        }
+
+        // Pre-negate all
+        for (int i = 0; i < 8; i++) {
+            t.neg_tbl_G[i].x = t.tbl_G[i].x;
+            t.neg_tbl_G[i].y = t.tbl_G[i].y.negate(1);
+            t.neg_tbl_G[i].y.normalize_weak();
+            t.neg_tbl_psiG[i].x = t.tbl_psiG[i].x;
+            t.neg_tbl_psiG[i].y = t.tbl_psiG[i].y.negate(1);
+            t.neg_tbl_psiG[i].y.normalize_weak();
+        }
+
+        return t;
+    }();
+
+    // ── Precompute P tables (per-call, same as scalar_mul_glv52) ─────
+    JacobianPoint52 P52 = decomp_b.k1_neg
+        ? to_jac52(P.negate())
+        : to_jac52(P);
+
+    std::array<AffinePoint52, glv_table_size> tbl_P;
+    std::array<AffinePoint52, glv_table_size> tbl_phiP;
+    std::array<AffinePoint52, glv_table_size> neg_tbl_P;
+    std::array<AffinePoint52, glv_table_size> neg_tbl_phiP;
+
+    // Build Jacobian table, then batch-convert to affine
+    {
+        std::array<JacobianPoint52, glv_table_size> jtbl;
+        jtbl[0] = P52;
+        JacobianPoint52 dbl52 = jac52_double(P52);
+        for (int i = 1; i < glv_table_size; i++) {
+            jtbl[i] = jac52_add(jtbl[i - 1], dbl52);
+        }
+
+        std::array<FieldElement52, glv_table_size> prods;
+        prods[0] = jtbl[0].z;
+        for (int i = 1; i < glv_table_size; i++) {
+            prods[i] = prods[i - 1] * jtbl[i].z;
+        }
+        FieldElement inv_fe = prods[glv_table_size - 1].to_fe().inverse();
+        FieldElement52 inv = FieldElement52::from_fe(inv_fe);
+        std::array<FieldElement52, glv_table_size> zs;
+        for (int i = glv_table_size - 1; i > 0; --i) {
+            zs[i] = prods[i - 1] * inv;
+            inv = inv * jtbl[i].z;
+        }
+        zs[0] = inv;
+        for (int i = 0; i < glv_table_size; i++) {
+            FieldElement52 zinv2 = zs[i].square();
+            FieldElement52 zinv3 = zinv2 * zs[i];
+            tbl_P[i].x = jtbl[i].x * zinv2;
+            tbl_P[i].y = jtbl[i].y * zinv3;
+        }
+    }
+
+    // ψ(P) table
+    static const FieldElement52 beta52 = FieldElement52::from_fe(
+        FieldElement::from_bytes(glv_constants::BETA));
+
+    const bool flip_phi_b = (decomp_b.k1_neg != decomp_b.k2_neg);
+    for (int i = 0; i < glv_table_size; i++) {
+        tbl_phiP[i].x = tbl_P[i].x * beta52;
+        if (flip_phi_b) {
+            tbl_phiP[i].y = tbl_P[i].y.negate(1);
+            tbl_phiP[i].y.normalize_weak();
+        } else {
+            tbl_phiP[i].y = tbl_P[i].y;
+        }
+    }
+
+    // Pre-negate P tables
+    for (int i = 0; i < glv_table_size; i++) {
+        neg_tbl_P[i].x = tbl_P[i].x;
+        neg_tbl_P[i].y = tbl_P[i].y.negate(1);
+        neg_tbl_P[i].y.normalize_weak();
+        neg_tbl_phiP[i].x = tbl_phiP[i].x;
+        neg_tbl_phiP[i].y = tbl_phiP[i].y.negate(1);
+        neg_tbl_phiP[i].y.normalize_weak();
+    }
+
+    // ── Compute wNAF for all 4 half-scalars ──────────────────────────
+    std::array<int32_t, 260> wnaf_a1{}, wnaf_a2{}, wnaf_b1{}, wnaf_b2{};
+    std::size_t len_a1 = 0, len_a2 = 0, len_b1 = 0, len_b2 = 0;
+
+    compute_wnaf_into(decomp_a.k1, glv_window, wnaf_a1.data(), wnaf_a1.size(), len_a1);
+    compute_wnaf_into(decomp_a.k2, glv_window, wnaf_a2.data(), wnaf_a2.size(), len_a2);
+    compute_wnaf_into(decomp_b.k1, glv_window, wnaf_b1.data(), wnaf_b1.size(), len_b1);
+    compute_wnaf_into(decomp_b.k2, glv_window, wnaf_b2.data(), wnaf_b2.size(), len_b2);
+
+    // Trim trailing zeros
+    while (len_a1 > 0 && wnaf_a1[len_a1 - 1] == 0) --len_a1;
+    while (len_a2 > 0 && wnaf_a2[len_a2 - 1] == 0) --len_a2;
+    while (len_b1 > 0 && wnaf_b1[len_b1 - 1] == 0) --len_b1;
+    while (len_b2 > 0 && wnaf_b2[len_b2 - 1] == 0) --len_b2;
+
+    // ── Select correct G/ψ(G) tables based on decomp_a signs ────────
+    // Static G tables are always-positive, so sign handling is independent:
+    //   G stream:    swap if k1_neg  (want -|a1|*G)
+    //   ψ(G) stream: swap if k2_neg  (want -|a2|*ψ(G))
+    const auto& ref_tbl_G     = decomp_a.k1_neg ? gen_tables.neg_tbl_G     : gen_tables.tbl_G;
+    const auto& ref_neg_tbl_G = decomp_a.k1_neg ? gen_tables.tbl_G         : gen_tables.neg_tbl_G;
+
+    const auto& ref_tbl_psiG     = decomp_a.k2_neg ? gen_tables.neg_tbl_psiG     : gen_tables.tbl_psiG;
+    const auto& ref_neg_tbl_psiG = decomp_a.k2_neg ? gen_tables.tbl_psiG         : gen_tables.neg_tbl_psiG;
+
+    // ── 4-stream Shamir interleaved scan ─────────────────────────────
+    JacobianPoint52 result52 = {
+        FieldElement52::zero(), FieldElement52::one(),
+        FieldElement52::zero(), true
+    };
+
+    std::size_t max_len = len_a1;
+    if (len_a2 > max_len) max_len = len_a2;
+    if (len_b1 > max_len) max_len = len_b1;
+    if (len_b2 > max_len) max_len = len_b2;
+
+    for (int i = static_cast<int>(max_len) - 1; i >= 0; --i) {
+        jac52_double_inplace(result52);
+
+        // Stream 1: a1 * G
+        {
+            int32_t d = wnaf_a1[static_cast<std::size_t>(i)];
+            if (d > 0) {
+                jac52_add_mixed_inplace(result52, ref_tbl_G[(d - 1) >> 1]);
+            } else if (d < 0) {
+                jac52_add_mixed_inplace(result52, ref_neg_tbl_G[(-d - 1) >> 1]);
+            }
+        }
+
+        // Stream 2: a2 * ψ(G)
+        {
+            int32_t d = wnaf_a2[static_cast<std::size_t>(i)];
+            if (d > 0) {
+                jac52_add_mixed_inplace(result52, ref_tbl_psiG[(d - 1) >> 1]);
+            } else if (d < 0) {
+                jac52_add_mixed_inplace(result52, ref_neg_tbl_psiG[(-d - 1) >> 1]);
+            }
+        }
+
+        // Stream 3: b1 * P
+        {
+            int32_t d = wnaf_b1[static_cast<std::size_t>(i)];
+            if (d > 0) {
+                jac52_add_mixed_inplace(result52, tbl_P[(d - 1) >> 1]);
+            } else if (d < 0) {
+                jac52_add_mixed_inplace(result52, neg_tbl_P[(-d - 1) >> 1]);
+            }
+        }
+
+        // Stream 4: b2 * ψ(P)
+        {
+            int32_t d = wnaf_b2[static_cast<std::size_t>(i)];
+            if (d > 0) {
+                jac52_add_mixed_inplace(result52, tbl_phiP[(d - 1) >> 1]);
+            } else if (d < 0) {
+                jac52_add_mixed_inplace(result52, neg_tbl_phiP[(-d - 1) >> 1]);
+            }
+        }
+    }
+
+    return from_jac52(result52);
+    } catch (...) {
+        // Fallback: separate multiplications
+        auto aG = Point::generator().scalar_mul(a);
+        aG.add_inplace(P.scalar_mul(b));
+        return aG;
+    }
+}
+#else
+// Non-52bit fallback: separate multiplications
+Point Point::dual_scalar_mul_gen_point(const Scalar& a, const Scalar& b, const Point& P) {
+    auto aG = Point::generator().scalar_mul(a);
+    aG.add_inplace(P.scalar_mul(b));
+    return aG;
+}
+#endif
 
 } // namespace secp256k1::fast

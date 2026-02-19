@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.18)
 
 project(UltrafastSecp256k1
-    VERSION 3.3.0
+    VERSION 3.4.0
     DESCRIPTION "Ultra high-performance secp256k1 elliptic curve cryptography library"
     LANGUAGES CXX
 )
@@ -167,6 +167,13 @@ if(SECP256K1_BUILD_EXAMPLES)
     add_subdirectory(examples)
 endif()
 
+# ── Stable C ABI layer (ufsecp_*) ─────────────────────────────────────────
+option(SECP256K1_BUILD_CABI "Build the stable ufsecp_* C ABI library" ON)
+if(SECP256K1_BUILD_CABI AND SECP256K1_BUILD_CPU)
+    add_subdirectory(include/ufsecp)
+    message(STATUS "  C ABI (ufsecp):   ON")
+endif()
+
 # Export targets
 if(SECP256K1_INSTALL)
     include(GNUInstallDirs)
@@ -217,6 +224,32 @@ if(SECP256K1_INSTALL)
         )
     endif()
 endif()
+
+# ── CPack packaging ─────────────────────────────────────────────────────────
+set(CPACK_PACKAGE_NAME "UltrafastSecp256k1")
+set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
+set(CPACK_PACKAGE_VENDOR "shrec")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY
+    "High-performance secp256k1 ECC library with stable C ABI (ufsecp)")
+set(CPACK_PACKAGE_HOMEPAGE_URL "https://github.com/shrec/UltrafastSecp256k1")
+set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
+set(CPACK_PACKAGE_FILE_NAME
+    "${CPACK_PACKAGE_NAME}-${PROJECT_VERSION}-${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}")
+set(CPACK_STRIP_FILES ON)
+
+# Generate ZIP on all platforms, plus TGZ on Unix
+if(WIN32)
+    set(CPACK_GENERATOR "ZIP")
+else()
+    set(CPACK_GENERATOR "TGZ;ZIP")
+endif()
+
+# Source package
+set(CPACK_SOURCE_GENERATOR "TGZ;ZIP")
+set(CPACK_SOURCE_IGNORE_FILES
+    "/build[^/]*/" "/[.]git/" "/[.]github/" "/[.]vscode/" "[.]DS_Store$" "[.]user$")
+
+include(CPack)
 
 # Summary
 message(STATUS "")

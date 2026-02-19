@@ -103,29 +103,13 @@ static std::pair<Point, bool> lift_x_even(const std::array<uint8_t, 32>& x_bytes
 
     // y² = x³ + 7
     auto x3 = px_fe.square() * px_fe;
-    auto seven = FieldElement::from_uint64(7);
-    auto y2 = x3 + seven;
+    auto y2 = x3 + FieldElement::from_uint64(7);
 
-    // sqrt: y = y2^((p+1)/4)
-    auto exp = FieldElement::from_hex(
-        "3fffffffffffffffffffffffffffffffffffffffffffffffffffffffbfffff0c");
-
-    auto y = FieldElement::one();
-    auto base = y2;
-    auto exp_bytes = exp.to_bytes();
-
-    for (int i = 0; i < 256; ++i) {
-        y = y.square();
-        int byte_idx = i / 8;
-        int bit_idx = 7 - (i % 8);
-        if ((exp_bytes[byte_idx] >> bit_idx) & 1) {
-            y = y * base;
-        }
-    }
+    // Optimized sqrt via addition chain
+    auto y = y2.sqrt();
 
     // Verify sqrt
-    auto y_check = y.square();
-    if (y_check != y2) return {Point::infinity(), false};
+    if (y.square() != y2) return {Point::infinity(), false};
 
     // Force even y (BIP-341 convention)
     auto y_bytes = y.to_bytes();

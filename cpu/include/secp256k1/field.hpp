@@ -63,11 +63,24 @@ public:
     std::string to_hex() const;
     const limbs_type& limbs() const noexcept { return limbs_; }
 
+    // Raw limb setter (no normalization) — for use when caller guarantees canonical form.
+    // Used by FieldElement52::to_fe() which already normalizes via fe52_normalize_inline.
+    static FieldElement from_limbs_raw(const limbs_type& limbs) noexcept {
+        FieldElement fe;
+        fe.limbs_ = limbs;
+        return fe;
+    }
+
     FieldElement operator+(const FieldElement& rhs) const;
     FieldElement operator-(const FieldElement& rhs) const;
     FieldElement operator*(const FieldElement& rhs) const;
     FieldElement square() const;
     FieldElement inverse() const;
+
+    // Square root: a^((p+1)/4) mod p.  Valid since p ≡ 3 (mod 4).
+    // Uses an optimized addition chain (~255 sqr + 13 mul).
+    // Returns a root r such that r² ≡ a (mod p). Caller must verify r²==a.
+    FieldElement sqrt() const;
 
     FieldElement& operator+=(const FieldElement& rhs);
     FieldElement& operator-=(const FieldElement& rhs);
@@ -216,6 +229,7 @@ FieldElement pow_p_minus_2_compact_table(FieldElement base);
 // Wrapper functions
 FieldElement fe_inverse_window_naf_v2(const FieldElement& value);
 FieldElement fe_inverse_hybrid_eea(const FieldElement& value);
+FieldElement fe_inverse_safegcd(const FieldElement& value);
 FieldElement fe_inverse_yao(const FieldElement& value);
 FieldElement fe_inverse_bos_coster(const FieldElement& value);
 FieldElement fe_inverse_ltr_precomp(const FieldElement& value);

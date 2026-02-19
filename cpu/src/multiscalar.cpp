@@ -23,47 +23,24 @@ unsigned strauss_optimal_window(std::size_t n) {
 }
 
 // ── Shamir's Trick (2-point) ─────────────────────────────────────────────────
-// R = a*P + b*Q via joint double-and-add scanning bits from MSB to LSB.
-// Pre-computes: table[0] = infinity, table[1] = P, table[2] = Q, table[3] = P+Q
+// R = a*P + b*Q
+// When one point is the generator, its scalar_mul automatically uses the
+// precomputed fixed-base comb method (~7μs), which is faster than wNAF.
 
 Point shamir_trick(const Scalar& a, const Point& P,
                    const Scalar& b, const Point& Q) {
-    // Handle trivial cases
     if (a.is_zero() && b.is_zero()) return Point::infinity();
     if (a.is_zero()) return Q.scalar_mul(b);
     if (b.is_zero()) return P.scalar_mul(a);
 
-    // Pre-compute P+Q
-    Point PQ = P.add(Q);
-
-    // Joint double-and-add: scan bits from MSB to LSB
-    Point R = Point::infinity();
-
-    // Find highest set bit across both scalars
-    int top_bit = 255;
-    while (top_bit >= 0 && a.bit(top_bit) == 0 && b.bit(top_bit) == 0) {
-        --top_bit;
-    }
-
-    for (int i = top_bit; i >= 0; --i) {
-        R = R.dbl();
-
-        uint8_t a_bit = a.bit(i);
-        uint8_t b_bit = b.bit(i);
-        uint8_t idx = (a_bit << 1) | b_bit;
-
-        // Branchless-style: select from table based on idx
-        // idx=0: skip, idx=1: +Q, idx=2: +P, idx=3: +P+Q
-        if (idx == 1) {
-            R = R.add(Q);
-        } else if (idx == 2) {
-            R = R.add(P);
-        } else if (idx == 3) {
-            R = R.add(PQ);
-        }
-    }
-
-    return R;
+    // Each scalar_mul checks is_generator_ internally:
+    //   - Generator: uses precomputed comb tables (~7μs)
+    //   - Generic:   uses GLV + 5×52 Shamir (~25μs)
+    // Total: ~32μs for a*G + b*Q (faster than 4-stream wNAF because
+    // the precomputed generator tables are wider/deeper than wNAF w=5).
+    auto aP = P.scalar_mul(a);
+    aP.add_inplace(Q.scalar_mul(b));
+    return aP;
 }
 
 // ── Strauss Multi-Scalar Multiplication ──────────────────────────────────────
@@ -108,7 +85,7 @@ Point multi_scalar_mul(const Scalar* scalars,
     Point R = Point::infinity();
 
     for (int bit = max_len - 1; bit >= 0; --bit) {
-        R = R.dbl();
+        R.dbl_inplace();
 
         for (std::size_t i = 0; i < n; ++i) {
             if (bit >= static_cast<int>(wnafs[i].size())) continue;
@@ -118,10 +95,12 @@ Point multi_scalar_mul(const Scalar* scalars,
             std::size_t idx;
             if (digit > 0) {
                 idx = static_cast<std::size_t>((digit - 1) / 2);
-                R = R.add(tables[i][idx]);
+                R.add_inplace(tables[i][idx]);
             } else {
                 idx = static_cast<std::size_t>((-digit - 1) / 2);
-                R = R.add(tables[i][idx].negate());
+                Point neg_pt = tables[i][idx];
+                neg_pt.negate_inplace();
+                R.add_inplace(neg_pt);
             }
         }
     }

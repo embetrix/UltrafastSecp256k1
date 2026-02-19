@@ -104,18 +104,8 @@ bool schnorr_adaptor_verify(const SchnorrAdaptorSig& pre_sig,
     FieldElement x2 = px * px;
     FieldElement x3 = x2 * px;
     FieldElement rhs = x3 + FieldElement::from_uint64(7);
-    auto sqrt_exp = FieldElement::from_hex(
-        "3fffffffffffffffffffffffffffffffffffffffffffffffffffffffbfffff0c");
-    auto py = FieldElement::one();
-    {
-        auto base = rhs;
-        auto eb = sqrt_exp.to_bytes();
-        for (int i = 0; i < 256; ++i) {
-            py = py.square();
-            int bi = i / 8, bt = 7 - (i % 8);
-            if ((eb[bi] >> bt) & 1) py = py * base;
-        }
-    }
+    // Optimized sqrt via addition chain
+    auto py = rhs.sqrt();
     auto py_bytes = py.to_bytes();
     if (py_bytes[31] & 1) py = FieldElement::zero() - py;
     Point P = Point::from_affine(px, py);

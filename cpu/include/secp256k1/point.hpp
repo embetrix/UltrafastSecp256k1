@@ -2,8 +2,19 @@
 #define C870F4A3_192C_4B96_9AE6_497D1885C5D9
 
 #include <string>
+#include <utility>
 #include "field.hpp"
 #include "scalar.hpp"
+
+// On 5×52-capable platforms, Point stores FieldElement52 internally
+// for zero-conversion-overhead point arithmetic.
+// FE52 native storage: only on 64-bit platforms with __int128
+#if defined(__SIZEOF_INT128__) && !defined(SECP256K1_PLATFORM_ESP32) && !defined(SECP256K1_PLATFORM_STM32)
+  #ifndef SECP256K1_FAST_52BIT
+    #define SECP256K1_FAST_52BIT 1
+  #endif
+  #include "field_52.hpp"
+#endif
 
 namespace secp256k1::fast {
 
@@ -38,6 +49,7 @@ public:
     FieldElement x() const;
     FieldElement y() const;
     bool is_infinity() const noexcept { return infinity_; }
+    bool is_gen() const noexcept { return is_generator_; }
     
     // Split x-coordinate helpers for split-keys database format
     // x_first_half(): returns first 16 bytes of x-coordinate
@@ -46,9 +58,19 @@ public:
     std::array<uint8_t, 16> x_second_half() const;
     
     // Direct access to Jacobian coordinates (for batch processing)
+#if defined(SECP256K1_FAST_52BIT)
+    FieldElement X() const noexcept;
+    FieldElement Y() const noexcept;
+    FieldElement z() const noexcept;
+    // Direct access to 5×52 internals (for hot paths)
+    const FieldElement52& X52() const noexcept { return x_; }
+    const FieldElement52& Y52() const noexcept { return y_; }
+    const FieldElement52& Z52() const noexcept { return z_; }
+#else
     const FieldElement& X() const noexcept { return x_; }
     const FieldElement& Y() const noexcept { return y_; }
     const FieldElement& z() const noexcept { return z_; }
+#endif
 
     Point add(const Point& other) const;
     Point dbl() const;
@@ -97,21 +119,51 @@ public:
     // Optimized repeated addition by a fixed affine point (z=1)
     void add_affine_constant_inplace(const FieldElement& ax, const FieldElement& ay);
 
+    // Y-parity check (single inversion, no full serialization)
+    bool has_even_y() const;
+
+    // Combined: returns (x_bytes, y_is_odd) with a single field inversion
+    std::pair<std::array<uint8_t, 32>, bool> x_bytes_and_parity() const;
+
+    // Dual scalar multiplication: a*G + b*P (4-stream GLV Shamir)
+    // Much faster than separate generator_mul(a) + scalar_mul(b) + add
+    static Point dual_scalar_mul_gen_point(const Scalar& a, const Scalar& b, const Point& P);
+
     std::array<std::uint8_t, 33> to_compressed() const;
     std::array<std::uint8_t, 65> to_uncompressed() const;
 
+#if defined(SECP256K1_FAST_52BIT)
+    FieldElement x_raw() const noexcept;
+    FieldElement y_raw() const noexcept;
+    FieldElement z_raw() const noexcept;
+#else
     const FieldElement& x_raw() const noexcept { return x_; }
     const FieldElement& y_raw() const noexcept { return y_; }
     const FieldElement& z_raw() const noexcept { return z_; }
+#endif
 
     static Point from_jacobian_coords(const FieldElement& x, const FieldElement& y, const FieldElement& z, bool infinity);
+#if defined(SECP256K1_FAST_52BIT)
+    // Zero-conversion factory: constructs Point directly from FE52 Jacobian coords
+    static Point from_jacobian52(const FieldElement52& x, const FieldElement52& y, const FieldElement52& z, bool infinity);
+#endif
 
 private:
     Point(const FieldElement& x, const FieldElement& y, const FieldElement& z, bool infinity);
+#if defined(SECP256K1_FAST_52BIT)
+    // Zero-conversion constructor: directly initializes FE52 members
+    Point(const FieldElement52& x, const FieldElement52& y, const FieldElement52& z, bool infinity, bool is_gen);
+#endif
 
+#if defined(SECP256K1_FAST_52BIT)
+    FieldElement52 x_;
+    FieldElement52 y_;
+    FieldElement52 z_;
+#else
     FieldElement x_;
     FieldElement y_;
     FieldElement z_;
+#endif
     bool infinity_;
     bool is_generator_;
 };

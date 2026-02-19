@@ -1246,6 +1246,7 @@ bool Selftest(bool verbose, SelftestMode mode, uint64_t seed) {
     const bool is_smoke  = (mode == SelftestMode::smoke);
     const bool is_ci     = (mode == SelftestMode::ci) || (mode == SelftestMode::stress);
     const bool is_stress = (mode == SelftestMode::stress);
+    (void)is_ci;     // used below in CI-only sections
     (void)is_stress; // used below in stress-only sections
 
     int passed = 0;

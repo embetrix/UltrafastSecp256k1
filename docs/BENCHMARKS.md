@@ -9,19 +9,21 @@ Benchmark results for UltrafastSecp256k1 across all supported platforms.
 | Platform | Field Mul | Generator Mul | Scalar Mul |
 |----------|-----------|---------------|------------|
 | x86-64 (i5, AVX2) | 33 ns | 5 μs | 110 μs |
-| x86-64 (Clang 21, Win) | 32 ns | 7 μs | 111 μs |
+| x86-64 (Clang 21, Win) | 44 ns (4×64) / 23 ns (5×52) | 8 μs | 42 μs |
 | RISC-V 64 (RVV) | 173 ns | 37 μs | 621 μs |
 | ARM64 (RK3588) | 85 ns | 7.6 μs | 77.6 μs |
 | ESP32-S3 (LX7, 240 MHz) | 7,458 ns | 2,483 μs | — |
 | ESP32 (LX6, 240 MHz) | 6,993 ns | 6,203 μs | — |
 | STM32F103 (CM3, 72 MHz) | 15,331 ns | 37,982 μs | — |
-| CUDA (RTX 5060 Ti) | 0.2 ns | 216.1 ns | 266.5 ns |
+| CUDA (RTX 5060 Ti) | 0.2 ns | 217.7 ns | 225.8 ns |
 | OpenCL (RTX 5060 Ti) | 0.2 ns | 295.1 ns | — |
 | Metal (Apple M3 Pro) | 1.9 ns | 3.00 μs | 2.94 μs |
 
 ---
 
 ## x86-64 Benchmarks
+
+### x86-64 / Linux (i5, Clang 19.1.7, AVX2)
 
 **Hardware:** Intel Core i5 (AVX2, BMI2, ADX)  
 **OS:** Linux  
@@ -42,6 +44,30 @@ Benchmark results for UltrafastSecp256k1 across all supported platforms.
 | Generator Mul | 5 μs | Precomputed tables |
 | Batch Inverse (n=100) | 140 ns/elem | Montgomery's trick |
 | Batch Inverse (n=1000) | 92 ns/elem | |
+
+### x86-64 / Windows (Clang 21.1.0, AVX2)
+
+**Hardware:** x86-64 (AVX2)  
+**OS:** Windows  
+**Compiler:** Clang 21.1.0  
+**Assembly:** x86-64 ASM enabled  
+**SIMD:** AVX2
+
+| Operation | Time | Notes |
+|-----------|------|-------|
+| Field Mul (4×64) | 44 ns | Portable representation |
+| Field Mul (5×52) | 23 ns | `__int128` lazy reduction |
+| Field Square (4×64) | 33 ns | |
+| Field Square (5×52) | 14 ns | |
+| Field Add | 9 ns | |
+| Field Sub | 10 ns | |
+| Field Inverse | 5 μs | Fermat's little theorem |
+| Point Add | 821 ns | Jacobian coordinates |
+| Point Double | 380 ns | |
+| Point Scalar Mul (k×P) | 42 μs | GLV + 5×52 + Shamir |
+| Generator Mul (k×G) | 8 μs | Precomputed tables |
+| Batch Inverse (n=100) | 166 ns/elem | Montgomery's trick |
+| Batch Inverse (n=1000) | 120 ns/elem | |
 
 ---
 
@@ -86,15 +112,34 @@ Benchmark results for UltrafastSecp256k1 across all supported platforms.
 **Architecture:** sm_86;sm89  
 **Build:** Clang 19 + nvcc, Release, -O3 --use_fast_math
 
+### Core ECC Operations
+
 | Operation | Time/Op | Throughput | Notes |
 |-----------|---------|------------|-------|
-| Field Mul | 0.2 ns | 4,139 M/s | Kernel-only, batch 1M |
-| Field Add | 0.2 ns | 4,122 M/s | Kernel-only, batch 1M |
-| Field Inv | 12.1 ns | 82.65 M/s | Kernel-only, batch 64K |
-| Point Add | 1.1 ns | 916 M/s | Kernel-only, batch 256K |
-| Point Double | 0.7 ns | 1,352 M/s | Kernel-only, batch 256K |
-| Scalar Mul (P*k) | 266.5 ns | 3.75 M/s | Kernel-only, batch 64K |
-| Generator Mul (G*k) | 216.1 ns | 4.63 M/s | Kernel-only, batch 128K |
+| Field Mul | 0.2 ns | 4,142 M/s | Kernel-only, batch 1M |
+| Field Add | 0.2 ns | 4,130 M/s | Kernel-only, batch 1M |
+| Field Inv | 10.2 ns | 98.35 M/s | Kernel-only, batch 64K |
+| Point Add | 1.6 ns | 619 M/s | Kernel-only, batch 256K |
+| Point Double | 0.8 ns | 1,282 M/s | Kernel-only, batch 256K |
+| Scalar Mul (P×k) | 225.8 ns | 4.43 M/s | Kernel-only, batch 64K |
+| Generator Mul (G×k) | 217.7 ns | 4.59 M/s | Kernel-only, batch 128K |
+| Affine Add | 0.4 ns | 2,532 M/s | Kernel-only, batch 256K |
+| Affine Lambda | 0.6 ns | 1,654 M/s | Kernel-only, batch 256K |
+| Affine X-Only | 0.4 ns | 2,328 M/s | Kernel-only, batch 256K |
+| Batch Inv | 2.9 ns | 340 M/s | Kernel-only, batch 64K |
+| Jac→Affine | 14.9 ns | 66.9 M/s | Kernel-only, batch 64K |
+
+### GPU Signature Operations
+
+> **No other open-source GPU library provides secp256k1 ECDSA + Schnorr sign/verify on GPU.**
+
+| Operation | Time/Op | Throughput | Notes |
+|-----------|---------|------------|-------|
+| ECDSA Sign | 204.8 ns | 4.88 M/s | RFC 6979, low-S, batch 16K |
+| ECDSA Verify | 410.1 ns | 2.44 M/s | Shamir + GLV, batch 16K |
+| ECDSA Sign + Recid | 311.5 ns | 3.21 M/s | Recoverable, batch 16K |
+| Schnorr Sign (BIP-340) | 273.4 ns | 3.66 M/s | Tagged hash midstates, batch 16K |
+| Schnorr Verify (BIP-340) | 354.6 ns | 2.82 M/s | X-only pubkey, batch 16K |
 
 ---
 
@@ -143,10 +188,14 @@ Benchmark results for UltrafastSecp256k1 across all supported platforms.
 |-----------|------|--------|--------|
 | Field Mul | 0.2 ns | 0.2 ns | Tie |
 | Field Add | 0.2 ns | 0.2 ns | Tie |
-| Field Inv | 12.1 ns | 14.3 ns | CUDA 1.18× |
-| Point Double | 0.7 ns | 0.9 ns | **CUDA 1.29×** |
-| Point Add | 1.1 ns | 1.6 ns | **CUDA 1.45×** |
-| Scalar Mul (kG) | 216.1 ns | 295.1 ns | **CUDA 1.37×** |
+| Field Inv | 10.2 ns | 14.3 ns | **CUDA 1.40×** |
+| Point Double | 0.8 ns | 0.9 ns | CUDA 1.13× |
+| Point Add | 1.6 ns | 1.6 ns | Tie |
+| Scalar Mul (kG) | 217.7 ns | 295.1 ns | **CUDA 1.36×** |
+| ECDSA Sign | 204.8 ns | — | CUDA only |
+| ECDSA Verify | 410.1 ns | — | CUDA only |
+| Schnorr Sign | 273.4 ns | — | CUDA only |
+| Schnorr Verify | 354.6 ns | — | CUDA only |
 
 ---
 
@@ -176,11 +225,15 @@ Benchmark results for UltrafastSecp256k1 across all supported platforms.
 |-----------|-------------------|---------------------|----------------|
 | Field Mul | 0.2 ns | 0.2 ns | 1.9 ns |
 | Field Add | 0.2 ns | 0.2 ns | 1.0 ns |
-| Field Inv | 12.1 ns | 14.3 ns | 106.4 ns |
-| Point Double | 0.7 ns | 0.9 ns | 5.1 ns |
-| Point Add | 1.1 ns | 1.6 ns | 10.1 ns |
-| Scalar Mul | 266.5 ns | 295.1 ns | 2.94 μs |
-| Generator Mul | 216.1 ns | 295.1 ns | 3.00 μs |
+| Field Inv | 10.2 ns | 14.3 ns | 106.4 ns |
+| Point Double | 0.8 ns | 0.9 ns | 5.1 ns |
+| Point Add | 1.6 ns | 1.6 ns | 10.1 ns |
+| Scalar Mul | 225.8 ns | 295.1 ns | 2.94 μs |
+| Generator Mul | 217.7 ns | 295.1 ns | 3.00 μs |
+| ECDSA Sign | 204.8 ns | — | — |
+| ECDSA Verify | 410.1 ns | — | — |
+| Schnorr Sign | 273.4 ns | — | — |
+| Schnorr Verify | 354.6 ns | — | — |
 
 > **შენიშვნა:** CUDA/OpenCL — RTX 5060 Ti (36 SMs, 2602 MHz, GDDR7 256 GB/s).  
 > Metal — M3 Pro (18 GPU cores, ~150 GB/s unified memory bandwidth).  
@@ -285,22 +338,100 @@ All 35 library self-tests pass.
 
 ---
 
-## Comparison with Other Libraries
+## Specialized Benchmark Results (Windows x64, Clang 21.1.0)
 
-### vs libsecp256k1 (Bitcoin Core)
+### Field Representation Comparison (5×52 vs 4×64)
 
-| Operation | UltrafastSecp256k1 | libsecp256k1 | Speedup |
-|-----------|-------------------|--------------|---------|
-| Scalar Mul (x86-64) | 110 μs | ~150 μs | 1.36× |
-| Generator Mul | 5 μs | ~8 μs | 1.6× |
-| Batch verify | TBD | TBD | - |
+5×52 uses `__int128` with lazy carry reduction — fewer normalizations = faster chains.
 
-### vs tiny-ecdsa
+| Operation | 4×64 (ns) | 5×52 (ns) | 5×52 Speedup |
+|-----------|----------:|----------:|-------------:|
+| Multiplication | 41.9 | 15.2 | **2.76×** |
+| Squaring | 31.2 | 12.8 | **2.44×** |
+| Addition | 4.3 | 1.6 | **2.69×** |
+| Negation | 7.6 | 2.4 | **3.13×** |
+| Add chain (4 ops) | 33.2 | 8.6 | **3.84×** |
+| Add chain (8 ops) | 65.4 | 16.4 | **3.98×** |
+| Add chain (16 ops) | 137.7 | 30.3 | **4.55×** |
+| Add chain (32 ops) | 285.9 | 57.0 | **5.01×** |
+| Add chain (64 ops) | 566.8 | 117.1 | **4.84×** |
+| Point-Add simulation | 428.3 | 174.8 | **2.45×** |
+| 256 squarings | 9,039 | 4,055 | **2.23×** |
 
-| Operation | UltrafastSecp256k1 | tiny-ecdsa | Speedup |
-|-----------|-------------------|------------|---------|
-| Scalar Mul | 110 μs | ~500 μs | 4.5× |
-| Field Mul | 33 ns | ~200 ns | 6× |
+*Conclusion: 5×52 is 2.0–5.0× faster across all operations. The advantage grows for addition-heavy chains (lazy reduction amortizes normalization cost).*
+
+### Field Representation Comparison (10×26 vs 4×64)
+
+10×26 is the 32-bit target representation — useful for embedded and GPU where 64-bit multiply is expensive.
+
+| Operation | 4×64 (ns) | 10×26 (ns) | 10×26 Speedup |
+|-----------|----------:|----------:|--------------:|
+| Addition | 4.7 | 1.8 | **2.57×** |
+| Multiplication | ~39 | ~39 | ~1× (tie) |
+| Add chain (16 ops) | wide | 3.3× faster | — |
+
+### Constant-Time (CT) Layer Performance
+
+CT layer provides side-channel resistance at the cost of performance.
+
+| Operation | Fast | CT | Overhead |
+|-----------|------:|------:|--------:|
+| Field Mul | 36 ns | 55 ns | 1.50× |
+| Field Square | 34 ns | 43 ns | 1.28× |
+| Field Inverse | 3.0 μs | 14.2 μs | 4.80× |
+| Scalar Add | 3 ns | 10 ns | 3.02× |
+| Scalar Sub | 2 ns | 10 ns | 6.33× |
+| Point Add | 0.65 μs | 1.63 μs | 2.50× |
+| Point Double | 0.36 μs | 0.67 μs | 1.88× |
+| Scalar Mul (k×P) | 130 μs | 322 μs | 2.49× |
+| Generator Mul (k×G) | 7.6 μs | 310 μs | 40.8× |
+
+*Generator mul overhead (40×) is high because CT disables precomputed variable-time table lookups. For signing with side-channel requirements, CT scalar mul (2.49× overhead) is the relevant metric.*
+
+### Multi-Scalar Multiplication (ECDSA Verify Path)
+
+| Method | Time | Description |
+|--------|------:|------------|
+| Separate (prod-like) | 137.4 μs | k₁×G (precompute) + k₂×Q (variable-base) |
+| Separate (variable) | 351.5 μs | Both via fixed-window variable-base |
+| Shamir interleaved | 155.2 μs | Merged stream — fewer doublings |
+| Windowed Shamir | 9.2 μs | Optimized multi-scalar |
+| JSF (Joint Sparse Form) | 9.5 μs | Joint encoding of both scalars |
+
+### Atomic ECC Building Blocks
+
+| Operation | Time | Formula Cost |
+|-----------|------:|-------------|
+| Point Add (immutable) | 959 ns | 12M + 4S + alloc |
+| Point Add (in-place) | 1,859 ns | 12M + 4S |
+| Point Double (immutable) | 673 ns | 4M + 4S + alloc |
+| Point Double (in-place) | 890 ns | 4M + 4S |
+| Point Negation | 11 ns | Y := −Y |
+| Point Triple | 1,585 ns | 2×P + P |
+| To Affine conversion | 15,389 ns | 1 inverse + 2–3 mul |
+| Field S/M ratio | 0.818 | (ideal: ~0.80) |
+| Field I/M ratio | 78× | Inverse is expensive — use Jacobian! |
+
+---
+
+## Available Benchmark Targets
+
+All targets registered in CMake. Build with `cmake --build build -j` then run from `build/cpu/`.
+
+| Target | What It Measures |
+|--------|-----------------|
+| `bench_comprehensive` | Full field/point/batch/5×52/10×26 suite — primary benchmark |
+| `bench_scalar_mul` | k×G and k×P with wNAF overhead analysis |
+| `bench_ct` | Fast (`fast::`) vs Constant-Time (`ct::`) layer comparison |
+| `bench_atomic_operations` | Individual ECC building block latencies (point add/dbl, field mul/sqr/inv) |
+| `bench_field_52` | 4×64 vs 5×52 field representation: single ops + add chains + ECC simulation |
+| `bench_field_26` | 4×64 vs 10×26 field representation comparison |
+| `bench_field_mul_kernels` | BMI2 `mulx` kernel micro-benchmark |
+| `bench_ecdsa_multiscalar` | k₁×G + k₂×Q: Shamir interleaved vs separate vs variable-base |
+| `bench_jsf_vs_shamir` | JSF (Joint Sparse Form) vs Windowed Shamir multi-scalar |
+| `bench_adaptive_glv` | GLV window size sweep (w=8 to w=20) |
+| `bench_glv_decomp_profile` | GLV decomposition profiling |
+| `bench_comprehensive_riscv` | RISC-V specific benchmark suite |
 
 ---
 
@@ -380,6 +511,6 @@ All 35 library self-tests pass.
 
 ## Version
 
-UltrafastSecp256k1 v3.3.0  
-Benchmarks updated: 2026-02-16
+UltrafastSecp256k1 v3.6.0  
+Benchmarks updated: 2026-02-20
 

@@ -22,6 +22,7 @@ set(SOURCES
     startup_stm32f103ze.cpp
     syscalls.cpp
     ${LIB_SRC_DIR}/field.cpp
+    ${LIB_SRC_DIR}/field_26.cpp
     ${LIB_SRC_DIR}/scalar.cpp
     ${LIB_SRC_DIR}/point.cpp
     ${LIB_SRC_DIR}/glv.cpp
@@ -42,7 +43,9 @@ target_compile_definitions(${PROJECT_NAME}.elf PUBLIC
     SECP256K1_PLATFORM_STM32=1
     SECP256K1_NO_INT128=1
     SECP256K1_NO_ASM=1
+    SECP256K1_32BIT=1
     STM32F103xE
+    NDEBUG=1
 )
 
 # Compile flags: -O3 aggressively, no exceptions/RTTI (save Flash/RAM)

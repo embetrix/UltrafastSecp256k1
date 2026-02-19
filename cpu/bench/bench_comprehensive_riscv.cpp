@@ -23,6 +23,9 @@
 #include <functional>
 #include "secp256k1/fast.hpp"
 #include "secp256k1/selftest.hpp"
+#include "secp256k1/field_optimal.hpp"
+#include "secp256k1/ecdsa.hpp"
+#include "secp256k1/schnorr.hpp"
 
 using namespace secp256k1::fast;
 
@@ -167,18 +170,32 @@ std::vector<Scalar> generate_random_scalars(size_t count) {
     return result;
 }
 
+// Type alias for the optimal field element selected at compile time
+using OFE = secp256k1::fast::OptimalFieldElement;
+
+// Convert FieldElements to Optimal type for benchmarking what's actually used
+std::vector<OFE> to_optimal_fields(const std::vector<FieldElement>& fields) {
+    std::vector<OFE> result;
+    result.reserve(fields.size());
+    for (const auto& f : fields)
+        result.push_back(secp256k1::fast::to_optimal(f));
+    return result;
+}
+
 static void warmup_benchmark(const std::vector<FieldElement>& fields,
+                             const std::vector<OFE>& opt_fields,
                              const std::vector<Scalar>& scalars) {
     constexpr size_t kFieldWarmIters = 2048;
     constexpr size_t kPointWarmIters = 256;
     constexpr size_t kScalarWarmIters = 32;
 
-    FieldElement fe = fields[0];
+    // Warm up optimal field ops (what's actually used in point operations)
+    OFE ofe = opt_fields[0];
     for (size_t i = 0; i < kFieldWarmIters; ++i) {
-        const auto& other = fields[i % fields.size()];
-        fe = (fe * other).square();
-        fe = fe + other;
-        fe = fe - other;
+        const auto& other = opt_fields[i % opt_fields.size()];
+        ofe = (ofe * other).square();
+        ofe = ofe + other;
+        ofe = ofe + other.negate(1);
     }
     for (size_t i = 0; i < 8; ++i) {
         volatile auto inv = fields[i % fields.size()].inverse();
@@ -202,7 +219,7 @@ static void warmup_benchmark(const std::vector<FieldElement>& fields,
     }
     fe_batch_inverse(batch.data(), batch.size());
 
-    volatile auto prevent_opt = fe.limbs()[0] ^ P.x_raw().limbs()[0] ^ batch[0].limbs()[0];
+    volatile auto prevent_opt = secp256k1::fast::from_optimal(ofe).limbs()[0] ^ P.x_raw().limbs()[0] ^ batch[0].limbs()[0];
     (void)prevent_opt;
 }
 
@@ -233,102 +250,71 @@ double measure_with_warmup(Func&& func, int warmup_runs, int measure_runs) {
 }
 
 // ============================================================
-// FIELD OPERATION BENCHMARKS
+// FIELD OPERATION BENCHMARKS (uses OptimalFieldElement — what point ops actually use)
 // ============================================================
 
-double bench_field_mul(const std::vector<FieldElement>& elements, size_t iterations) {
-    FieldElement result = elements[0];
+double bench_field_mul(const std::vector<OFE>& elements, size_t iterations) {
+    OFE result = elements[0];
 
-    // Warmup
-    for (size_t i = 0; i < 1000; ++i) {
+    for (size_t i = 0; i < 1000; ++i)
         result = result * elements[i % elements.size()];
-    }
 
     auto start = std::chrono::high_resolution_clock::now();
-
-    for (size_t i = 0; i < iterations; ++i) {
-        size_t idx = i % elements.size();
-        result = result * elements[idx];
-    }
-
+    for (size_t i = 0; i < iterations; ++i)
+        result = result * elements[i % elements.size()];
     auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
 
-    volatile auto prevent_opt = result.limbs()[0];
+    volatile auto prevent_opt = secp256k1::fast::from_optimal(result).limbs()[0];
     (void)prevent_opt;
-
-    return static_cast<double>(duration.count()) / iterations;
+    return static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count()) / iterations;
 }
 
-double bench_field_square(const std::vector<FieldElement>& elements, size_t iterations) {
-    FieldElement result = elements[0];
+double bench_field_square(const std::vector<OFE>& elements, size_t iterations) {
+    OFE result = elements[0];
 
-    // Warmup
-    for (size_t i = 0; i < 1000; ++i) {
+    for (size_t i = 0; i < 1000; ++i)
         result = result.square();
-    }
 
     auto start = std::chrono::high_resolution_clock::now();
-
-    for (size_t i = 0; i < iterations; ++i) {
+    for (size_t i = 0; i < iterations; ++i)
         result = result.square();
-    }
-
     auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
 
-    volatile auto prevent_opt = result.limbs()[0];
+    volatile auto prevent_opt = secp256k1::fast::from_optimal(result).limbs()[0];
     (void)prevent_opt;
-
-    return static_cast<double>(duration.count()) / iterations;
+    return static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count()) / iterations;
 }
 
-double bench_field_add(const std::vector<FieldElement>& elements, size_t iterations) {
-    FieldElement result = elements[0];
+double bench_field_add(const std::vector<OFE>& elements, size_t iterations) {
+    OFE result = elements[0];
 
-    // Warmup
-    for (size_t i = 0; i < 1000; ++i) {
+    for (size_t i = 0; i < 1000; ++i)
         result = result + elements[i % elements.size()];
-    }
 
     auto start = std::chrono::high_resolution_clock::now();
-
-    for (size_t i = 0; i < iterations; ++i) {
-        size_t idx = i % elements.size();
-        result = result + elements[idx];
-    }
-
+    for (size_t i = 0; i < iterations; ++i)
+        result = result + elements[i % elements.size()];
     auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
 
-    volatile auto prevent_opt = result.limbs()[0];
+    volatile auto prevent_opt = secp256k1::fast::from_optimal(result).limbs()[0];
     (void)prevent_opt;
-
-    return static_cast<double>(duration.count()) / iterations;
+    return static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count()) / iterations;
 }
 
-double bench_field_sub(const std::vector<FieldElement>& elements, size_t iterations) {
-    FieldElement result = elements[0];
+double bench_field_negate(const std::vector<OFE>& elements, size_t iterations) {
+    OFE result = elements[0];
 
-    // Warmup
-    for (size_t i = 0; i < 1000; ++i) {
-        result = result - elements[i % elements.size()];
-    }
+    for (size_t i = 0; i < 1000; ++i)
+        result = result.negate(1);
 
     auto start = std::chrono::high_resolution_clock::now();
-
-    for (size_t i = 0; i < iterations; ++i) {
-        size_t idx = i % elements.size();
-        result = result - elements[idx];
-    }
-
+    for (size_t i = 0; i < iterations; ++i)
+        result = result.negate(1);
     auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
 
-    volatile auto prevent_opt = result.limbs()[0];
+    volatile auto prevent_opt = secp256k1::fast::from_optimal(result).limbs()[0];
     (void)prevent_opt;
-
-    return static_cast<double>(duration.count()) / iterations;
+    return static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count()) / iterations;
 }
 
 double bench_field_inverse(const std::vector<FieldElement>& elements, size_t iterations) {
@@ -363,18 +349,21 @@ double bench_field_inverse(const std::vector<FieldElement>& elements, size_t ite
 double bench_point_add(size_t iterations) {
     Point G = Point::generator();
     Point P = G.scalar_mul(Scalar::from_uint64(7));
-    Point Q = G.scalar_mul(Scalar::from_uint64(11));
+    // Q is affine (z=1) — this is the common case: precomputed tables, loaded
+    // points, etc.  Mixed Jacobian+Affine addition is 7M+4S vs 12M+5S general.
+    Point Q_jac = G.scalar_mul(Scalar::from_uint64(11));
+    Point Q = Point::from_affine(Q_jac.x(), Q_jac.y());
     Point result = P;
 
     // Warmup
     for (size_t i = 0; i < 1000; ++i) {
-        result = result.add(Q);
+        result.add_inplace(Q);
     }
 
     auto start = std::chrono::high_resolution_clock::now();
 
     for (size_t i = 0; i < iterations; ++i) {
-        result = result.add(Q);
+        result.add_inplace(Q);
     }
 
     auto end = std::chrono::high_resolution_clock::now();
@@ -393,13 +382,13 @@ double bench_point_double(size_t iterations) {
 
     // Warmup
     for (size_t i = 0; i < 1000; ++i) {
-        result = result.dbl();
+        result.dbl_inplace();
     }
 
     auto start = std::chrono::high_resolution_clock::now();
 
     for (size_t i = 0; i < iterations; ++i) {
-        result = result.dbl();
+        result.dbl_inplace();
     }
 
     auto end = std::chrono::high_resolution_clock::now();
@@ -458,6 +447,86 @@ double bench_generator_mul(const std::vector<Scalar>& scalars, size_t iterations
     (void)prevent_opt;
 
     return static_cast<double>(duration.count()) / iterations;
+}
+
+// ============================================================
+// ECDSA & SCHNORR SIGNATURE BENCHMARKS
+// ============================================================
+
+double bench_ecdsa_sign(const std::vector<Scalar>& keys,
+                        const std::vector<std::array<uint8_t,32>>& msgs,
+                        size_t iterations) {
+    // Warmup
+    for (size_t i = 0; i < 10; ++i) {
+        volatile auto sig = secp256k1::ecdsa_sign(msgs[i % msgs.size()], keys[i % keys.size()]);
+        (void)sig;
+    }
+
+    auto start = std::chrono::high_resolution_clock::now();
+    for (size_t i = 0; i < iterations; ++i) {
+        volatile auto sig = secp256k1::ecdsa_sign(msgs[i % msgs.size()], keys[i % keys.size()]);
+        (void)sig;
+    }
+    auto end = std::chrono::high_resolution_clock::now();
+    return static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count()) / iterations;
+}
+
+double bench_ecdsa_verify(const std::vector<secp256k1::ECDSASignature>& sigs,
+                          const std::vector<std::array<uint8_t,32>>& msgs,
+                          const std::vector<Point>& pubkeys,
+                          size_t iterations) {
+    // Warmup
+    for (size_t i = 0; i < 10; ++i) {
+        volatile bool ok = secp256k1::ecdsa_verify(msgs[i % msgs.size()], pubkeys[i % pubkeys.size()], sigs[i % sigs.size()]);
+        (void)ok;
+    }
+
+    auto start = std::chrono::high_resolution_clock::now();
+    for (size_t i = 0; i < iterations; ++i) {
+        volatile bool ok = secp256k1::ecdsa_verify(msgs[i % msgs.size()], pubkeys[i % pubkeys.size()], sigs[i % sigs.size()]);
+        (void)ok;
+    }
+    auto end = std::chrono::high_resolution_clock::now();
+    return static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count()) / iterations;
+}
+
+double bench_schnorr_sign(const std::vector<Scalar>& keys,
+                          const std::vector<std::array<uint8_t,32>>& msgs,
+                          size_t iterations) {
+    std::array<uint8_t,32> aux{}; // zero aux for deterministic bench
+
+    // Warmup
+    for (size_t i = 0; i < 10; ++i) {
+        volatile auto sig = secp256k1::schnorr_sign(keys[i % keys.size()], msgs[i % msgs.size()], aux);
+        (void)sig;
+    }
+
+    auto start = std::chrono::high_resolution_clock::now();
+    for (size_t i = 0; i < iterations; ++i) {
+        volatile auto sig = secp256k1::schnorr_sign(keys[i % keys.size()], msgs[i % msgs.size()], aux);
+        (void)sig;
+    }
+    auto end = std::chrono::high_resolution_clock::now();
+    return static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count()) / iterations;
+}
+
+double bench_schnorr_verify(const std::vector<secp256k1::SchnorrSignature>& sigs,
+                            const std::vector<std::array<uint8_t,32>>& msgs,
+                            const std::vector<std::array<uint8_t,32>>& xonly_pks,
+                            size_t iterations) {
+    // Warmup
+    for (size_t i = 0; i < 10; ++i) {
+        volatile bool ok = secp256k1::schnorr_verify(xonly_pks[i % xonly_pks.size()], msgs[i % msgs.size()], sigs[i % sigs.size()]);
+        (void)ok;
+    }
+
+    auto start = std::chrono::high_resolution_clock::now();
+    for (size_t i = 0; i < iterations; ++i) {
+        volatile bool ok = secp256k1::schnorr_verify(xonly_pks[i % xonly_pks.size()], msgs[i % msgs.size()], sigs[i % sigs.size()]);
+        (void)ok;
+    }
+    auto end = std::chrono::high_resolution_clock::now();
+    return static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count()) / iterations;
 }
 
 // ============================================================
@@ -528,10 +597,11 @@ int main()
     std::cout << "Generating test data...\n";
     auto fields = generate_random_fields(field_count);
     auto scalars = generate_random_scalars(scalar_count);
+    auto opt_fields = to_optimal_fields(fields);
     std::cout << "Test data ready.\n\n";
 
     std::cout << "Warming up benchmark...\n";
-    warmup_benchmark(fields, scalars);
+    warmup_benchmark(fields, opt_fields, scalars);
     std::cout << "Warm-up done.\n\n";
 
     constexpr int kBenchWarmupRuns = 1;
@@ -549,13 +619,13 @@ int main()
 
     // ========== FIELD OPERATIONS ==========
     std::cout << "==============================================\n";
-    std::cout << "  FIELD ARITHMETIC OPERATIONS\n";
+    std::cout << "  FIELD ARITHMETIC OPERATIONS (" << secp256k1::fast::kOptimalTierName << ")\n";
     std::cout << "==============================================\n";
 
     {
         const size_t iterations = 100000;
         double time = measure_with_warmup([&]() {
-            return bench_field_mul(fields, iterations);
+            return bench_field_mul(opt_fields, iterations);
         }, kBenchWarmupRuns, kBenchMeasureRuns);
         results.push_back({"Field Mul", time});
         std::cout << "Field Mul:       " << std::setw(10) << format_time(time) << "\n";
@@ -564,7 +634,7 @@ int main()
     {
         const size_t iterations = 100000;
         double time = measure_with_warmup([&]() {
-            return bench_field_square(fields, iterations);
+            return bench_field_square(opt_fields, iterations);
         }, kBenchWarmupRuns, kBenchMeasureRuns);
         results.push_back({"Field Square", time});
         std::cout << "Field Square:    " << std::setw(10) << format_time(time) << "\n";
@@ -573,7 +643,7 @@ int main()
     {
         const size_t iterations = 100000;
         double time = measure_with_warmup([&]() {
-            return bench_field_add(fields, iterations);
+            return bench_field_add(opt_fields, iterations);
         }, kBenchWarmupRuns, kBenchMeasureRuns);
         results.push_back({"Field Add", time});
         std::cout << "Field Add:       " << std::setw(10) << format_time(time) << "\n";
@@ -582,10 +652,10 @@ int main()
     {
         const size_t iterations = 100000;
         double time = measure_with_warmup([&]() {
-            return bench_field_sub(fields, iterations);
+            return bench_field_negate(opt_fields, iterations);
         }, kBenchWarmupRuns, kBenchMeasureRuns);
-        results.push_back({"Field Sub", time});
-        std::cout << "Field Sub:       " << std::setw(10) << format_time(time) << "\n";
+        results.push_back({"Field Negate", time});
+        std::cout << "Field Negate:    " << std::setw(10) << format_time(time) << "\n";
     }
 
     {
@@ -642,6 +712,86 @@ int main()
 
     std::cout << "\n";
 
+    // ========== ECDSA & SCHNORR ==========
+    std::cout << "==============================================\n";
+    std::cout << "  ECDSA & SCHNORR SIGNATURES\n";
+    std::cout << "==============================================\n";
+
+    // Pre-generate signature test data
+    const size_t sig_count = 64;
+    std::vector<std::array<uint8_t,32>> msg_hashes(sig_count);
+    std::vector<Scalar> sign_keys(sig_count);
+    std::vector<Point> sign_pubkeys(sig_count);
+    std::vector<secp256k1::ECDSASignature> ecdsa_sigs(sig_count);
+    std::vector<secp256k1::SchnorrSignature> schnorr_sigs(sig_count);
+    std::vector<std::array<uint8_t,32>> xonly_pks(sig_count);
+
+    {
+        std::random_device rd;
+        std::mt19937_64 gen(rd());
+        std::uniform_int_distribution<uint64_t> dist;
+        Point G = Point::generator();
+        std::array<uint8_t,32> aux{};
+
+        for (size_t i = 0; i < sig_count; ++i) {
+            // random message hash
+            for (size_t j = 0; j < 32; j += 8) {
+                uint64_t v = dist(gen);
+                std::memcpy(&msg_hashes[i][j], &v, std::min(size_t(8), 32 - j));
+            }
+            // random private key
+            std::array<uint8_t,32> kb;
+            for (size_t j = 0; j < 32; j += 8) {
+                uint64_t v = dist(gen);
+                std::memcpy(&kb[j], &v, std::min(size_t(8), 32 - j));
+            }
+            sign_keys[i] = Scalar::from_bytes(kb);
+            sign_pubkeys[i] = G.scalar_mul(sign_keys[i]);
+            ecdsa_sigs[i] = secp256k1::ecdsa_sign(msg_hashes[i], sign_keys[i]);
+            schnorr_sigs[i] = secp256k1::schnorr_sign(sign_keys[i], msg_hashes[i], aux);
+            xonly_pks[i] = secp256k1::schnorr_pubkey(sign_keys[i]);
+        }
+        std::cout << "Prepared " << sig_count << " key/message/signature tuples.\n";
+    }
+
+    {
+        const size_t iterations = 100;
+        double time = measure_with_warmup([&]() {
+            return bench_ecdsa_sign(sign_keys, msg_hashes, iterations);
+        }, kBenchWarmupRuns, kBenchMeasureRuns);
+        results.push_back({"ECDSA Sign", time});
+        std::cout << "ECDSA Sign:      " << std::setw(10) << format_time(time) << "\n";
+    }
+
+    {
+        const size_t iterations = 100;
+        double time = measure_with_warmup([&]() {
+            return bench_ecdsa_verify(ecdsa_sigs, msg_hashes, sign_pubkeys, iterations);
+        }, kBenchWarmupRuns, kBenchMeasureRuns);
+        results.push_back({"ECDSA Verify", time});
+        std::cout << "ECDSA Verify:    " << std::setw(10) << format_time(time) << "\n";
+    }
+
+    {
+        const size_t iterations = 100;
+        double time = measure_with_warmup([&]() {
+            return bench_schnorr_sign(sign_keys, msg_hashes, iterations);
+        }, kBenchWarmupRuns, kBenchMeasureRuns);
+        results.push_back({"Schnorr Sign", time});
+        std::cout << "Schnorr Sign:    " << std::setw(10) << format_time(time) << "\n";
+    }
+
+    {
+        const size_t iterations = 100;
+        double time = measure_with_warmup([&]() {
+            return bench_schnorr_verify(schnorr_sigs, msg_hashes, xonly_pks, iterations);
+        }, kBenchWarmupRuns, kBenchMeasureRuns);
+        results.push_back({"Schnorr Verify", time});
+        std::cout << "Schnorr Verify:  " << std::setw(10) << format_time(time) << "\n";
+    }
+
+    std::cout << "\n";
+
     // ========== BATCH OPERATIONS ==========
     std::cout << "==============================================\n";
     std::cout << "  BATCH OPERATIONS\n";
@@ -666,8 +816,10 @@ int main()
     }
 
     std::cout << "\n";
+
     std::cout << "==============================================\n";
     std::cout << "  Benchmark Complete\n";
+    std::cout << "  Field Tier: " << secp256k1::fast::kOptimalTierName << "\n";
     std::cout << "==============================================\n";
 
     // Generate summary table for README

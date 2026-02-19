@@ -1,5 +1,6 @@
 #include "secp256k1/ecdsa.hpp"
 #include "secp256k1/sha256.hpp"
+#include "secp256k1/multiscalar.hpp"
 #include <cstring>
 
 namespace secp256k1 {
@@ -252,10 +253,9 @@ bool ecdsa_verify(const std::array<uint8_t, 32>& msg_hash,
     // u2 = r * w mod n
     auto u2 = sig.r * w;
 
-    // R' = u1 * G + u2 * Q
-    auto P1 = Point::generator().scalar_mul(u1);
-    auto P2 = public_key.scalar_mul(u2);
-    auto R_prime = P1.add(P2);
+    // R' = u1 * G + u2 * Q  (Shamir's trick — single pass, ~1.5× faster)
+    auto G = Point::generator();
+    auto R_prime = shamir_trick(u1, G, u2, public_key);
 
     if (R_prime.is_infinity()) return false;
 

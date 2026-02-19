@@ -1,6 +1,6 @@
 # UltrafastSecp256k1 Documentation
 
-> **Version 3.0.0** — Cross-platform secp256k1 ECC library
+> **Version 3.3.0** — Cross-platform secp256k1 ECC library
 
 ---
 
@@ -13,6 +13,15 @@
 | [Benchmarks](BENCHMARKS.md) | Performance data: CPU, GPU, embedded, mobile |
 | [ESP32 Setup](ESP32_SETUP.md) | ESP32-S3/PICO-D4 flashing & testing guide |
 | [RISC-V Optimizations](../RISCV_OPTIMIZATIONS.md) | RISC-V assembly & RVV details |
+
+## Adoption & Integration
+
+| Document | Description |
+|----------|-------------|
+| [Integration Guide](adoption/INTEGRATION.md) | CMake FetchContent, add_subdirectory, vcpkg, migration from libsecp256k1 |
+| [API Stability](adoption/API_STABILITY.md) | Header stability tiers: Stable / Provisional / Experimental |
+| [Backend Guide](adoption/BACKENDS.md) | CPU, CUDA, ROCm, OpenCL, Metal, WASM, Android matrix |
+| [libsecp256k1 Shim](../compat/libsecp256k1_shim/README.md) | Drop-in C API compatibility layer |
 
 ## External Docs
 

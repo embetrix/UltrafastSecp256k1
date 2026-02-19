@@ -13,6 +13,8 @@
 
 // Include real secp256k1 library
 #include "secp256k1/field.hpp"
+#include "secp256k1/field_26.hpp"
+#include "secp256k1/field_optimal.hpp"
 #include "secp256k1/scalar.hpp"
 #include "secp256k1/point.hpp"
 #include "secp256k1/selftest.hpp"
@@ -389,10 +391,208 @@ extern "C" void app_main() {
         }
     }
 
+    // ═══════════════════════════════════════════════════════════════════
+    // 10×26 Field Element Benchmark (Lazy-Reduction for 32-bit)
+    // ═══════════════════════════════════════════════════════════════════
+    printf("\n");
+    printf("==============================================\n");
+    printf("  10x26 Field Element Benchmark\n");
+    printf("  (Lazy-Reduction for 32-bit Platforms)\n");
+    printf("==============================================\n");
+
+    // ── Correctness ──
+    {
+        FieldElement fe_x = FieldElement::from_limbs({0xDEADBEEF12345678ULL, 0xCAFEBABE87654321ULL, 0x1122334455667788ULL, 0x99AABBCCDDEEFF00ULL});
+        FieldElement fe_y = FieldElement::from_limbs({0xFEDCBA9876543210ULL, 0x0123456789ABCDEFULL, 0xAABBCCDDEEFF0011ULL, 0x2233445566778899ULL});
+
+        FieldElement26 f26_x = FieldElement26::from_fe(fe_x);
+        FieldElement26 f26_y = FieldElement26::from_fe(fe_y);
+
+        // Mul correctness
+        FieldElement mul64 = fe_x * fe_y;
+        FieldElement26 mul26 = f26_x * f26_y;
+        FieldElement mul26_back = mul26.to_fe();
+        printf("  10x26 mul OK: %s\n", (mul26_back == mul64) ? "PASS" : "FAIL");
+
+        // Sqr correctness
+        FieldElement sqr64 = fe_x.square();
+        FieldElement26 sqr26 = f26_x.square();
+        FieldElement sqr26_back = sqr26.to_fe();
+        printf("  10x26 sqr OK: %s\n", (sqr26_back == sqr64) ? "PASS" : "FAIL");
+
+        // Add correctness (lazy + normalize)
+        FieldElement add64 = fe_x + fe_y;
+        FieldElement26 add26 = f26_x + f26_y;
+        add26.normalize();
+        FieldElement add26_back = add26.to_fe();
+        printf("  10x26 add OK: %s\n", (add26_back == add64) ? "PASS" : "FAIL");
+
+        // Roundtrip
+        FieldElement rt = f26_x.to_fe();
+        printf("  10x26 roundtrip: %s\n", (rt == fe_x) ? "PASS" : "FAIL");
+    }
+
+    // ── Benchmarks ──
+    {
+        FieldElement fe_a_ref = FieldElement::from_limbs({0x12345678, 0xABCDEF01, 0x11223344, 0x55667788});
+        FieldElement fe_b_ref = FieldElement::from_limbs({0x87654321, 0xFEDCBA98, 0x99AABBCC, 0xDDEEFF00});
+        FieldElement26 fa26 = FieldElement26::from_fe(fe_a_ref);
+        FieldElement26 fb26 = FieldElement26::from_fe(fe_b_ref);
+
+        // 10x26 Multiplication
+        {
+            int64_t start = esp_timer_get_time();
+            FieldElement26 result = fa26;
+            for (int i = 0; i < iterations; i++) {
+                result = result * fb26;
+            }
+            int64_t elapsed = esp_timer_get_time() - start;
+            printf("  10x26 Mul:    %5lld ns/op\n", (elapsed * 1000) / iterations);
+            if (result.n[0] == 0xDEAD) printf("!");
+        }
+
+        // 10x26 Squaring
+        {
+            int64_t start = esp_timer_get_time();
+            FieldElement26 result = fa26;
+            for (int i = 0; i < iterations; i++) {
+                result.square_inplace();
+            }
+            int64_t elapsed = esp_timer_get_time() - start;
+            printf("  10x26 Square: %5lld ns/op\n", (elapsed * 1000) / iterations);
+            if (result.n[0] == 0xDEAD) printf("!");
+        }
+
+        // 10x26 Addition (lazy, no normalization per add!)
+        {
+            int64_t start = esp_timer_get_time();
+            FieldElement26 result = fa26;
+            for (int i = 0; i < iterations; i++) {
+                result.add_assign(fb26);
+            }
+            result.normalize_weak();
+            int64_t elapsed = esp_timer_get_time() - start;
+            printf("  10x26 Add:    %5lld ns/op  (LAZY! no carry per-add)\n", (elapsed * 1000) / iterations);
+            if (result.n[0] == 0xDEAD) printf("!");
+        }
+
+        // 10x26 Negation
+        {
+            int64_t start = esp_timer_get_time();
+            FieldElement26 result = fa26;
+            for (int i = 0; i < iterations; i++) {
+                result = result.negate(1);
+            }
+            int64_t elapsed = esp_timer_get_time() - start;
+            printf("  10x26 Neg:    %5lld ns/op\n", (elapsed * 1000) / iterations);
+            if (result.n[0] == 0xDEAD) printf("!");
+        }
+
+        // 10x26 Half
+        {
+            int64_t start = esp_timer_get_time();
+            FieldElement26 result = fa26;
+            for (int i = 0; i < iterations; i++) {
+                result = result.half();
+            }
+            int64_t elapsed = esp_timer_get_time() - start;
+            printf("  10x26 Half:   %5lld ns/op\n", (elapsed * 1000) / iterations);
+            if (result.n[0] == 0xDEAD) printf("!");
+        }
+
+        // 10x26 Add chains (lazy reduction advantage!)
+        printf("\n  --- Lazy Add Chains ---\n");
+        for (int chain : {4, 8, 16, 32, 64}) {
+            int reps = 500;
+            int64_t start = esp_timer_get_time();
+            for (int r = 0; r < reps; r++) {
+                FieldElement26 acc = fa26;
+                for (int i = 0; i < chain; i++) acc.add_assign(fb26);
+                acc.normalize_weak();
+                if (acc.n[0] == 0xDEAD) printf("!");
+            }
+            int64_t elapsed = esp_timer_get_time() - start;
+            printf("  10x26 %2d adds+norm: %5lld ns/chain\n", chain, (elapsed * 1000) / reps);
+        }
+
+        // Comparison table
+        printf("\n  --- 4x64 vs 10x26 on ESP32 ---\n");
+        printf("  (4x64 uses emulated 64-bit math on 32-bit CPU)\n");
+        printf("  (10x26 uses native 32x32->64 multiplies)\n");
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Optimal Field Element (compile-time dispatch)
+    // ═══════════════════════════════════════════════════════════════════
+    printf("\n");
+    printf("==============================================\n");
+    printf("  Optimal Field Element (Auto-Dispatch)\n");
+    printf("  Selected: %s\n", secp256k1::fast::kOptimalTierName);
+    printf("==============================================\n");
+
+    {
+        using OFE = secp256k1::fast::OptimalFieldElement;
+        FieldElement fe_a_ref = FieldElement::from_limbs({0x12345678, 0xABCDEF01, 0x11223344, 0x55667788});
+        FieldElement fe_b_ref = FieldElement::from_limbs({0x87654321, 0xFEDCBA98, 0x99AABBCC, 0xDDEEFF00});
+        OFE oa = secp256k1::fast::to_optimal(fe_a_ref);
+        OFE ob = secp256k1::fast::to_optimal(fe_b_ref);
+
+        // Correctness
+        OFE ofe_mul = oa * ob;
+        FieldElement rt_mul = secp256k1::fast::from_optimal(ofe_mul);
+        FieldElement ref_mul = fe_a_ref * fe_b_ref;
+        printf("  Optimal Mul OK: %s\n", (rt_mul == ref_mul) ? "PASS" : "FAIL");
+
+        OFE ofe_sqr = oa.square();
+        FieldElement rt_sqr = secp256k1::fast::from_optimal(ofe_sqr);
+        FieldElement ref_sqr = fe_a_ref.square();
+        printf("  Optimal Sqr OK: %s\n", (rt_sqr == ref_sqr) ? "PASS" : "FAIL");
+
+        // Benchmark Optimal Mul
+        {
+            int64_t start = esp_timer_get_time();
+            OFE result = oa;
+            for (int i = 0; i < iterations; i++) {
+                result = result * ob;
+            }
+            int64_t elapsed = esp_timer_get_time() - start;
+            printf("  Optimal Mul:    %5lld ns/op\n", (elapsed * 1000) / iterations);
+            volatile auto sink = result;
+            (void)sink;
+        }
+
+        // Benchmark Optimal Sqr
+        {
+            int64_t start = esp_timer_get_time();
+            OFE result = oa;
+            for (int i = 0; i < iterations; i++) {
+                result = result.square();
+            }
+            int64_t elapsed = esp_timer_get_time() - start;
+            printf("  Optimal Sqr:    %5lld ns/op\n", (elapsed * 1000) / iterations);
+            volatile auto sink = result;
+            (void)sink;
+        }
+
+        // Benchmark Optimal Add
+        {
+            int64_t start = esp_timer_get_time();
+            OFE result = oa;
+            for (int i = 0; i < iterations; i++) {
+                result = result + ob;
+            }
+            int64_t elapsed = esp_timer_get_time() - start;
+            printf("  Optimal Add:    %5lld ns/op\n", (elapsed * 1000) / iterations);
+            volatile auto sink = result;
+            (void)sink;
+        }
+    }
+
     printf("\n");
     printf("============================================================\n");
     printf("   UltrafastSecp256k1 on ESP32 - Test Complete\n");
     printf("   CT Tests: %d/%d PASS\n", ct_pass, ct_pass + ct_fail);
+    printf("   Optimal Tier: %s\n", secp256k1::fast::kOptimalTierName);
     printf("============================================================\n");
 
     while (1) {

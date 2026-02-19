@@ -494,24 +494,12 @@ WIFDecodeResult wif_decode(const std::string& wif) {
 // Helper: lift_x with even y (try-and-increment)
 static Point lift_x_even(const FieldElement& x_in) {
     FieldElement x = x_in;
-    auto exp = FieldElement::from_hex(
-        "3fffffffffffffffffffffffffffffffffffffffffffffffffffffffbfffff0c");
     for (int attempt = 0; attempt < 256; ++attempt) {
         FieldElement x2 = x * x;
         FieldElement x3 = x2 * x;
         FieldElement rhs = x3 + FieldElement::from_uint64(7);
-        // sqrt via exp: y = rhs^((p+1)/4), p ≡ 3 (mod 4)
-        auto y = FieldElement::one();
-        auto base = rhs;
-        auto exp_bytes = exp.to_bytes();
-        for (int i = 0; i < 256; ++i) {
-            y = y.square();
-            int byte_idx = i / 8;
-            int bit_idx = 7 - (i % 8);
-            if ((exp_bytes[byte_idx] >> bit_idx) & 1) {
-                y = y * base;
-            }
-        }
+        // Optimized sqrt via addition chain
+        auto y = rhs.sqrt();
         if (y.square() == rhs) {
             auto y_bytes = y.to_bytes();
             if (y_bytes[31] & 1) y = FieldElement::zero() - y;

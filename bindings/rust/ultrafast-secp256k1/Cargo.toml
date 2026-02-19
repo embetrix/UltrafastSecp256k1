@@ -1,0 +1,12 @@
+[package]
+name = "ultrafast-secp256k1"
+version = "1.0.0"
+edition = "2021"
+license = "MIT"
+description = "Safe Rust bindings to UltrafastSecp256k1 — high-performance secp256k1 elliptic curve library"
+repository = "https://github.com/UltrafastSecp256k1/UltrafastSecp256k1"
+categories = ["cryptography"]
+keywords = ["secp256k1", "ecdsa", "schnorr", "bitcoin", "cryptography"]
+
+[dependencies]
+ultrafast-secp256k1-sys = { path = "../ultrafast-secp256k1-sys" }

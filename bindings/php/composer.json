@@ -1,0 +1,24 @@
+{
+    "name": "ultrafast/secp256k1",
+    "description": "PHP bindings for UltrafastSecp256k1 — high-performance secp256k1 elliptic curve library",
+    "version": "1.0.0",
+    "type": "library",
+    "license": "MIT",
+    "require": {
+        "php": ">=8.1",
+        "ext-ffi": "*"
+    },
+    "autoload": {
+        "psr-4": {
+            "Ultrafast\\Secp256k1\\": "src/"
+        }
+    },
+    "keywords": [
+        "secp256k1",
+        "ecdsa",
+        "schnorr",
+        "bitcoin",
+        "cryptography",
+        "elliptic-curve"
+    ]
+}

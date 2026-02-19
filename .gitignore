@@ -86,8 +86,28 @@ docs/.buildinfo
 *_out.txt
 stm32_output.txt
 
+# Benchmark output files (machine-specific)
+benchmark-*.txt
+
 # Binary cache
 cache_w*.bin
 
 # ESP32 SDK config (machine-specific)
 examples/esp32_test/sdkconfig
+
+# Android Gradle cache
+android/example/.gradle/
+
+# Bindings build artifacts
+bindings/c_api/build/
+bindings/rust/*/target/
+bindings/dart/.dart_tool/
+bindings/nodejs/node_modules/
+bindings/ruby/*.gem
+bindings/csharp/**/bin/
+bindings/csharp/**/obj/
+test_errors.txt
+test_f52.txt
+test_f52_err.txt
+test_output.txt
+benchmark-*.txt

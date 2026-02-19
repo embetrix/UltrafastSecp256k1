@@ -2313,6 +2313,292 @@ FieldElement FieldElement::from_hex(const std::string& hex) {
     return from_bytes(bytes);
 }
 
+// ============================================================================
+// SafeGCD modular inverse — Bernstein-Yang divsteps algorithm
+// Variable-time version.  ~3× faster than binary EEA for secp256k1.
+// Ref: "Fast constant-time gcd computation and modular inversion" (2019)
+// Requires __int128 for the 128-bit accumulation in update_fg / update_de.
+// ============================================================================
+#if defined(__SIZEOF_INT128__)
+namespace {
+
+// Signed 62-bit limb representation: value = Σ v[i]·2^(62·i)
+struct SafeGCD_Int { int64_t v[5]; };
+
+// 2×2 transition matrix from batched divstep iterations
+struct SafeGCD_Trans { int64_t u, v, q, r; };
+
+// secp256k1 prime in signed-62 form:
+//   p = 2^256 − 2^32 − 977  =  (−0x1000003D1) + 256·2^248
+static constexpr SafeGCD_Int SAFEGCD_P = {{
+    -(int64_t)0x1000003D1LL, 0, 0, 0, 256
+}};
+
+// (−p)^{−1} mod 2^62  — needed for exact division in update_de
+static constexpr uint64_t SAFEGCD_P_INV62 = 0x27C7F6E22DDACACFULL;
+
+// Variable-time trailing zero count
+static inline int safegcd_ctz64(uint64_t x) {
+#if defined(__GNUC__) || defined(__clang__)
+    return __builtin_ctzll(x);
+#elif defined(_MSC_VER)
+    unsigned long idx;
+    _BitScanForward64(&idx, x);
+    return (int)idx;
+#else
+    int c = 0; while (!(x & 1)) { x >>= 1; ++c; } return c;
+#endif
+}
+
+// FieldElement (4×64 LE) → SafeGCD (5×62 signed)
+static SafeGCD_Int fe_to_s62(const FieldElement& fe) {
+    const auto& d = fe.limbs();
+    constexpr uint64_t M = (1ULL << 62) - 1;
+    return {{
+        (int64_t)(d[0] & M),
+        (int64_t)(((d[0] >> 62) | (d[1] << 2)) & M),
+        (int64_t)(((d[1] >> 60) | (d[2] << 4)) & M),
+        (int64_t)(((d[2] >> 58) | (d[3] << 6)) & M),
+        (int64_t)(d[3] >> 56)
+    }};
+}
+
+// SafeGCD (5×62, normalized non-negative) → FieldElement
+static FieldElement s62_to_fe(const SafeGCD_Int& s) {
+    return FieldElement::from_limbs({
+        (uint64_t)s.v[0] | ((uint64_t)s.v[1] << 62),
+        ((uint64_t)s.v[1] >> 2)  | ((uint64_t)s.v[2] << 60),
+        ((uint64_t)s.v[2] >> 4)  | ((uint64_t)s.v[3] << 58),
+        ((uint64_t)s.v[3] >> 6)  | ((uint64_t)s.v[4] << 56)
+    });
+}
+
+// ── Batch 62 variable-time divsteps (ctz-accelerated) ──
+// Invariant: f is always odd.
+// Matrix semantics:  f_new = (u·f0 + v·g0) / 2^62
+//                    g_new = (q·f0 + r·g0) / 2^62
+static int64_t safegcd_divsteps_62_var(int64_t delta, uint64_t f0, uint64_t g0,
+                                        SafeGCD_Trans& t) {
+    uint64_t u = 1, v = 0, q = 0, r = 1;
+    uint64_t f = f0, g = g0;
+    int i = 62;
+
+    for (;;) {
+        // Skip zero-bits of g in bulk (each = one "g is even" divstep)
+        int zeros = safegcd_ctz64(g | ((uint64_t)1 << i));
+        g >>= zeros;
+        u <<= zeros;
+        v <<= zeros;
+        delta += zeros;
+        i -= zeros;
+        if (i == 0) break;
+
+        // g is odd, f is odd.  Check δ for swap decision.
+        if (delta > 0) {
+            // Swap-case:  δ → 1−δ  (set to −δ now, +1 after the shift below)
+            delta = -delta;
+            uint64_t tmp;
+            tmp = f; f = g; g = (uint64_t)(-(int64_t)tmp);
+            tmp = u; u = q; q = (uint64_t)(-(int64_t)tmp);
+            tmp = v; v = r; r = (uint64_t)(-(int64_t)tmp);
+        }
+        // g += f  →  g becomes even  (odd + odd = even)
+        g += f;  q += u;  r += v;
+        // One shift iteration
+        g >>= 1;  u <<= 1;  v <<= 1;
+        ++delta;  --i;
+        if (i == 0) break;
+    }
+
+    t.u = (int64_t)u;  t.v = (int64_t)v;
+    t.q = (int64_t)q;  t.r = (int64_t)r;
+    return delta;
+}
+
+// ── Apply transition matrix to full-precision (f, g) ──
+// f' = (u·f + v·g) / 2^62,  g' = (q·f + r·g) / 2^62   (exact)
+static void safegcd_update_fg(SafeGCD_Int& f, SafeGCD_Int& g,
+                               const SafeGCD_Trans& t, int len) {
+    const int64_t M62 = (int64_t)((uint64_t)(-1) >> 2);
+    __int128 cf, cg;
+
+    cf = (__int128)t.u * f.v[0] + (__int128)t.v * g.v[0];
+    cg = (__int128)t.q * f.v[0] + (__int128)t.r * g.v[0];
+    cf >>= 62;                     // low 62 bits are zero (exact division)
+    cg >>= 62;
+
+    for (int i = 1; i < len; ++i) {
+        cf += (__int128)t.u * f.v[i] + (__int128)t.v * g.v[i];
+        cg += (__int128)t.q * f.v[i] + (__int128)t.r * g.v[i];
+        f.v[i - 1] = (int64_t)cf & M62;
+        g.v[i - 1] = (int64_t)cg & M62;
+        cf >>= 62;
+        cg >>= 62;
+    }
+    f.v[len - 1] = (int64_t)cf;
+    g.v[len - 1] = (int64_t)cg;
+
+    for (int i = len; i < 5; ++i) { f.v[i] = 0; g.v[i] = 0; }
+}
+
+// ── Apply transition matrix to (d, e) mod p ──
+// Computes (t/2^62) · [d, e] mod p.  On input, d and e are in range (-2p, p).
+// secp256k1 optimization: p.v[1..3] = 0, so only limbs 0 and 4 contribute.
+// Ref: secp256k1_modinv64_update_de_62 in bitcoin-core/secp256k1.
+static void safegcd_update_de(SafeGCD_Int& d, SafeGCD_Int& e,
+                               const SafeGCD_Trans& t) {
+    const uint64_t M62 = UINT64_MAX >> 2;
+    const int64_t d0 = d.v[0], d1 = d.v[1], d2 = d.v[2], d3 = d.v[3], d4 = d.v[4];
+    const int64_t e0 = e.v[0], e1 = e.v[1], e2 = e.v[2], e3 = e.v[3], e4 = e.v[4];
+    const int64_t u = t.u, v = t.v, q = t.q, r = t.r;
+    int64_t md, me, sd, se;
+    __int128 cd, ce;
+
+    // Sign-extension correction: if d (or e) is negative, the implicit bits
+    // above limb 4 are all-ones.  Account for this by initializing md/me.
+    sd = d4 >> 63;
+    se = e4 >> 63;
+    md = (u & sd) + (v & se);
+    me = (q & sd) + (r & se);
+
+    // Begin computing t·[d,e]
+    cd = (__int128)u * d0 + (__int128)v * e0;
+    ce = (__int128)q * d0 + (__int128)r * e0;
+
+    // Correct md, me so that t·[d,e] + p·[md,me] has 62 zero bottom bits
+    md -= (int64_t)((SAFEGCD_P_INV62 * (uint64_t)cd + (uint64_t)md) & M62);
+    me -= (int64_t)((SAFEGCD_P_INV62 * (uint64_t)ce + (uint64_t)me) & M62);
+
+    // Limb 0: exact-division shift-out  (p.v[0] = −0x1000003D1)
+    cd += (__int128)SAFEGCD_P.v[0] * md;
+    ce += (__int128)SAFEGCD_P.v[0] * me;
+    cd >>= 62;       // bottom 62 bits are zero by construction
+    ce >>= 62;
+
+    // Limb 1  (p.v[1] = 0)
+    cd += (__int128)u * d1 + (__int128)v * e1;
+    ce += (__int128)q * d1 + (__int128)r * e1;
+    d.v[0] = (int64_t)((uint64_t)cd & M62);  cd >>= 62;
+    e.v[0] = (int64_t)((uint64_t)ce & M62);  ce >>= 62;
+
+    // Limb 2  (p.v[2] = 0)
+    cd += (__int128)u * d2 + (__int128)v * e2;
+    ce += (__int128)q * d2 + (__int128)r * e2;
+    d.v[1] = (int64_t)((uint64_t)cd & M62);  cd >>= 62;
+    e.v[1] = (int64_t)((uint64_t)ce & M62);  ce >>= 62;
+
+    // Limb 3  (p.v[3] = 0)
+    cd += (__int128)u * d3 + (__int128)v * e3;
+    ce += (__int128)q * d3 + (__int128)r * e3;
+    d.v[2] = (int64_t)((uint64_t)cd & M62);  cd >>= 62;
+    e.v[2] = (int64_t)((uint64_t)ce & M62);  ce >>= 62;
+
+    // Limb 4  (p.v[4] = 256)
+    cd += (__int128)u * d4 + (__int128)v * e4 + (__int128)SAFEGCD_P.v[4] * md;
+    ce += (__int128)q * d4 + (__int128)r * e4 + (__int128)SAFEGCD_P.v[4] * me;
+    d.v[3] = (int64_t)((uint64_t)cd & M62);  cd >>= 62;
+    e.v[3] = (int64_t)((uint64_t)ce & M62);  ce >>= 62;
+
+    d.v[4] = (int64_t)cd;
+    e.v[4] = (int64_t)ce;
+}
+
+// ── Effective limb count reduction (with sign-extension propagation) ──
+// Ref: inline len reduction in secp256k1_modinv64_var.
+// Reduces len when top limbs of both f and g are 0 or -1.
+static void safegcd_reduce_len(int& len, SafeGCD_Int& f, SafeGCD_Int& g) {
+    int64_t fn = f.v[len - 1];
+    int64_t gn = g.v[len - 1];
+    // cond == 0 iff len >= 2 AND fn in {0,-1} AND gn in {0,-1}
+    int64_t cond = ((int64_t)len - 2) >> 63;
+    cond |= fn ^ (fn >> 63);
+    cond |= gn ^ (gn >> 63);
+    if (cond == 0) {
+        // Propagate sign bit of top limb into bit 62 of the limb below
+        f.v[len - 2] |= (uint64_t)fn << 62;
+        g.v[len - 2] |= (uint64_t)gn << 62;
+        --len;
+    }
+}
+
+// ── Normalize to [0, p):  conditional add + negate + carry + conditional add ──
+// Input:  r in range (-2p, p),  sign = top limb of f (negative if f = -1).
+// Ref: secp256k1_modinv64_normalize_62 in bitcoin-core/secp256k1.
+static void safegcd_normalize(SafeGCD_Int& r, int64_t f_sign) {
+    const int64_t M62 = (int64_t)(UINT64_MAX >> 2);
+    int64_t r0 = r.v[0], r1 = r.v[1], r2 = r.v[2], r3 = r.v[3], r4 = r.v[4];
+
+    // Step 1:  If r < 0, add p to bring from (-2p, p) into (-p, p).
+    int64_t cond_add = r4 >> 63;                    // -1 if negative, 0 if not
+    r0 += SAFEGCD_P.v[0] & cond_add;               // p.v[0] = -0x1000003D1
+    r4 += SAFEGCD_P.v[4] & cond_add;               // p.v[4] = 256  (p.v[1..3] = 0)
+
+    // Negate if f is negative (f_sign < 0)
+    int64_t cond_negate = f_sign >> 63;
+    r0 = (r0 ^ cond_negate) - cond_negate;
+    r1 = (r1 ^ cond_negate) - cond_negate;
+    r2 = (r2 ^ cond_negate) - cond_negate;
+    r3 = (r3 ^ cond_negate) - cond_negate;
+    r4 = (r4 ^ cond_negate) - cond_negate;
+
+    // Propagate carries to bring limbs back to (-2^62, 2^62)
+    r1 += r0 >> 62; r0 &= M62;
+    r2 += r1 >> 62; r1 &= M62;
+    r3 += r2 >> 62; r2 &= M62;
+    r4 += r3 >> 62; r3 &= M62;
+
+    // Step 2:  If still negative, add p again to bring to [0, p).
+    cond_add = r4 >> 63;
+    r0 += SAFEGCD_P.v[0] & cond_add;
+    r4 += SAFEGCD_P.v[4] & cond_add;
+
+    // Final carry propagation
+    r1 += r0 >> 62; r0 &= M62;
+    r2 += r1 >> 62; r1 &= M62;
+    r3 += r2 >> 62; r2 &= M62;
+    r4 += r3 >> 62; r3 &= M62;
+
+    r.v[0] = r0; r.v[1] = r1; r.v[2] = r2; r.v[3] = r3; r.v[4] = r4;
+}
+
+} // anonymous namespace (safegcd helpers)
+
+// ── SafeGCD inverse entry point ──
+static FieldElement fe_inverse_safegcd_impl(const FieldElement& x) {
+    SafeGCD_Int d = {{0, 0, 0, 0, 0}};     // d tracks: f = d·x (mod p)
+    SafeGCD_Int e = {{1, 0, 0, 0, 0}};     // e tracks: g = e·x (mod p)
+    SafeGCD_Int f = SAFEGCD_P;               // f = p
+    SafeGCD_Int g = fe_to_s62(x);            // g = x
+
+    int64_t delta = 1;
+    int len = 5;
+
+    // At most 12 × 62 = 744 divsteps  (> 590 bound for 256-bit primes)
+    for (int i = 0; i < 12; ++i) {
+        SafeGCD_Trans t;
+        delta = safegcd_divsteps_62_var(delta,
+                    (uint64_t)f.v[0], (uint64_t)g.v[0], t);
+
+        safegcd_update_de(d, e, t);
+        safegcd_update_fg(f, g, t, len);
+
+        // g == 0 → done (gcd found)
+        {
+            int64_t cond = 0;
+            for (int j = 0; j < len; ++j) cond |= g.v[j];
+            if (cond == 0) break;
+        }
+
+        // Reduce len when top limbs of f and g are 0 or -1
+        if (i < 11) safegcd_reduce_len(len, f, g);
+    }
+
+    // f = ±1 now.  Normalize d: negate if f<0, reduce into [0, p).
+    safegcd_normalize(d, f.v[len - 1]);
+    return s62_to_fe(d);
+}
+#endif // __SIZEOF_INT128__
+
 FieldElement FieldElement::operator+(const FieldElement& rhs) const {
     return FieldElement(add_impl(limbs_, rhs.limbs_), true);
 }
@@ -2338,7 +2624,11 @@ FieldElement FieldElement::inverse() const {
             throw std::runtime_error("Inverse of zero not defined");
         #endif
     }
-    return pow_p_minus_2_hybrid_eea(*this);
+    #if defined(__SIZEOF_INT128__)
+    return fe_inverse_safegcd_impl(*this);
+    #else
+    return pow_p_minus_2_binary(*this); // Fallback: a^(p-2) mod p
+    #endif
 }
 
 FieldElement& FieldElement::operator+=(const FieldElement& rhs) {
@@ -2370,7 +2660,85 @@ void FieldElement::inverse_inplace() {
             throw std::runtime_error("Inverse of zero not defined");
         #endif
     }
-    *this = pow_p_minus_2_eea(*this);
+    #if defined(__SIZEOF_INT128__)
+    *this = fe_inverse_safegcd_impl(*this);
+    #else
+    *this = pow_p_minus_2_binary(*this); // Fallback: a^(p-2) mod p
+    #endif
+}
+
+// ── Optimized square root: a^((p+1)/4) mod p ────────────────────────────────
+// Uses an addition chain building 2^n-1 blocks: {2, 22, 223}
+// then assembles (p+1)/4 via sliding window.
+// Total cost: ~255 squarings + 13 multiplications.
+// Direct port of bitcoin-core/secp256k1 secp256k1_fe_sqrt.
+FieldElement FieldElement::sqrt() const {
+    FieldElement x2, x3, x6, x9, x11, x22, x44, x88, x176, x220, x223, t1;
+
+    // x2 = a^(2^2-1)
+    x2 = this->square();
+    x2 = x2 * *this;
+
+    // x3 = a^(2^3-1)
+    x3 = x2.square();
+    x3 = x3 * *this;
+
+    // x6 = a^(2^6-1)
+    x6 = x3;
+    for (int j = 0; j < 3; ++j) x6.square_inplace();
+    x6 = x6 * x3;
+
+    // x9 = a^(2^9-1)
+    x9 = x6;
+    for (int j = 0; j < 3; ++j) x9.square_inplace();
+    x9 = x9 * x3;
+
+    // x11 = a^(2^11-1)
+    x11 = x9;
+    for (int j = 0; j < 2; ++j) x11.square_inplace();
+    x11 = x11 * x2;
+
+    // x22 = a^(2^22-1)
+    x22 = x11;
+    for (int j = 0; j < 11; ++j) x22.square_inplace();
+    x22 = x22 * x11;
+
+    // x44 = a^(2^44-1)
+    x44 = x22;
+    for (int j = 0; j < 22; ++j) x44.square_inplace();
+    x44 = x44 * x22;
+
+    // x88 = a^(2^88-1)
+    x88 = x44;
+    for (int j = 0; j < 44; ++j) x88.square_inplace();
+    x88 = x88 * x44;
+
+    // x176 = a^(2^176-1)
+    x176 = x88;
+    for (int j = 0; j < 88; ++j) x176.square_inplace();
+    x176 = x176 * x88;
+
+    // x220 = a^(2^220-1)
+    x220 = x176;
+    for (int j = 0; j < 44; ++j) x220.square_inplace();
+    x220 = x220 * x44;
+
+    // x223 = a^(2^223-1)
+    x223 = x220;
+    for (int j = 0; j < 3; ++j) x223.square_inplace();
+    x223 = x223 * x3;
+
+    // Assemble (p+1)/4 using sliding window:
+    // (p+1)/4 = 2^254 - 2^30 - 2^4
+    t1 = x223;
+    for (int j = 0; j < 23; ++j) t1.square_inplace();
+    t1 = t1 * x22;
+    for (int j = 0; j < 6; ++j) t1.square_inplace();
+    t1 = t1 * x2;
+    t1.square_inplace();
+    t1.square_inplace();
+
+    return t1;
 }
 
 bool FieldElement::operator==(const FieldElement& rhs) const noexcept {
@@ -2399,6 +2767,14 @@ FieldElement fe_inverse_window_naf_v2(const FieldElement& value) {
 
 FieldElement fe_inverse_hybrid_eea(const FieldElement& value) {
     return pow_p_minus_2_hybrid_eea(value);
+}
+
+FieldElement fe_inverse_safegcd(const FieldElement& value) {
+    #if defined(__SIZEOF_INT128__)
+    return fe_inverse_safegcd_impl(value);
+    #else
+    return pow_p_minus_2_binary(value); // Fallback on 32-bit
+    #endif
 }
 
 FieldElement fe_inverse_yao(const FieldElement& value) {

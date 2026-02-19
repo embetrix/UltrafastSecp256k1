@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ufsecp"
+version = "3.4.0"
+description = "Python ctypes bindings for UltrafastSecp256k1 — high-performance secp256k1 ECC (ufsecp C ABI v1)"
+readme = "README.md"
+license = {text = "AGPL-3.0-only"}
+requires-python = ">=3.8"
+authors = [
+    {name = "UltrafastSecp256k1 Contributors"}
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: GNU Affero General Public License v3",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Security :: Cryptography",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+keywords = ["secp256k1", "ecdsa", "schnorr", "bitcoin", "cryptography", "ufsecp", "taproot", "bip32"]
+
+[project.urls]
+Homepage = "https://github.com/AvraSasmo/UltrafastSecp256k1"
+Repository = "https://github.com/AvraSasmo/UltrafastSecp256k1"
+Documentation = "https://github.com/AvraSasmo/UltrafastSecp256k1/tree/main/bindings/python"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["ufsecp*"]

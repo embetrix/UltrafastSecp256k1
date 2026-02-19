@@ -16,21 +16,9 @@ using fast::FieldElement;
 // ── Nothing-up-my-sleeve generators ──────────────────────────────────────────
 
 // Modular sqrt: y = a^((p+1)/4) mod p, valid since p ≡ 3 (mod 4)
+// Uses optimized addition chain from FieldElement::sqrt()
 static FieldElement field_sqrt(const FieldElement& a) {
-    auto exp = FieldElement::from_hex(
-        "3fffffffffffffffffffffffffffffffffffffffffffffffffffffffbfffff0c");
-    auto y = FieldElement::one();
-    auto base = a;
-    auto exp_bytes = exp.to_bytes();
-    for (int i = 0; i < 256; ++i) {
-        y = y.square();
-        int byte_idx = i / 8;
-        int bit_idx = 7 - (i % 8);
-        if ((exp_bytes[byte_idx] >> bit_idx) & 1) {
-            y = y * base;
-        }
-    }
-    return y;
+    return a.sqrt();
 }
 
 // lift_x helper: find point with given x-coordinate and even y

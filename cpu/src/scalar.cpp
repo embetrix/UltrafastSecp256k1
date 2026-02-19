@@ -487,44 +487,288 @@ bool Scalar::operator==(const Scalar& rhs) const noexcept {
     return limbs_ == rhs.limbs_;
 }
 
+// ============================================================================
+// SafeGCD scalar modular inverse — Bernstein-Yang divsteps algorithm (mod n)
+// Variable-time.  ~10× faster than Fermat square-and-multiply.
+// Ref: "Fast constant-time gcd computation and modular inversion" (2019)
+// Direct port of bitcoin-core/secp256k1 secp256k1_modinv64_var.
+// ============================================================================
+#if defined(__SIZEOF_INT128__)
+namespace scalar_safegcd {
+
+using i128 = __int128;
+
+struct S62  { int64_t v[5]; };
+struct T2x2 { int64_t u, v, q, r; };
+struct ModInfo { S62 modulus; uint64_t modulus_inv62; };
+
+// secp256k1 order n in signed-62 form, plus modular inverse
+// n = FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141
+// Matches bitcoin-core secp256k1_const_modinfo_scalar exactly.
+static constexpr ModInfo NINFO = {
+    {{0x3FD25E8CD0364141LL, 0x2ABB739ABD2280EELL, -0x15LL, 0LL, 256LL}},
+    0x34F20099AA774EC1ULL
+};
+
+static inline int ctz64_var(uint64_t x) {
+#if defined(__GNUC__) || defined(__clang__)
+    return __builtin_ctzll(x);
+#elif defined(_MSC_VER)
+    unsigned long idx;
+    _BitScanForward64(&idx, x);
+    return (int)idx;
+#else
+    int c = 0; while (!(x & 1)) { x >>= 1; ++c; } return c;
+#endif
+}
+
+// Exactly matches secp256k1_modinv64_divsteps_62_var
+static int64_t divsteps_62_var(int64_t eta, uint64_t f0, uint64_t g0, T2x2& t) {
+    uint64_t u = 1, v = 0, q = 0, r = 1;
+    uint64_t f = f0, g = g0, m;
+    uint32_t w;
+    int i = 62, limit, zeros;
+
+    for (;;) {
+        zeros = ctz64_var(g | (UINT64_MAX << i));
+        g >>= zeros;
+        u <<= zeros;
+        v <<= zeros;
+        eta -= zeros;
+        i -= zeros;
+        if (i == 0) break;
+
+        if (eta < 0) {
+            uint64_t tmp;
+            eta = -eta;
+            tmp = f; f = g; g = (uint64_t)(-(int64_t)tmp);
+            tmp = u; u = q; q = (uint64_t)(-(int64_t)tmp);
+            tmp = v; v = r; r = (uint64_t)(-(int64_t)tmp);
+            limit = ((int)eta + 1) > i ? i : ((int)eta + 1);
+            m = (UINT64_MAX >> (64 - limit)) & 63U;
+            w = (uint32_t)((f * g * (f * f - 2)) & m);
+        } else {
+            limit = ((int)eta + 1) > i ? i : ((int)eta + 1);
+            m = (UINT64_MAX >> (64 - limit)) & 15U;
+            w = (uint32_t)(f + (((f + 1) & 4) << 1));
+            w = (uint32_t)((-(uint64_t)w * g) & m);
+        }
+        g += f * (uint64_t)w;
+        q += u * (uint64_t)w;
+        r += v * (uint64_t)w;
+    }
+
+    t.u = (int64_t)u; t.v = (int64_t)v;
+    t.q = (int64_t)q; t.r = (int64_t)r;
+    return eta;
+}
+
+// Exactly matches secp256k1_modinv64_update_de_62
+static void update_de_62(S62& d, S62& e, const T2x2& t, const ModInfo& mod) {
+    const uint64_t M62 = UINT64_MAX >> 2;
+    const int64_t d0 = d.v[0], d1 = d.v[1], d2 = d.v[2], d3 = d.v[3], d4 = d.v[4];
+    const int64_t e0 = e.v[0], e1 = e.v[1], e2 = e.v[2], e3 = e.v[3], e4 = e.v[4];
+    const int64_t u = t.u, v = t.v, q = t.q, r = t.r;
+    int64_t md, me, sd, se;
+    i128 cd, ce;
+
+    sd = d4 >> 63;
+    se = e4 >> 63;
+    md = (u & sd) + (v & se);
+    me = (q & sd) + (r & se);
+
+    cd = (i128)u * d0 + (i128)v * e0;
+    ce = (i128)q * d0 + (i128)r * e0;
+
+    md -= (int64_t)((mod.modulus_inv62 * (uint64_t)cd + (uint64_t)md) & M62);
+    me -= (int64_t)((mod.modulus_inv62 * (uint64_t)ce + (uint64_t)me) & M62);
+
+    cd += (i128)mod.modulus.v[0] * md;
+    ce += (i128)mod.modulus.v[0] * me;
+    cd >>= 62; ce >>= 62;
+
+    cd += (i128)u * d1 + (i128)v * e1;
+    ce += (i128)q * d1 + (i128)r * e1;
+    if (mod.modulus.v[1]) { cd += (i128)mod.modulus.v[1] * md; ce += (i128)mod.modulus.v[1] * me; }
+    d.v[0] = (int64_t)((uint64_t)cd & M62); cd >>= 62;
+    e.v[0] = (int64_t)((uint64_t)ce & M62); ce >>= 62;
+
+    cd += (i128)u * d2 + (i128)v * e2;
+    ce += (i128)q * d2 + (i128)r * e2;
+    if (mod.modulus.v[2]) { cd += (i128)mod.modulus.v[2] * md; ce += (i128)mod.modulus.v[2] * me; }
+    d.v[1] = (int64_t)((uint64_t)cd & M62); cd >>= 62;
+    e.v[1] = (int64_t)((uint64_t)ce & M62); ce >>= 62;
+
+    cd += (i128)u * d3 + (i128)v * e3;
+    ce += (i128)q * d3 + (i128)r * e3;
+    if (mod.modulus.v[3]) { cd += (i128)mod.modulus.v[3] * md; ce += (i128)mod.modulus.v[3] * me; }
+    d.v[2] = (int64_t)((uint64_t)cd & M62); cd >>= 62;
+    e.v[2] = (int64_t)((uint64_t)ce & M62); ce >>= 62;
+
+    cd += (i128)u * d4 + (i128)v * e4;
+    ce += (i128)q * d4 + (i128)r * e4;
+    cd += (i128)mod.modulus.v[4] * md;
+    ce += (i128)mod.modulus.v[4] * me;
+    d.v[3] = (int64_t)((uint64_t)cd & M62); cd >>= 62;
+    e.v[3] = (int64_t)((uint64_t)ce & M62); ce >>= 62;
+
+    d.v[4] = (int64_t)cd;
+    e.v[4] = (int64_t)ce;
+}
+
+// Exactly matches secp256k1_modinv64_update_fg_62_var
+static void update_fg_62_var(int len, S62& f, S62& g, const T2x2& t) {
+    const uint64_t M62 = UINT64_MAX >> 2;
+    const int64_t u = t.u, v = t.v, q = t.q, r = t.r;
+    int64_t fi, gi;
+    i128 cf, cg;
+
+    fi = f.v[0]; gi = g.v[0];
+    cf = (i128)u * fi + (i128)v * gi;
+    cg = (i128)q * fi + (i128)r * gi;
+    cf >>= 62; cg >>= 62;
+
+    for (int j = 1; j < len; ++j) {
+        fi = f.v[j]; gi = g.v[j];
+        cf += (i128)u * fi + (i128)v * gi;
+        cg += (i128)q * fi + (i128)r * gi;
+        f.v[j - 1] = (int64_t)((uint64_t)cf & M62); cf >>= 62;
+        g.v[j - 1] = (int64_t)((uint64_t)cg & M62); cg >>= 62;
+    }
+    f.v[len - 1] = (int64_t)cf;
+    g.v[len - 1] = (int64_t)cg;
+    for (int j = len; j < 5; ++j) { f.v[j] = 0; g.v[j] = 0; }
+}
+
+// Exactly matches secp256k1_modinv64_normalize_62
+static void normalize_62(S62& r, int64_t sign, const ModInfo& mod) {
+    const int64_t M62 = (int64_t)(UINT64_MAX >> 2);
+    int64_t r0 = r.v[0], r1 = r.v[1], r2 = r.v[2], r3 = r.v[3], r4 = r.v[4];
+    int64_t cond_add, cond_negate;
+
+    cond_add = r4 >> 63;
+    r0 += mod.modulus.v[0] & cond_add;
+    r1 += mod.modulus.v[1] & cond_add;
+    r2 += mod.modulus.v[2] & cond_add;
+    r3 += mod.modulus.v[3] & cond_add;
+    r4 += mod.modulus.v[4] & cond_add;
+    cond_negate = sign >> 63;
+    r0 = (r0 ^ cond_negate) - cond_negate;
+    r1 = (r1 ^ cond_negate) - cond_negate;
+    r2 = (r2 ^ cond_negate) - cond_negate;
+    r3 = (r3 ^ cond_negate) - cond_negate;
+    r4 = (r4 ^ cond_negate) - cond_negate;
+    r1 += r0 >> 62; r0 &= M62;
+    r2 += r1 >> 62; r1 &= M62;
+    r3 += r2 >> 62; r2 &= M62;
+    r4 += r3 >> 62; r3 &= M62;
+
+    cond_add = r4 >> 63;
+    r0 += mod.modulus.v[0] & cond_add;
+    r1 += mod.modulus.v[1] & cond_add;
+    r2 += mod.modulus.v[2] & cond_add;
+    r3 += mod.modulus.v[3] & cond_add;
+    r4 += mod.modulus.v[4] & cond_add;
+    r1 += r0 >> 62; r0 &= M62;
+    r2 += r1 >> 62; r1 &= M62;
+    r3 += r2 >> 62; r2 &= M62;
+    r4 += r3 >> 62; r3 &= M62;
+
+    r.v[0] = r0; r.v[1] = r1; r.v[2] = r2; r.v[3] = r3; r.v[4] = r4;
+}
+
+static S62 limbs_to_s62(const limbs4& d) {
+    constexpr uint64_t M = (1ULL << 62) - 1;
+    return {{
+        (int64_t)(d[0] & M),
+        (int64_t)(((d[0] >> 62) | (d[1] << 2)) & M),
+        (int64_t)(((d[1] >> 60) | (d[2] << 4)) & M),
+        (int64_t)(((d[2] >> 58) | (d[3] << 6)) & M),
+        (int64_t)(d[3] >> 56)
+    }};
+}
+
+static limbs4 s62_to_limbs(const S62& s) {
+    return {{
+        (uint64_t)s.v[0] | ((uint64_t)s.v[1] << 62),
+        ((uint64_t)s.v[1] >> 2) | ((uint64_t)s.v[2] << 60),
+        ((uint64_t)s.v[2] >> 4) | ((uint64_t)s.v[3] << 58),
+        ((uint64_t)s.v[3] >> 6) | ((uint64_t)s.v[4] << 56)
+    }};
+}
+
+// Exactly matches secp256k1_modinv64_var
+static limbs4 inverse_impl(const limbs4& x) {
+    S62 d = {{0, 0, 0, 0, 0}};
+    S62 e = {{1, 0, 0, 0, 0}};
+    S62 f = NINFO.modulus;
+    S62 g = limbs_to_s62(x);
+    int len = 5;
+    int64_t eta = -1;  // eta = -delta; delta starts at 1
+
+    while (1) {
+        T2x2 t;
+        eta = divsteps_62_var(eta, (uint64_t)f.v[0], (uint64_t)g.v[0], t);
+
+        update_de_62(d, e, t, NINFO);
+        update_fg_62_var(len, f, g, t);
+
+        if (g.v[0] == 0) {
+            int64_t cond = 0;
+            for (int j = 1; j < len; ++j) cond |= g.v[j];
+            if (cond == 0) break;
+        }
+
+        int64_t fn = f.v[len - 1], gn = g.v[len - 1];
+        int64_t cond = ((int64_t)len - 2) >> 63;
+        cond |= fn ^ (fn >> 63);
+        cond |= gn ^ (gn >> 63);
+        if (cond == 0) {
+            f.v[len - 2] |= (uint64_t)fn << 62;
+            g.v[len - 2] |= (uint64_t)gn << 62;
+            --len;
+        }
+    }
+
+    normalize_62(d, f.v[len - 1], NINFO);
+    return s62_to_limbs(d);
+}
+
+} // namespace scalar_safegcd
+
 Scalar Scalar::inverse() const {
-    // Fermat's little theorem: a^{-1} = a^{n-2} mod n
-    // n = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141
-    // n-2 = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD036413F
-    //
-    // Fixed addition-chain exponentiation (no secret-dependent branches).
-    // Uses square-and-multiply with a hand-crafted chain for n-2.
-    // The binary representation of n-2 has 256 bits; we process them MSB→LSB.
-
     if (is_zero()) return Scalar::zero();
+    // SafeGCD divsteps — ~10× faster than Fermat square-and-multiply
+    return from_limbs(scalar_safegcd::inverse_impl(limbs_));
+}
 
-    // n-2 limbs (little-endian):
-    //  [0] = 0xBFD25E8CD036413F
-    //  [1] = 0xBAAEDCE6AF48A03B
-    //  [2] = 0xFFFFFFFFFFFFFFFE
-    //  [3] = 0xFFFFFFFFFFFFFFFF
+#else // !__SIZEOF_INT128__
+
+// Fermat inverse: fallback for platforms without __int128
+static Scalar fermat_inverse(const Scalar& self) {
     constexpr uint64_t nm2[4] = {
         0xBFD25E8CD036413FULL,
         0xBAAEDCE6AF48A03BULL,
         0xFFFFFFFFFFFFFFFEULL,
         0xFFFFFFFFFFFFFFFFULL
     };
-
     Scalar result = Scalar::one();
-    Scalar base = *this;
-
-    // Square-and-multiply, LSB first is simpler but MSB first is standard.
-    // We do MSB→LSB (bit 255 down to 0).
+    Scalar base = self;
     for (int i = 255; i >= 0; --i) {
-        result *= result; // square
-        int limb_idx = i / 64;
-        int bit_idx = i % 64;
-        if ((nm2[limb_idx] >> bit_idx) & 1) {
+        result *= result;
+        if ((nm2[i / 64] >> (i % 64)) & 1) {
             result *= base;
         }
     }
     return result;
 }
+
+Scalar Scalar::inverse() const {
+    if (is_zero()) return Scalar::zero();
+    return fermat_inverse(*this);
+}
+
+#endif // __SIZEOF_INT128__
 
 Scalar Scalar::negate() const {
     if (is_zero()) return Scalar::zero();

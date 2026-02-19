@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ultrafast-secp256k1"
+version = "1.0.0"
+description = "Python bindings for UltrafastSecp256k1 — high-performance secp256k1 elliptic curve library"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.8"
+authors = [
+    {name = "UltrafastSecp256k1 Contributors"}
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security :: Cryptography",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+keywords = ["secp256k1", "ecdsa", "schnorr", "bitcoin", "cryptography", "elliptic-curve"]
+
+[project.urls]
+Homepage = "https://github.com/UltrafastSecp256k1/UltrafastSecp256k1"
+Documentation = "https://github.com/UltrafastSecp256k1/UltrafastSecp256k1/tree/main/bindings/python"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["ultrafast_secp256k1*"]

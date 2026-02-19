@@ -1,0 +1,32 @@
+{
+  "name": "react-native-ultrafast-secp256k1",
+  "version": "1.0.0",
+  "description": "React Native bindings for UltrafastSecp256k1 — high-performance secp256k1 ECC",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "react-native": "lib/index.js",
+  "files": [
+    "lib/",
+    "android/",
+    "ios/",
+    "cpp/",
+    "react-native-ultrafast-secp256k1.podspec",
+    "README.md"
+  ],
+  "scripts": {
+    "typescript": "tsc --noEmit",
+    "lint": "eslint lib/"
+  },
+  "keywords": ["react-native", "secp256k1", "bitcoin", "crypto", "ecdsa", "schnorr"],
+  "author": "UltrafastSecp256k1",
+  "license": "MIT",
+  "peerDependencies": {
+    "react": ">=18.0.0",
+    "react-native": ">=0.71.0"
+  },
+  "devDependencies": {
+    "react": "^18.2.0",
+    "react-native": "^0.73.0",
+    "typescript": "^5.3.0"
+  }
+}
