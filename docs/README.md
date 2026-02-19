@@ -1,6 +1,6 @@
 # UltrafastSecp256k1 Documentation
 
-> **Version 3.3.0** — Cross-platform secp256k1 ECC library
+> **Version 3.6.0** — Cross-platform secp256k1 ECC library
 
 ---
 
@@ -13,6 +13,14 @@
 | [Benchmarks](BENCHMARKS.md) | Performance data: CPU, GPU, embedded, mobile |
 | [ESP32 Setup](ESP32_SETUP.md) | ESP32-S3/PICO-D4 flashing & testing guide |
 | [RISC-V Optimizations](../RISCV_OPTIMIZATIONS.md) | RISC-V assembly & RVV details |
+| [Porting Guide](../PORTING.md) | Add new platforms, architectures, GPU backends |
+
+## Security
+
+| Document | Description |
+|----------|-------------|
+| [Security Policy](../SECURITY.md) | Vulnerability reporting, audit status, production readiness |
+| [Threat Model](../THREAT_MODEL.md) | Layer-by-layer risk assessment (FAST vs CT) |
 
 ## Adoption & Integration
 

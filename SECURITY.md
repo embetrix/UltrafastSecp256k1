@@ -4,9 +4,10 @@
 
 | Version | Supported |
 |---------|-----------|
-| 3.2.x   | ✅ Active  |
-| 3.0.x–3.1.x | ⚠️ Critical fixes only |
-| 2.x.x   | ⚠️ Critical fixes only |
+| 3.6.x   | ✅ Active  |
+| 3.4.x–3.5.x | ⚠️ Critical fixes only |
+| 3.0.x–3.3.x | ⚠️ Critical fixes only |
+| 2.x.x   | ❌ Unsupported |
 | < 2.0   | ❌ Unsupported |
 
 Security fixes apply to the latest release on the `main` branch.
@@ -157,4 +158,4 @@ We appreciate responsible disclosure. Contributors who report valid security iss
 
 ---
 
-*UltrafastSecp256k1 v3.2.0 — Security Policy*
+*UltrafastSecp256k1 v3.6.0 — Security Policy*

@@ -1,12 +1,22 @@
-# UltrafastSecp256k1
+# UltrafastSecp256k1 — Fastest Open-Source secp256k1 Library
 
-The **world's fastest open-source secp256k1** elliptic curve cryptography library — GPU-accelerated ECDSA & Schnorr signatures, multi-platform, zero dependencies.
+**Zero-dependency, multi-backend secp256k1 elliptic curve cryptography library** — GPU-accelerated ECDSA & Schnorr signatures, constant-time side-channel protection, 12+ platform targets inc. CUDA, Metal, OpenCL, ROCm, WebAssembly, RISC-V, ESP32, and STM32.
 
-> **4.88M ECDSA signs/s** · **2.44M ECDSA verifies/s** · **3.66M Schnorr signs/s** · **2.82M Schnorr verifies/s** on a single GPU
+> **4.88 M ECDSA signs/s** · **2.44 M ECDSA verifies/s** · **3.66 M Schnorr signs/s** · **2.82 M Schnorr verifies/s** — single GPU (RTX 5060 Ti)
+
+### Why UltrafastSecp256k1?
+
+- **Fastest open-source GPU signatures** — no other library provides secp256k1 ECDSA + Schnorr sign/verify on CUDA, OpenCL, and Metal
+- **Zero dependencies** — pure C++20, no Boost, no OpenSSL, compiles anywhere with a conforming compiler
+- **Dual-layer security** — variable-time FAST path for throughput, constant-time CT path for secret-key operations
+- **12+ platforms** — x86-64, ARM64, RISC-V, WASM, iOS, Android, ESP32, STM32, CUDA, Metal, OpenCL, ROCm
+
+**Quick links:** [Benchmarks](docs/BENCHMARKS.md) · [Build Guide](docs/BUILDING.md) · [API Reference](docs/API_REFERENCE.md) · [Security Policy](SECURITY.md) · [Threat Model](THREAT_MODEL.md) · [Porting Guide](PORTING.md)
+
+---
 
 [![GitHub stars](https://img.shields.io/github/stars/shrec/UltrafastSecp256k1?style=social)](https://github.com/shrec/UltrafastSecp256k1/stargazers)
 [![GitHub forks](https://img.shields.io/github/forks/shrec/UltrafastSecp256k1?style=social)](https://github.com/shrec/UltrafastSecp256k1/network/members)
-
 [![CI](https://img.shields.io/github/actions/workflow/status/shrec/UltrafastSecp256k1/ci.yml?branch=main&label=CI)](https://github.com/shrec/UltrafastSecp256k1/actions/workflows/ci.yml)
 [![Benchmark](https://img.shields.io/github/actions/workflow/status/shrec/UltrafastSecp256k1/benchmark.yml?branch=main&label=Bench)](https://shrec.github.io/UltrafastSecp256k1/dev/bench/)
 [![Release](https://img.shields.io/github/v/release/shrec/UltrafastSecp256k1?label=Release)](https://github.com/shrec/UltrafastSecp256k1/releases/latest)
@@ -27,7 +37,7 @@ The **world's fastest open-source secp256k1** elliptic curve cryptography librar
 [![Avalanche](https://img.shields.io/badge/Avalanche-AVAX-E84142.svg?logo=avalanche&logoColor=white)](https://avax.network)
 [![Arbitrum](https://img.shields.io/badge/Arbitrum-ARB-28A0F0.svg)](https://arbitrum.io)
 [![Optimism](https://img.shields.io/badge/Optimism-OP-FF0420.svg)](https://optimism.io)
-[![+15 more](https://img.shields.io/badge/+15%20more-secp256k1%20coins-grey.svg)](#supported-coins)
+[![+15 more](https://img.shields.io/badge/+15%20more-secp256k1%20coins-grey.svg)](#secp256k1-supported-coins-27-blockchains)
 
 **GPU & Platform Support:**
 
@@ -45,451 +55,288 @@ The **world's fastest open-source secp256k1** elliptic curve cryptography librar
 [![ESP32](https://img.shields.io/badge/ESP32-Xtensa%20LX6-orange.svg)](https://www.espressif.com/en/products/socs/esp32)
 [![STM32](https://img.shields.io/badge/STM32-Cortex--M3-orange.svg)](https://www.st.com/en/microcontrollers-microprocessors/stm32f103ze.html)
 
+---
+
 ## ⚠️ Security Notice
 
-**Research & Development Project - Not Audited**
+**Research & Development Project — Not Audited**
 
 This library has **not undergone independent security audits**. It is provided for research, educational, and experimental purposes.
 
-**Production Use:**
-- ❌ Not recommended without independent cryptographic audit
-- ❌ No formal security guarantees
+- ❌ Not recommended for production without independent cryptographic audit
 - ✅ All self-tests pass (76/76 including all backends)
 - ✅ Dual-layer constant-time architecture (FAST + CT always active)
 - ✅ Stable C ABI (`ufsecp`) with 45 exported functions
+- ✅ Fuzz-tested core arithmetic (libFuzzer + ASan)
 
-**Reporting Security Issues:**
-- Email: [payysoon@gmail.com](mailto:payysoon@gmail.com)
-- GitHub Issues: [UltrafastSecp256k1/issues](https://github.com/shrec/UltrafastSecp256k1/issues)
-
-**Disclaimer:**
-Users assume all risks. For production cryptographic systems, prefer audited libraries like [libsecp256k1](https://github.com/bitcoin-core/secp256k1).
+**Report vulnerabilities** via [GitHub Security Advisories](https://github.com/shrec/UltrafastSecp256k1/security/advisories/new) or email [payysoon@gmail.com](mailto:payysoon@gmail.com).
+For production cryptographic systems, prefer audited libraries like [libsecp256k1](https://github.com/bitcoin-core/secp256k1).
 
 ---
 
-## 🚀 Features
-
-- **Multi-Platform Architecture**
-  - CPU: Optimized for x86-64 (BMI2/ADX), RISC-V (RV64GC), and ARM64 (MUL/UMULH)
-  - Mobile: Android ARM64 (NDK r27, Clang 18) + iOS 17+ (XCFramework, SPM, CocoaPods)
-  - WebAssembly: Emscripten ES6 module with TypeScript declarations
-  - Embedded: ESP32-S3 (Xtensa LX7) + ESP32-PICO-D4 (Xtensa LX6) + STM32F103 (ARM Cortex-M3)
-  - GPU/CUDA: Batch ECDSA sign 4.88M/s, verify 2.44M/s, Schnorr sign 3.66M/s, verify 2.82M/s
-  - GPU/Metal: Apple Silicon (M1/M2/M3/M4) with Comba-accelerated field arithmetic
-  - GPU/ROCm (HIP): Portable PTX→__int128 fallbacks for AMD GPUs
-  - GPU/OpenCL: PTX inline asm, 3.39M kG/s
-
-- **Performance**
-  - x86-64: 3-5× speedup with BMI2/ADX assembly
-  - ARM64: ~5× speedup with MUL/UMULH inline assembly
-  - RISC-V: 2-3× speedup with native assembly
-  - CUDA: Batch ECDSA & Schnorr signatures at millions/second
-
-- **Features**
-  - Complete secp256k1 field and scalar arithmetic
-  - Point addition, doubling, and multiplication
-  - GLV endomorphism optimization
-  - Efficient batch operations
-  - ECDSA sign/verify (RFC 6979 deterministic nonce, low-S)
-  - Schnorr BIP-340 sign/verify
-  - SHA-256 hashing
-  - Constant-time (CT) layer for side-channel resistance
-  - Public key derivation
-
-### Feature Coverage (v3.4.0)
+## secp256k1 Feature Overview
 
 | Category | Component | Status |
 |----------|-----------|--------|
 | **Core** | Field, Scalar, Point, GLV, Precompute | ✅ |
-| **Assembly** | x64 MASM/GAS, BMI2/ADX, RISC-V | ✅ |
+| **Assembly** | x64 MASM/GAS, BMI2/ADX, ARM64 MUL/UMULH, RISC-V RV64GC | ✅ |
 | **SIMD** | AVX2/AVX-512 batch ops, Montgomery batch inverse | ✅ |
-| **CT** | Constant-time field/scalar/point | ✅ |
-| **ECDSA** | Sign/Verify, RFC 6979, DER/Compact, low-S | ✅ |
-| **Schnorr** | BIP-340 sign/verify | ✅ |
-| **Recovery** | ECDSA pubkey recovery (recid) | ✅ |
+| **Constant-Time** | CT field/scalar/point — no secret-dependent branches | ✅ |
+| **ECDSA** | Sign/Verify, RFC 6979, DER/Compact, low-S, Recovery | ✅ |
+| **Schnorr** | BIP-340 sign/verify, tagged hashing, x-only pubkeys | ✅ |
 | **ECDH** | Key exchange (raw, xonly, SHA-256) | ✅ |
-| **Multi-scalar** | Strauss/Shamir | ✅ |
-| **Batch verify** | ECDSA + Schnorr batch | ✅ |
-| **BIP-32** | HD derivation, path parsing, xprv/xpub | ✅ |
-| **MuSig2** | BIP-327, key aggregation, 2-round | ✅ |
-| **Taproot** | BIP-341/342, tweak, Merkle | ✅ |
-| **Pedersen** | Commitments, homomorphic, switch | ✅ |
+| **Multi-scalar** | Strauss/Shamir dual-scalar multiplication | ✅ |
+| **Batch verify** | ECDSA + Schnorr batch verification | ✅ |
+| **BIP-32/44** | HD derivation, path parsing, xprv/xpub, coin-type | ✅ |
+| **MuSig2** | BIP-327, key aggregation, 2-round signing | ✅ |
+| **Taproot** | BIP-341/342, tweak, Merkle tree | ✅ |
+| **Pedersen** | Commitments, homomorphic, switch commitments | ✅ |
 | **FROST** | Threshold signatures, t-of-n | ✅ |
-| **Adaptor** | Schnorr + ECDSA adaptor sigs | ✅ |
-| **Address** | P2PKH, P2WPKH, P2TR, Base58, Bech32/m | ✅ |
-| **Silent Pay** | BIP-352 | ✅ |
+| **Adaptor** | Schnorr + ECDSA adaptor signatures | ✅ |
+| **Address** | P2PKH, P2WPKH, P2TR, Base58, Bech32/m, EIP-55 | ✅ |
+| **Coins** | 27 blockchains, auto-dispatch | ✅ |
 | **Hashing** | SHA-256 (SHA-NI), SHA-512, HMAC, Keccak-256 | ✅ |
-| **Coins** | 27 coins, auto-dispatch, EIP-55 | ✅ |
-| **Custom G** | CurveContext, custom generator/curve | ✅ |
-| **BIP-44** | Coin-type HD, auto-purpose | ✅ |
-| **C ABI** | `ufsecp` stable FFI (45 exports, C/C#/Python/Go/…) | ✅ |
-| **Self-test** | Known vector verification | ✅ |
+| **C ABI** | `ufsecp` stable FFI (45 exports, C/C#/Python/Go/Rust/…) | ✅ |
 | **GPU** | CUDA, Metal, OpenCL, ROCm kernels | ✅ |
-| **Platforms** | x64, ARM64, RISC-V, ESP32, WASM, iOS, Android, Metal, ROCm | ✅ |
+| **Platforms** | x64, ARM64, RISC-V, ESP32, STM32, WASM, iOS, Android | ✅ |
 
-## � Batch Modular Inverse (Montgomery Trick)
+---
 
-All backends include **batch modular inversion** — a critical building block for Jacobian→Affine conversion and high-throughput point operations:
+## secp256k1 GPU Acceleration (CUDA / OpenCL / Metal / ROCm)
 
-| Backend | File | Function(s) |
-|---------|------|-------------|
-| **CPU** | `cpu/src/field.cpp` | `fe_batch_inverse(FieldElement*, size_t)` — Montgomery trick with scratch buffer |
-| **CPU** | `cpu/src/precompute.cpp` | `batch_inverse(std::vector<FieldElement>&)` — vector variant |
-| **CUDA** | `cuda/include/batch_inversion.cuh` | `batch_inverse_montgomery` — GPU Montgomery trick kernel |
-| **CUDA** | `cuda/include/batch_inversion.cuh` | `batch_inverse_fermat` — Fermat's little theorem variant |
-| **CUDA** | `cuda/include/batch_inversion.cuh` | `batch_inverse_kernel` — production kernel (`__launch_bounds__(256, 4)`) |
-| **CUDA** | `cuda/src/test_suite.cu` | `fe_batch_inverse()` — host wrapper + unit tests |
-| **Metal** | `metal/shaders/secp256k1_kernels.metal` | `batch_inverse` — chunked Montgomery inverse (parallel threadgroups) |
+UltrafastSecp256k1 is the **only open-source library** that provides full secp256k1 ECDSA + Schnorr sign/verify on GPU across four backends:
+
+| Backend | Hardware | kG/s | ECDSA Sign | ECDSA Verify | Schnorr Sign | Schnorr Verify |
+|---------|----------|------|------------|--------------|--------------|----------------|
+| **CUDA** | RTX 5060 Ti | 4.59 M/s | 4.88 M/s | 2.44 M/s | 3.66 M/s | 2.82 M/s |
+| **OpenCL** | RTX 5060 Ti | 3.39 M/s | — | — | — | — |
+| **Metal** | Apple M3 Pro | 0.33 M/s | — | — | — | — |
+| **ROCm (HIP)** | AMD GPUs | Portable | — | — | — | — |
+
+*CUDA 12.0, sm_86;sm_89, batch=16K signatures. Metal 2.4, 8×32-bit Comba limbs, 18 GPU cores.*
+
+### CUDA Core ECC Operations (Kernel-Only Throughput)
+
+| Operation | Time/Op | Throughput |
+|-----------|---------|------------|
+| Field Mul | 0.2 ns | 4,142 M/s |
+| Field Add | 0.2 ns | 4,130 M/s |
+| Field Inv | 10.2 ns | 98.35 M/s |
+| Point Add | 1.6 ns | 619 M/s |
+| Point Double | 0.8 ns | 1,282 M/s |
+| Scalar Mul (P×k) | 225.8 ns | 4.43 M/s |
+| Generator Mul (G×k) | 217.7 ns | 4.59 M/s |
+| Batch Inv (Montgomery) | 2.9 ns | 340 M/s |
+| Jac→Affine (per-pt) | 14.9 ns | 66.9 M/s |
+
+### GPU Signature Operations (ECDSA + Schnorr)
+
+| Operation | Time/Op | Throughput | Protocol |
+|-----------|---------|------------|----------|
+| **ECDSA Sign** | **204.8 ns** | **4.88 M/s** | RFC 6979 + low-S |
+| **ECDSA Verify** | **410.1 ns** | **2.44 M/s** | Shamir + GLV |
+| **ECDSA Sign+Recid** | **311.5 ns** | **3.21 M/s** | Recoverable (EIP-155) |
+| **Schnorr Sign** | **273.4 ns** | **3.66 M/s** | BIP-340 |
+| **Schnorr Verify** | **354.6 ns** | **2.82 M/s** | BIP-340 + GLV |
+
+### CUDA vs OpenCL Comparison (RTX 5060 Ti)
+
+| Operation | CUDA | OpenCL | Winner |
+|-----------|------|--------|--------|
+| Field Mul | 0.2 ns | 0.2 ns | Tie |
+| Field Inv | 10.2 ns | 14.3 ns | **CUDA 1.40×** |
+| Point Double | 0.8 ns | 0.9 ns | **CUDA 1.13×** |
+| Point Add | 1.6 ns | 1.6 ns | Tie |
+| kG (Generator Mul) | 217.7 ns | 295.1 ns | **CUDA 1.36×** |
+
+*Benchmarks: 2026-02-14, Linux x86_64, NVIDIA Driver 580.126.09. Both kernel-only (no buffer allocation/copy overhead).*
+
+### Apple Metal (M3 Pro) — Kernel-Only
+
+| Operation | Time/Op | Throughput |
+|-----------|---------|------------|
+| Field Mul | 1.9 ns | 527 M/s |
+| Field Inv | 106.4 ns | 9.40 M/s |
+| Point Add | 10.1 ns | 98.6 M/s |
+| Point Double | 5.1 ns | 196 M/s |
+| Scalar Mul (P×k) | 2.94 μs | 0.34 M/s |
+| Generator Mul (G×k) | 3.00 μs | 0.33 M/s |
+
+*Metal 2.4, 8×32-bit Comba limbs, Apple M3 Pro (18 GPU cores, Unified Memory 18 GB)*
+
+---
+
+## secp256k1 ECDSA & Schnorr Signatures (BIP-340, RFC 6979)
+
+Full signature support across CPU and GPU:
+
+- **ECDSA**: RFC 6979 deterministic nonces, low-S normalization, DER/Compact encoding, public key recovery (recid)
+- **Schnorr**: BIP-340 compliant — tagged hashing, x-only public keys
+- **Batch verification**: ECDSA and Schnorr batch verify
+- **Multi-scalar**: Shamir's trick (k₁×G + k₂×Q) for fast verification
+
+### CPU Signature Benchmarks (x86-64, Clang 21, AVX2, Release)
+
+| Operation | Time | Notes |
+|-----------|------:|-------|
+| ECDSA Sign (RFC 6979) | 33 μs | Deterministic nonce, low-S |
+| ECDSA Verify | 57 μs | Accepts low-S and high-S |
+| Schnorr Sign (BIP-340) | 23 μs | Tagged hashing, x-only |
+| Schnorr Verify (BIP-340) | 58 μs | BIP-340 verification |
+
+*Schnorr sign is ~30% faster than ECDSA sign due to simpler nonce derivation (no modular inverse).*
+
+---
+
+## Constant-Time secp256k1 (Side-Channel Resistance)
+
+The `ct::` namespace provides constant-time operations for secret-key material — no secret-dependent branches or memory access patterns:
+
+| Operation | Fast | CT | Overhead |
+|-----------|------:|------:|--------:|
+| Field Mul | 36 ns | 55 ns | 1.50× |
+| Field Inverse | 3.0 μs | 14.2 μs | 4.80× |
+| Point Add | 0.65 μs | 1.63 μs | 2.50× |
+| Scalar Mul (k×P) | 130 μs | 322 μs | 2.49× |
+| Generator Mul (k×G) | 7.6 μs | 310 μs | 40.8× |
+
+**CT layer provides:** `ct::field_mul`, `ct::field_inv`, `ct::scalar_mul`, `ct::point_add_complete`, `ct::point_dbl`
+
+**Use the CT layer for**: private key operations, signing, nonce generation, ECDH.
+**Use the FAST layer for**: verification, public key derivation, batch processing, benchmarks.
+
+See [THREAT_MODEL.md](THREAT_MODEL.md) for a full layer-by-layer risk assessment.
+
+---
+
+## secp256k1 Benchmarks — Cross-Platform Comparison
+
+### CPU: x86-64 vs ARM64 vs RISC-V
+
+| Operation | x86-64 (Clang 21, AVX2) | ARM64 (Cortex-A76) | RISC-V (Milk-V Mars) |
+|-----------|-------------------------:|--------------------:|---------------------:|
+| Field Mul | 17 ns | 85 ns | 173 ns |
+| Field Square | 13 ns | 66 ns | 160 ns |
+| Field Add | 1 ns | 18 ns | 38 ns |
+| Field Inverse | 1 μs | 2.6 μs | 17 μs |
+| Point Add | 172 ns | 9,329 ns | 3 μs |
+| Generator Mul (k×G) | 7 μs | 7.6 μs | 37 μs |
+| Scalar Mul (k×P) | 24 μs | 77.6 μs | 621 μs |
+
+### GPU: CUDA vs OpenCL vs Metal
+
+| Operation | CUDA (RTX 5060 Ti) | OpenCL (RTX 5060 Ti) | Metal (M3 Pro) |
+|-----------|--------------------:|---------------------:|---------------:|
+| Field Mul | 0.2 ns | 0.2 ns | 1.9 ns |
+| Field Inv | 10.2 ns | 14.3 ns | 106.4 ns |
+| Point Add | 1.6 ns | 1.6 ns | 10.1 ns |
+| Generator Mul (G×k) | 217.7 ns | 295.1 ns | 3.00 μs |
+
+### Embedded: ESP32-S3 vs ESP32 vs STM32
+
+| Operation | ESP32-S3 LX7 (240 MHz) | ESP32 LX6 (240 MHz) | STM32F103 (72 MHz) |
+|-----------|-------------------:|-------------------:|-------------------:|
+| Field Mul | 7,458 ns | 6,993 ns | 15,331 ns |
+| Field Square | 7,592 ns | 6,247 ns | 12,083 ns |
+| Field Add | 636 ns | 985 ns | 4,139 ns |
+| Field Inv | 844 μs | 609 μs | 1,645 μs |
+| Scalar × G | 2,483 μs | 6,203 μs | 37,982 μs |
+
+### Field Representation: 5×52 vs 4×64
+
+| Operation | 4×64 | 5×52 | Speedup |
+|-----------|------:|------:|--------:|
+| Multiplication | 42 ns | 15 ns | **2.76×** |
+| Squaring | 31 ns | 13 ns | **2.44×** |
+| Addition | 4.3 ns | 1.6 ns | **2.69×** |
+| Add chain (32 ops) | 286 ns | 57 ns | **5.01×** |
+
+*5×52 uses `__int128` lazy reduction — ideal for 64-bit platforms.*
+
+For full benchmark results, see [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
+
+---
+
+## secp256k1 on Embedded (ESP32 / STM32 / ARM Cortex-M)
+
+UltrafastSecp256k1 runs on resource-constrained microcontrollers with **portable C++ (no `__int128`, no assembly required)**:
+
+- **ESP32-S3** (Xtensa LX7 @ 240 MHz): Scalar × G in 2.5 ms — fast enough for IoT signing
+- **ESP32-PICO-D4** (Xtensa LX6 @ 240 MHz): Scalar × G in 6.2 ms, CT layer available (44.8 ms CT)
+- **STM32F103** (ARM Cortex-M3 @ 72 MHz): Scalar × G in 38 ms with ARM inline assembly (UMULL/ADDS/ADCS)
+- **Android ARM64** (Cortex-A55/A76 @ 2.4 GHz): Scalar × G in 7.6 μs with MUL/UMULH assembly
+
+All 35 library tests pass on every embedded target. See [examples/esp32_test/](examples/esp32_test/) and [examples/stm32_test/](examples/stm32_test/).
+
+### Porting to New Platforms
+
+See [PORTING.md](PORTING.md) for a step-by-step checklist to add new CPU architectures, embedded targets, or GPU backends.
+
+---
+
+## WASM secp256k1 (Browser & Node.js)
+
+WebAssembly build via Emscripten — runs secp256k1 in any modern browser or Node.js:
+
+```bash
+./scripts/build_wasm.sh        # → build-wasm/dist/
+```
+
+Output: `secp256k1_wasm.wasm` + `secp256k1.mjs` (ES6 module with TypeScript declarations).
+See [wasm/README.md](wasm/README.md) for JavaScript/TypeScript integration.
+
+---
+
+## secp256k1 Batch Modular Inverse (Montgomery Trick)
+
+All backends include **batch modular inversion** — a critical building block for Jacobian→Affine conversion:
+
+| Backend | Function | Notes |
+|---------|----------|-------|
+| **CPU** | `fe_batch_inverse(FieldElement*, size_t)` | Montgomery trick with scratch buffer |
+| **CUDA** | `batch_inverse_montgomery` / `batch_inverse_kernel` | GPU Montgomery trick kernel |
+| **Metal** | `batch_inverse` | Chunked parallel threadgroups |
+| **OpenCL** | Inline PTX inverse | Batch via host orchestration |
 
 **Algorithm**: Montgomery batch inverse computes N field inversions using only **1 modular inversion + 3(N−1) multiplications**, amortizing the expensive inversion across the entire batch.
-## ⚡ Mixed Addition (Jacobian + Affine)
 
-The library provides **branchless mixed addition** (`add_mixed_inplace`) — the fastest way to add a point with known affine coordinates (Z=1) to a Jacobian point. Uses the **madd-2007-bl** formula (7M + 4S, vs 11M + 5S for full Jacobian add).
+For N=1024: ~500× cheaper than individual inversions. A single field inversion costs ~3.5 μs (Fermat), while batch amortizes to ~7 ns per element.
 
-| Backend | File | Function |
-|---------|------|----------|
-| **CPU** | `cpu/src/point.cpp` | `jacobian_add_mixed(JacobianPoint&, AffinePoint&)` |
-| **CPU** | `cpu/src/point.cpp` | `Point::add_mixed_inplace(FieldElement&, FieldElement&)` |
-| **CPU** | `cpu/src/point.cpp` | `Point::sub_mixed_inplace(FieldElement&, FieldElement&)` |
-| **CPU** | `cpu/src/precompute.cpp` | `jacobian_add_mixed_local(JacobianPoint&, AffinePointPacked&)` |
-| **OpenCL** | `opencl/kernels/secp256k1_point.cl` | `point_add_mixed_impl(JacobianPoint*, AffinePoint*)` |
-| **Metal** | `metal/shaders/secp256k1_point.h` | `jacobian_add_mixed(JacobianPoint&, AffinePoint&)` |
+### Mixed Addition (Jacobian + Affine)
 
-### Usage Example (CPU)
+Branchless mixed addition (`add_mixed_inplace`) uses the **madd-2007-bl** formula: **7M + 4S** (vs 11M + 5S for full Jacobian add).
 
 ```cpp
 #include <secp256k1/point.hpp>
-
 using namespace secp256k1::fast;
 
-// Start with generator point G
 Point P = Point::generator();
+FieldElement gx = P.x(), gy = P.y();
 
-// Get affine coordinates of G for mixed addition
-FieldElement gx = P.x();
-FieldElement gy = P.y();
-
-// Compute 2G using mixed add (Jacobian + Affine, 7M + 4S)
+// Compute 2G using mixed add (7M + 4S)
 Point Q = Point::generator();
 Q.add_mixed_inplace(gx, gy);  // Q = G + G = 2G
 
-// Subtraction variant: Q = Q - G
-Q.sub_mixed_inplace(gx, gy);  // Q = 2G - G = G
-
-// Batch walk: P, P+G, P+2G, ... using repeated mixed add
+// Batch walk: P, P+G, P+2G, ...
 Point walker = P;
 for (int i = 0; i < 1000; ++i) {
     walker.add_mixed_inplace(gx, gy);  // walker += G each step
-    // ... process walker ...
-}
-```
-### Mixed Add + Batch Inverse: Collecting Z Values for Cheap Jacobian→Affine
-
-During serial mixed additions, each point accumulates a growing Z coordinate.
-To extract affine X for comparison, you need Z⁻² — which requires an expensive modular inversion.
-**Solution**: Collect Z values in a batch, then invert them all at once with Montgomery trick (1 inversion + 3N multiplications instead of N inversions).
-
-```cpp
-#include <secp256k1/point.hpp>
-#include <secp256k1/field.hpp>
-
-using namespace secp256k1::fast;
-
-constexpr size_t BATCH_SIZE = 1024;
-
-// Buffers (allocate once, reuse)
-Point batch_points[BATCH_SIZE];
-FieldElement batch_z[BATCH_SIZE];
-
-// Start from some point P
-Point walker = Point::generator();
-FieldElement gx = walker.x();
-FieldElement gy = walker.y();
-
-size_t idx = 0;
-
-for (uint64_t j = 0; j < total_count; ++j) {
-    // Save point and its Z coordinate
-    batch_points[idx] = walker;
-    batch_z[idx] = walker.z();
-    idx++;
-
-    // Advance walker using mixed add (7M + 4S)
-    walker.add_mixed_inplace(gx, gy);
-
-    // When batch is full — do batch inversion
-    if (idx == BATCH_SIZE) {
-        // ONE modular inversion for 1024 points!
-        fe_batch_inverse(batch_z.data(), idx);
-
-        // Now batch_z[i] contains Z_i^(-1)
-        for (size_t i = 0; i < idx; ++i) {
-            FieldElement z_inv_sq = batch_z[i].square();         // Z^(-2)
-            FieldElement x_affine = batch_points[i].X() * z_inv_sq;  // X_affine = X_jac * Z^(-2)
-            // Use x_affine as needed
-        }
-        idx = 0;  // Reset batch
-    }
 }
 ```
 
-**Performance**: For N=1024 batch, this is **~500× cheaper** than individual inversions. A single field inversion costs ~3.5μs (Fermat), while batch amortizes to ~7ns per element.
+### GPU Pattern: H-Product Serial Inversion
 
-### GPU Pattern: H-Product Serial Inversion (`jacobian_add_mixed_h`)
+Production GPU apps use a memory-efficient variant: instead of storing full Z coordinates, `jacobian_add_mixed_h` returns **H = U2 − X1** separately. Since Z_k = Z_0 · H_0 · H_1 · … · H_{k-1}, the entire Z chain is invertible from H values + initial Z_0.
 
-Production GPU apps use a more memory-efficient variant: instead of storing full Z coordinates,
-`jacobian_add_mixed_h` returns **H = U2 − X1** separately from each addition. Since Z_{k} = Z_0 · H_0 · H_1 · … · H_{k-1},
-we can reconstruct and invert the entire Z chain from just the H values + initial Z_0.
+**Cost**: 1 Fermat inversion + 2N multiplications per thread (vs N Fermat inversions naively).
 
-**Step 1 — Collect H values during serial additions** (CUDA kernel):
-```cuda
-// jacobian_add_mixed_h: madd-2004-hmv (8M+3S), outputs H separately
-// H = U2 - X1, and internally computes Z3 = Z1 * H
-__device__ void jacobian_add_mixed_h(
-    const JacobianPoint* p, const AffinePoint* q,
-    JacobianPoint* r, FieldElement& h_out);
+> See `apps/secp256k1_search_gpu_only/gpu_only.cu` (step kernel) + `unified_split.cuh` (batch inversion kernel)
 
-// --- Step kernel: add G repeatedly, save X and H at each slot ---
-FieldElement h;
-win_z0[tid] = P.z;                    // Save initial Z_0
+---
 
-for (int slot = 0; slot < batch_interval; ++slot) {
-    win_x[tid + slot * stride] = P.x; // Save Jacobian X
-    jacobian_add_mixed_h(&P, &G, &P, h);
-    win_h[tid + slot * stride] = h;   // Save H (not Z!)
-}
-```
+## secp256k1 Stable C ABI (`ufsecp`) — FFI Bindings
 
-**Step 2 — Serial Z chain inversion** (1 Fermat inversion per thread):
-```cuda
-// Forward: reconstruct Z_final = Z_0 * H_0 * H_1 * ... * H_{N-1}
-FieldElement z_current = z0_values[tid];
-for (int slot = 0; slot < batch_interval; ++slot) {
-    z_current = z_current * h_array[tid + slot * stride];
-}
-
-// ONE inversion of Z_final (Fermat: 255 sqr + 16 mul)
-FieldElement z_inv = field_inverse(z_current);
-
-// Backward: unwind to get Z_slot^{-2} at each position
-for (int slot = batch_interval - 1; slot >= 0; --slot) {
-    int idx = tid + slot * stride;
-    z_inv = z_inv * h_array[idx];     // Z_{slot}^{-1}
-    h_array[idx] = z_inv * z_inv;     // Z_{slot}^{-2} (overwrite H in-place!)
-}
-```
-
-**Step 3 — Affine X extraction**:
-```cuda
-// h_array now contains Z^{-2} at each slot
-for (int slot = 0; slot < batch_interval; ++slot) {
-    int idx = tid + slot * stride;
-    FieldElement x_affine = win_x[idx] * h_array[idx];  // X_jac * Z^{-2}
-    // Use x_affine as needed
-}
-```
-
-**Why H instead of Z?**
-- **Memory**: H is a single field element; Z would also be a field element, but H is computed "for free" inside the addition — no extra multiply needed
-- **Serial inversion**: Z_k = Z_0 · ∏H_i, so the backward sweep naturally yields Z_k^{-1} at each step using just the stored H values
-- **In-place**: H array is overwritten with Z^{-2} — zero extra memory allocation
-- **Cost**: 1 Fermat inversion + 2N multiplications per thread (vs N Fermat inversions naively)
-
-> See production usage: `apps/secp256k1_search_gpu_only/gpu_only.cu` (step kernel) + `unified_split.cuh` (batch inversion kernel)
-
-### Other Batch Inverse Use Cases
-
-#### 1. Full Point Conversion: Jacobian → Affine (X + Y)
-
-When you need both X and Y (precompute table, serialization, debugging):
-
-```cpp
-// N Jacobian points → N Affine points (1 inversion)
-FieldElement z_values[N];
-for (size_t i = 0; i < N; ++i)
-    z_values[i] = points[i].z();
-
-fe_batch_inverse(z_values.data(), N);  // z_values[i] = Z_i^(-1)
-
-for (size_t i = 0; i < N; ++i) {
-    FieldElement z_inv = z_values[i];
-    FieldElement z2 = z_inv.square();          // Z^(-2)
-    FieldElement z3 = z2 * z_inv;              // Z^(-3)
-    affine_x[i] = points[i].X() * z2;         // X_affine = X_jac · Z^(-2)
-    affine_y[i] = points[i].Y() * z3;         // Y_affine = Y_jac · Z^(-3)
-}
-```
-
-#### 2. X-Only Coordinate Extraction
-
-In most cases you don't need Y — only the affine X coordinate is required:
-
-```cpp
-// CPU pattern
-constexpr size_t BATCH_SIZE = 1024;
-Point batch_points[BATCH_SIZE];
-FieldElement batch_z[BATCH_SIZE];
-size_t batch_idx = 0;
-
-for (uint64_t j = start; j < end; ++j) {
-    batch_points[batch_idx] = p;
-    batch_z[batch_idx] = p.z();
-    batch_idx++;
-    p.next_inplace();
-
-    if (batch_idx == BATCH_SIZE || j == end - 1) {
-        fe_batch_inverse(batch_z.data(), batch_idx);  // 1 inversion!
-
-        for (size_t i = 0; i < batch_idx; ++i) {
-            FieldElement z_inv_sq = batch_z[i].square();           // Z^(-2)
-            FieldElement x_affine = batch_points[i].X() * z_inv_sq;  // X only!
-            // Use x_affine as needed
-        }
-        batch_idx = 0;
-    }
-}
-```
-
-#### 3. CUDA: Z Extraction → batch_inverse_kernel → Affine X
-
-On GPU where you have an array of `JacobianPoint` — Z coordinates are extracted separately, inversion uses shared memory:
-
-```cuda
-// Step 1: Extract Z coordinates (1 kernel)
-__global__ void extract_z_kernel(const JacobianPoint* points,
-                                 FieldElement* zs, int n) {
-    int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if (idx < n) zs[idx] = points[idx].z;
-}
-
-// Step 2: Montgomery batch inverse (shared memory prefix/suffix scan)
-//         1 inversion per block, inner elements use multiplications only
-batch_inverse_kernel<<<blocks, 256, shared_mem>>>(d_zs, d_inv_zs, N);
-
-// Step 3: Affine X = X_jac * Z_inv²
-__global__ void affine_extraction_kernel(const JacobianPoint* points,
-                                         const FieldElement* inv_zs, ...) {
-    int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    FieldElement z_inv = inv_zs[idx];
-    FieldElement z2;
-    field_sqr(&z_inv, &z2);           // Z^(-2)
-    FieldElement x_aff;
-    field_mul(&points[idx].x, &z2, &x_aff);  // X_affine
-    // Use x_aff as needed
-}
-```
-
-#### 4. Batch Modular Division: a[i] / b[i]
-
-Arbitrary batch division for field elements:
-
-```cpp
-FieldElement denominators[] = {b0, b1, b2, b3};
-fe_batch_inverse(denominators, 4);
-// denominators[i] = b_i^(-1)
-FieldElement r0 = a0 * denominators[0];  // a0 / b0
-FieldElement r1 = a1 * denominators[1];  // a1 / b1
-FieldElement r2 = a2 * denominators[2];  // a2 / b2
-FieldElement r3 = a3 * denominators[3];  // a3 / b3
-```
-
-#### 5. Scratch Buffer Reuse
-
-When processing multiple rounds, a single pre-allocated scratch buffer is reused across all rounds:
-
-```cpp
-std::vector<FieldElement> scratch;
-scratch.reserve(BATCH_SIZE);  // Allocate once
-
-for (int round = 0; round < total_rounds; ++round) {
-    // ... fill batch_z[] ...
-    fe_batch_inverse(batch_z.data(), N, scratch);  // Reuses scratch buffer
-    // ... affine conversion ...
-}
-```
-
-### Montgomery Trick — Full Algorithm Explanation
-
-```
-Input: [a₀, a₁, a₂, ..., aₙ₋₁]
-
-1) Forward pass — cumulative products:
-   prod[0] = a₀
-   prod[1] = a₀ · a₁
-   prod[2] = a₀ · a₁ · a₂
-   ...
-   prod[N-1] = a₀ · a₁ · ... · aₙ₋₁
-
-2) Single inversion:
-   inv = prod[N-1]⁻¹ = (a₀ · a₁ · ... · aₙ₋₁)⁻¹
-
-3) Backward pass — extract individual inverses:
-   aₙ₋₁⁻¹ = inv · prod[N-2]
-   inv ← inv · aₙ₋₁(original)
-   aₙ₋₂⁻¹ = inv · prod[N-3]
-   inv ← inv · aₙ₋₂(original)
-   ...
-   a₀⁻¹ = inv
-
-Cost: 1 inversion + 3(N-1) multiplications
-N=1024: 1×3.5μs + 3069×5ns ≈ 18.8μs (vs 1024×3.5μs = 3584μs → 190× faster!)
-```
-
-## �📦 Use Cases
-
-> ### ⚠️ Testers Wanted
-> We need community testers for platforms we cannot fully validate in CI:
-> - **iOS** — Build & run on real iPhone/iPad hardware with Xcode
-> - **AMD GPU (ROCm/HIP)** — Test on AMD Radeon RX / Instinct GPUs
->
-> If you can help, please [open an issue](https://github.com/shrec/UltrafastSecp256k1/issues) with your results!
-
-- **Cryptocurrency Applications**
-  - Bitcoin/Ethereum address generation
-  - Transaction signing and verification
-  - Hardware wallet integration
-  - Bulk address validation
-
-- **Cryptographic Research**
-  - ECC algorithm testing
-  - Performance benchmarking
-  - Custom curve implementations
-
-- **General Purpose**
-  - Any application requiring secp256k1 operations
-  - High-throughput cryptographic services
-  - Embedded systems (RISC-V support)
-
-## 🔐 Security Model
-
-UltrafastSecp256k1 is a performance-focused secp256k1 engine with two security profiles.
-See [THREAT_MODEL.md](THREAT_MODEL.md) for a full layer-by-layer risk assessment.
-
-⚠️ **Constant-time behavior is NOT guaranteed unless you use the `ct::` namespace.**
-
-### FAST Profile (Default)
-
-* Optimized for maximum throughput
-* Variable-time algorithms (timing side-channels possible)
-* Intended for:
-  * Public-key operations and verification
-  * Batch processing and GPU workloads
-  * Research and benchmarking
-
-### CT / HARDENED Profile (Implemented)
-
-* Constant-time arithmetic — no secret-dependent branches or memory access
-* ~5–7× performance penalty vs FAST
-* Provides: `ct::field_mul`, `ct::field_inv`, `ct::scalar_mul`, `ct::point_add_complete`, `ct::point_dbl`
-* Use for: private key handling, signing, nonce operations
-
-**Choose the appropriate profile for your use case.** Using FAST with secret data is a security vulnerability.
-
-## � Stable C ABI (`ufsecp`)
-
-Starting with **v3.4.0**, UltrafastSecp256k1 ships a stable C ABI — `ufsecp` — designed for FFI bindings (C#, Python, Rust, Go, Java, etc.) and embedding.
-
-### Architecture
+Starting with **v3.4.0**, UltrafastSecp256k1 ships a stable C ABI — `ufsecp` — designed for FFI bindings (C#, Python, Rust, Go, Java, Node.js, etc.):
 
 ```
 ┌──────────────────────────────────────────────────┐
@@ -501,16 +348,13 @@ Starting with **v3.4.0**, UltrafastSecp256k1 ships a stable C ABI — `ufsecp` �
 │           ufsecp.dll / libufsecp.so              │
 │  Opaque ctx  │  Error model  │  ABI versioning   │
 ├──────────────┴───────────────┴───────────────────┤
-│                FAST layer                        │
-│  Variable-time point/field/scalar operations     │
+│   FAST layer (variable-time public ops)          │
 ├──────────────────────────────────────────────────┤
-│                CT layer (always active)           │
-│  Constant-time signing, nonce gen, secret ops    │
-│  Complete addition (12M+2S), Valgrind markers    │
+│   CT layer (constant-time secret-key ops)        │
 └──────────────────────────────────────────────────┘
 ```
 
-Both layers are **always active** — no flag-based selection. Public operations use the FAST layer; secret-key operations (sign, derive, ECDH) use the CT layer internally.
+Both layers are **always active** — public operations use FAST; secret-key operations (sign, derive, ECDH) use CT internally.
 
 ### Quick Start (C)
 
@@ -552,30 +396,38 @@ ufsecp_ctx_destroy(ctx);
 | **Tweak** | `pubkey_tweak_add`, `pubkey_tweak_mul` |
 | **Version** | `version`, `abi_version`, `version_string` |
 
-### Building ufsecp
-
-```bash
-# Sub-project (from UltrafastSecp256k1 root — preferred)
-cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
-cmake --build build -j
-
-# Standalone
-cmake -S include/ufsecp -B build-ufsecp -DCMAKE_BUILD_TYPE=Release
-cmake --build build-ufsecp -j
-```
-
-Output: `ufsecp.dll` (shared) + `ufsecp_s.lib` (static).
-
 See [SUPPORTED_GUARANTEES.md](include/ufsecp/SUPPORTED_GUARANTEES.md) for Tier 1/2/3 stability guarantees.
 
-## �🛠️ Building
+---
+
+## secp256k1 Use Cases
+
+- **Transaction Signing & Verification** — Bitcoin, Ethereum, and 25+ blockchain transaction signing at CPU or GPU scale
+- **Batch Signature Verification** — verify thousands of ECDSA/Schnorr signatures per second for block validation
+- **HD Wallet Key Derivation** — BIP-32/44 hierarchical deterministic derivation with 27-coin address generation
+- **Embedded IoT Signing** — ESP32 and STM32 on-device key generation and transaction signing
+- **High-Throughput Indexing** — GPU-accelerated public key derivation for address indexing services
+- **Zero-Knowledge Proof Systems** — Pedersen commitments, adaptor signatures for ZK protocols
+- **Multi-Party Computation** — MuSig2 (BIP-327) and FROST threshold signing
+- **Cross-Platform Cryptographic Services** — single codebase across server (CUDA), desktop (OpenCL/Metal), mobile (ARM64), browser (WASM), and embedded (ESP32/STM32)
+- **Cryptographic Research & Benchmarking** — field/group operation microbenchmarks, algorithm variant comparison
+
+> ### Testers Wanted
+> We need community testers for platforms we cannot fully validate in CI:
+> - **iOS** — Build & run on real iPhone/iPad hardware with Xcode
+> - **AMD GPU (ROCm/HIP)** — Test on AMD Radeon RX / Instinct GPUs
+>
+> [Open an issue](https://github.com/shrec/UltrafastSecp256k1/issues) with your results!
+
+---
+
+## Building secp256k1 from Source (CMake)
 
 ### Prerequisites
 
 - CMake 3.18+
-- C++20 compiler (GCC 11+, Clang/LLVM 15+)
-  - MSVC 2022+ (optional, disabled by default - use `-DSECP256K1_ALLOW_MSVC=ON`)
-- CUDA Toolkit 12.0+ (optional, for GPU support)
+- C++20 compiler (GCC 11+, Clang/LLVM 15+, MSVC 2022+ with `-DSECP256K1_ALLOW_MSVC=ON`)
+- CUDA Toolkit 12.0+ (optional, for GPU)
 - Ninja (recommended)
 
 ### CPU-Only Build
@@ -585,7 +437,7 @@ cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j
 ```
 
-### With CUDA Support
+### With CUDA GPU Support
 
 ```bash
 cmake -S . -B build -G Ninja \
@@ -597,11 +449,8 @@ cmake --build build -j
 ### WebAssembly (Emscripten)
 
 ```bash
-# Requires Emscripten SDK (emsdk)
 ./scripts/build_wasm.sh        # → build-wasm/dist/
 ```
-
-Output: `secp256k1_wasm.wasm` + `secp256k1.mjs` (ES6 module with TypeScript types). See [wasm/README.md](wasm/README.md) for JS/TS usage.
 
 ### iOS (XCFramework)
 
@@ -609,54 +458,28 @@ Output: `secp256k1_wasm.wasm` + `secp256k1.mjs` (ES6 module with TypeScript type
 ./scripts/build_xcframework.sh  # → build-xcframework/output/
 ```
 
-Produces a universal XCFramework (arm64 device + arm64 simulator). Also available via **Swift Package Manager** and **CocoaPods**.
+Universal XCFramework (arm64 device + arm64 simulator). Also available via **Swift Package Manager** and **CocoaPods**.
 
 ### Build Options
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `SECP256K1_USE_ASM` | ON | Enable assembly optimizations (x64/RISC-V) |
-| `SECP256K1_BUILD_CUDA` | OFF | Build CUDA GPU support |
-| `SECP256K1_BUILD_OPENCL` | OFF | Build OpenCL GPU support |
-| `SECP256K1_BUILD_ROCM` | OFF | Build ROCm/HIP GPU support (AMD) |
-| `SECP256K1_BUILD_TESTS` | ON | Build test suite |
-| `SECP256K1_BUILD_BENCH` | ON | Build benchmarks |
+| `SECP256K1_USE_ASM` | ON | Assembly optimizations (x64/ARM64/RISC-V) |
+| `SECP256K1_BUILD_CUDA` | OFF | CUDA GPU support |
+| `SECP256K1_BUILD_OPENCL` | OFF | OpenCL GPU support |
+| `SECP256K1_BUILD_ROCM` | OFF | ROCm/HIP GPU support (AMD) |
+| `SECP256K1_BUILD_TESTS` | ON | Test suite |
+| `SECP256K1_BUILD_BENCH` | ON | Benchmarks |
 | `SECP256K1_RISCV_FAST_REDUCTION` | ON | Fast modular reduction (RISC-V) |
 | `SECP256K1_RISCV_USE_VECTOR` | ON | RVV vector extension (RISC-V) |
 
-### Build Profiles
+For detailed build instructions, see [docs/BUILDING.md](docs/BUILDING.md).
 
-UltrafastSecp256k1 is designed with two conceptual build targets:
+---
 
-#### 1️⃣ FAST (Performance Research Mode)
+## secp256k1 Quick Start (C++ Examples)
 
-* Maximum throughput
-* Aggressive compiler optimizations allowed
-* Suitable for:
-  * Benchmarking
-  * Public key generation
-  * Batch verification
-  * High-performance research environments
-
-#### 2️⃣ CT (Constant-Time Hardened Mode)
-
-* Secret-dependent branches avoided
-* Deterministic execution paths
-* Safer for:
-  * Private key operations
-  * Signing workflows
-  * External-facing cryptographic services
-
-CT mode is under continuous development and will be expanded with:
-
-* Montgomery ladder options
-* Constant-time table selection
-* Optional blinding techniques
-* Timing regression testing integration
-
-## 🎯 Quick Start
-
-### Basic CPU Usage
+### Basic Point Operations
 
 ```cpp
 #include <secp256k1/field.hpp>
@@ -667,94 +490,24 @@ CT mode is under continuous development and will be expanded with:
 using namespace secp256k1::fast;
 
 int main() {
-    // 1. Field arithmetic
-    auto a = FieldElement::from_hex(
-        "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141"
-    );
-    auto b = FieldElement::from_hex(
-        "1234567890ABCDEF1234567890ABCDEF1234567890ABCDEF1234567890ABCDEF"
-    );
-    
-    auto sum = a + b;
-    auto product = a * b;
-    auto inverse = a.inverse();
-    
-    std::cout << "Sum: " << sum.to_hex() << "\n";
-    std::cout << "Product: " << product.to_hex() << "\n";
-    
-    // 2. Point operations (public key derivation)
+    // Public key derivation: private_key × G = public_key
     auto generator = Point::generator();
     auto private_key = Scalar::from_hex(
         "E9873D79C6D87DC0FB6A5778633389F4453213303DA61F20BD67FC233AA33262"
     );
-    
-    // Multiply generator by private key
     auto public_key = generator * private_key;
-    
+
     std::cout << "Public Key X: " << public_key.x().to_hex() << "\n";
     std::cout << "Public Key Y: " << public_key.y().to_hex() << "\n";
-    
-    // 3. Point addition
-    auto point1 = Point::from_coordinates(
-        FieldElement::from_hex("..."),
-        FieldElement::from_hex("...")
-    );
-    auto point2 = Point::from_coordinates(
-        FieldElement::from_hex("..."),
-        FieldElement::from_hex("...")
-    );
-    
-    auto result = point1 + point2;
-    
     return 0;
 }
 ```
 
-**Compile & Run:**
 ```bash
-# Link with the library
-g++ -std=c++20 example.cpp -lsecp256k1-fast-cpu -o example
-./example
+g++ -std=c++20 example.cpp -lsecp256k1-fast-cpu -o example && ./example
 ```
 
-### Advanced: Batch Signature Verification
-
-```cpp
-#include <secp256k1/point.hpp>
-#include <secp256k1/scalar.hpp>
-#include <vector>
-
-using namespace secp256k1::fast;
-
-bool verify_signatures_batch(
-    const std::vector<Point>& public_keys,
-    const std::vector<std::array<uint8_t, 32>>& messages,
-    const std::vector<Scalar>& r_values,
-    const std::vector<Scalar>& s_values
-) {
-    auto generator = Point::generator();
-    
-    for (size_t i = 0; i < public_keys.size(); ++i) {
-        // Hash message
-        auto msg_hash = Scalar::from_bytes(messages[i]);
-        
-        // Verify: s*G = R + hash*PubKey
-        auto s_inv = s_values[i].inverse();
-        auto u1 = msg_hash * s_inv;
-        auto u2 = r_values[i] * s_inv;
-        
-        auto point = generator * u1 + public_keys[i] * u2;
-        
-        if (point.x().to_scalar() != r_values[i]) {
-            return false;
-        }
-    }
-    
-    return true;
-}
-```
-
-### CUDA GPU Acceleration
+### GPU Batch Multiplication
 
 ```cpp
 #include <secp256k1_cuda/batch_operations.hpp>
@@ -764,443 +517,42 @@ bool verify_signatures_batch(
 using namespace secp256k1::fast;
 
 int main() {
-    // Prepare batch data (1 million operations)
-    std::vector<Point> base_points(1'000'000);
+    std::vector<Point> base_points(1'000'000, Point::generator());
     std::vector<Scalar> scalars(1'000'000);
-    
-    // Fill with data...
-    for (size_t i = 0; i < base_points.size(); ++i) {
-        base_points[i] = Point::generator();
-        scalars[i] = Scalar::random();
-    }
-    
-    // GPU batch multiplication
-    cuda::BatchConfig config{
-        .device_id = 0,
-        .threads_per_block = 256,
-        .streams = 4
-    };
-    
-    auto results = cuda::batch_multiply(
-        base_points, 
-        scalars, 
-        config
-    );
-    
-    std::cout << "Processed " << results.size() 
-              << " point multiplications on GPU\n";
-    
-    // Results are already on host memory
-    for (const auto& result : results) {
-        std::cout << "Result: " << result.x().to_hex() << "\n";
-    }
-    
+    for (auto& s : scalars) s = Scalar::random();
+
+    cuda::BatchConfig config{.device_id = 0, .threads_per_block = 256, .streams = 4};
+    auto results = cuda::batch_multiply(base_points, scalars, config);
+
+    std::cout << "Processed " << results.size() << " point multiplications\n";
     return 0;
 }
 ```
 
-**Compile with CUDA:**
-```bash
-nvcc -std=c++20 cuda_example.cpp \
-     -lsecp256k1-fast-cpu -lsecp256k1-fast-cuda \
-     -o cuda_example
-./cuda_example
-```
+---
 
-### CUDA: Batch Address Generation
+## secp256k1 Security Model (FAST vs CT)
 
-```cpp
-#include <secp256k1_cuda/batch_operations.hpp>
-#include <secp256k1_cuda/address_generator.hpp>
+Two security profiles are **always active** — no flag-based selection:
 
-int main() {
-    // Generate 10 million Bitcoin addresses on GPU
-    std::vector<Scalar> private_keys(10'000'000);
-    
-    // Fill with sequential or random keys
-    for (size_t i = 0; i < private_keys.size(); ++i) {
-        private_keys[i] = Scalar::from_int(i + 1);
-    }
-    
-    // GPU batch generation
-    auto addresses = cuda::generate_addresses(
-        private_keys,
-        cuda::AddressType::P2PKH // Bitcoin P2PKH format
-    );
-    
-    std::cout << "Generated " << addresses.size() << " addresses\n";
-    
-    // First few addresses
-    for (size_t i = 0; i < 10; ++i) {
-        std::cout << "Address " << i << ": " 
-                  << addresses[i] << "\n";
-    }
-    
-    return 0;
-}
-```
+### FAST Profile (Default)
 
-### Performance Tuning Example
+- Maximum throughput, variable-time algorithms
+- Use for: verification, batch processing, public key derivation, benchmarking
+- ⚠️ **Not safe for secret key operations** — timing side-channels possible
 
-```cpp
-#include <secp256k1/field.hpp>
-#include <secp256k1/field_asm.hpp>
-#include <chrono>
+### CT / Hardened Profile (`ct::` namespace)
 
-using namespace secp256k1::fast;
+- Constant-time arithmetic — no secret-dependent branches or memory access
+- ~5–7× performance penalty vs FAST
+- Use for: signing, private key handling, nonce generation, ECDH
 
-void benchmark_field_multiply() {
-    auto a = FieldElement::random();
-    auto b = FieldElement::random();
-    
-    const int iterations = 1'000'000;
-    
-    // Warm-up
-    for (int i = 0; i < 1000; ++i) {
-        volatile auto result = a * b;
-    }
-    
-    auto start = std::chrono::high_resolution_clock::now();
-    
-    for (int i = 0; i < iterations; ++i) {
-        volatile auto result = a * b;
-    }
-    
-    auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(
-        end - start
-    ).count();
-    
-    std::cout << "Field multiply: " 
-              << (duration / iterations) << " ns/op\n";
-    
-    // Check if using assembly
-    if (has_bmi2_support()) {
-        std::cout << "Using BMI2 intrinsics: YES\n";
-    }
-    
-#ifdef SECP256K1_HAS_ASM
-    std::cout << "Using assembly: YES\n";
-#else
-    std::cout << "Using portable C++\n";
-#endif
-}
-```
+**Choose the appropriate profile for your use case.** Using FAST with secret data is a security vulnerability.
+See [THREAT_MODEL.md](THREAT_MODEL.md) for full details.
 
-## 📊 Performance
+---
 
-All CPU benchmarks use median of 3 passes after warm-up. Windows results from Clang 21.1.0, Release, AVX2.
-RISC-V results collected on **Milk-V Mars** (RV64 + RVV).
-
-### x86_64 / Windows (Clang 21.1.0, AVX2, BMI2/ADX, Release)
-
-| Operation | Time |
-|-----------|------:|
-| Field Mul (5×52) | 17 ns |
-| Field Square (5×52) | 13 ns |
-| Field Add | 1 ns |
-| Field Negate | <1 ns |
-| Field Inverse | 1 μs |
-| Point Add | 172 ns |
-| Point Double | 83 ns |
-| Point Scalar Mul (k×P) | 24 μs |
-| Generator Mul (k×G) | 7 μs |
-| **ECDSA Sign** | **33 μs** |
-| **ECDSA Verify** | **57 μs** |
-| **Schnorr Sign (BIP-340)** | **23 μs** |
-| **Schnorr Verify (BIP-340)** | **58 μs** |
-| Batch Inverse (n=100) | 118 ns/elem |
-| Batch Inverse (n=1000) | 105 ns/elem |
-
-#### Signature Performance Summary
-
-| Operation | Time | Notes |
-|-----------|------:|-------|
-| ECDSA Sign (RFC 6979) | 33 μs | Deterministic nonce, low-S normalized |
-| ECDSA Verify | 57 μs | Accepts both low-S and high-S |
-| Schnorr Sign (BIP-340) | 23 μs | Tagged hashing, x-only pubkeys |
-| Schnorr Verify (BIP-340) | 58 μs | Standard BIP-340 verification |
-
-*Schnorr sign is ~30% faster than ECDSA sign due to simpler nonce derivation (no modular inverse). Verification speed is comparable — both require two scalar multiplications (k₁×G + k₂×Q).*
-
-#### Scalar Multiplication Breakdown
-
-| Method | Time |
-|--------|------:|
-| k×G (Generator, precomputed) | 7 μs |
-| k×P (Arbitrary point) | 24 μs |
-
-#### Field Representation Comparison (5×52 vs 4×64)
-
-| Operation | 4×64 | 5×52 | Speedup |
-|-----------|------:|------:|--------:|
-| Multiplication | 42 ns | 15 ns | **2.76×** |
-| Squaring | 31 ns | 13 ns | **2.44×** |
-| Addition | 4.3 ns | 1.6 ns | **2.69×** |
-| Add chain (32 ops) | 286 ns | 57 ns | **5.01×** |
-
-*5×52 uses `__int128` lazy reduction — ideal for 64-bit platforms. 4×64 is the default portable representation.*
-
-#### Constant-Time (CT) Layer Overhead
-
-| Operation | Fast | CT | Overhead |
-|-----------|------:|------:|--------:|
-| Field Mul | 36 ns | 55 ns | 1.50× |
-| Field Inverse | 3.0 μs | 14.2 μs | 4.80× |
-| Point Add | 0.65 μs | 1.63 μs | 2.50× |
-| Scalar Mul (k×P) | 130 μs | 322 μs | 2.49× |
-| Generator Mul (k×G) | 7.6 μs | 310 μs | 40.8× |
-
-*CT layer provides constant-time execution for side-channel resistance. Generator mul overhead is higher due to disabled precomputed table lookups (variable-time).*
-
-### x86_64 / Linux (i5, Clang 19.1.7, AVX2, Release)
-
-| Operation | Time |
-|-----------|------:|
-| Field Mul | 33 ns |
-| Field Square | 32 ns |
-| Field Add | 11 ns |
-| Field Sub | 12 ns |
-| Field Inverse | 5 μs |
-| Point Add | 521 ns |
-| Point Double | 278 ns |
-| Point Scalar Mul | 110 μs |
-| Generator Mul | 5 μs |
-| Batch Inverse (n=100) | 140 ns |
-| Batch Inverse (n=1000) | 92 ns |
-
-### RISC-V 64-bit / Linux (Milk-V Mars, RVV, Clang 21.1.8, Release)
-
-| Operation | Time |
-|-----------|------:|
-| Field Mul | 173 ns |
-| Field Square | 160 ns |
-| Field Add | 38 ns |
-| Field Sub | 34 ns |
-| Field Inverse | 17 μs |
-| Point Add | 3 μs |
-| Point Double | 1 μs |
-| Point Scalar Mul | 621 μs |
-| Generator Mul | 37 μs |
-| Batch Inverse (n=100) | 695 ns |
-| Batch Inverse (n=1000) | 547 ns |
-
-*See [RISCV_OPTIMIZATIONS.md](RISCV_OPTIMIZATIONS.md) for optimization details.*
-
-### ESP32-S3 / Embedded (Xtensa LX7 @ 240 MHz, ESP-IDF v5.5.1, -O3)
-
-| Operation | Time |
-|-----------|------:|
-| Field Mul | 7,458 ns |
-| Field Square | 7,592 ns |
-| Field Add | 636 ns |
-| Field Inv | 844 μs |
-| Scalar × G (Generator Mul) | 2,483 μs |
-
-*Portable C++ (no `__int128`, no assembly). All 35 library tests pass. See [examples/esp32_test/](examples/esp32_test/) for details.*
-
-### ESP32-PICO-D4 / Embedded (Xtensa LX6 Dual Core @ 240 MHz, ESP-IDF v5.5.1, -O3)
-
-| Operation | Time |
-|-----------|------:|
-| Field Mul | 6,993 ns |
-| Field Square | 6,247 ns |
-| Field Add | 985 ns |
-| Field Inv | 609 μs |
-| Scalar × G (Generator Mul) | 6,203 μs |
-| CT Scalar × G | 44,810 μs |
-| CT Add (complete) | 249,672 ns |
-| CT Dbl | 87,113 ns |
-| CT/Fast ratio | 6.5× |
-
-*Portable C++ (no `__int128`, no assembly). All 35 self-tests + 8 CT tests pass. See [examples/esp32_test/](examples/esp32_test/) for details.*
-
-### STM32F103ZET6 / Embedded (ARM Cortex-M3 @ 72 MHz, GCC 13.3.1, -O3)
-
-| Operation | Time |
-|-----------|------:|
-| Field Mul | 15,331 ns |
-| Field Square | 12,083 ns |
-| Field Add | 4,139 ns |
-| Field Inv | 1,645 μs |
-| Scalar × G (Generator Mul) | 37,982 μs |
-
-*ARM Cortex-M3 inline assembly (UMULL/ADDS/ADCS) for multiply/squaring/reduction. Portable C++ for field add/sub. All 35 library tests pass. See [examples/stm32_test/](examples/stm32_test/) for details.*
-
-### Android ARM64 (RK3588, Cortex-A55/A76 @ 2.4 GHz, NDK r27 Clang 18, -O3)
-
-| Operation | Time |
-|-----------|------:|
-| Field Mul | 85 ns |
-| Field Square | 66 ns |
-| Field Add | 18 ns |
-| Field Sub | 16 ns |
-| Field Inverse | 2,621 ns |
-| Scalar Mul | 105 ns |
-| Scalar Add | 12 ns |
-| Point Add | 9,329 ns |
-| Point Double | 8,711 ns |
-| Fast Scalar × G (Generator Mul) | 7.6 μs |
-| Fast Scalar × P (Non-Generator) | 77.6 μs |
-| CT Scalar × G | 545 μs |
-| CT ECDH | 545 μs |
-
-*ARM64 inline assembly (MUL/UMULH) for field mul/sqr/add/sub/neg. ~5× faster than generic C++. All 12 Android tests pass. See [android/](android/) for details.*
-
-### Embedded Cross-Platform Comparison
-
-| Operation | ESP32-S3 LX7 (240 MHz) | ESP32 LX6 (240 MHz) | STM32F103 (72 MHz) |
-|-----------|-------------------:|-------------------:|-------------------:|
-| Field Mul | 7,458 ns | 6,993 ns | 15,331 ns |
-| Field Square | 7,592 ns | 6,247 ns | 12,083 ns |
-| Field Add | 636 ns | 985 ns | 4,139 ns |
-| Field Inv | 844 μs | 609 μs | 1,645 μs |
-| Scalar × G | 2,483 μs | 6,203 μs | 37,982 μs |
-
-*Clock-Normalized = (STM32 time × 72) / (ESP32 time × 240). Values < 1.0 mean STM32 is faster per-clock.*
-
-### CUDA (NVIDIA RTX 5060 Ti) — Kernel-Only
-
-#### Core ECC Operations
-
-| Operation | Time/Op | Throughput |
-|-----------|---------|------------|
-| Field Mul | 0.2 ns | 4,142 M/s |
-| Field Add | 0.2 ns | 4,130 M/s |
-| Field Inv | 10.2 ns | 98.35 M/s |
-| Point Add | 1.6 ns | 619 M/s |
-| Point Double | 0.8 ns | 1,282 M/s |
-| Scalar Mul (P×k) | 225.8 ns | 4.43 M/s |
-| Generator Mul (G×k) | 217.7 ns | 4.59 M/s |
-| Affine Add (2M+1S+inv) | 0.4 ns | 2,532 M/s |
-| Affine Lambda (2M+1S) | 0.6 ns | 1,654 M/s |
-| Affine X-Only (1M+1S) | 0.4 ns | 2,328 M/s |
-| Batch Inv (Montgomery) | 2.9 ns | 340 M/s |
-| Jac→Affine (per-pt) | 14.9 ns | 66.9 M/s |
-
-#### GPU Signature Operations (ECDSA + Schnorr)
-
-| Operation | Time/Op | Throughput | Protocol |
-|-----------|---------|------------|----------|
-| **ECDSA Sign** | **204.8 ns** | **4.88 M/s** | RFC 6979 + low-S |
-| **ECDSA Verify** | **410.1 ns** | **2.44 M/s** | Shamir + GLV |
-| **ECDSA Sign+Recid** | **311.5 ns** | **3.21 M/s** | Recoverable (EIP-155) |
-| **Schnorr Sign** | **273.4 ns** | **3.66 M/s** | BIP-340 |
-| **Schnorr Verify** | **354.6 ns** | **2.82 M/s** | BIP-340 + GLV |
-
-> **No other open-source GPU library provides secp256k1 ECDSA+Schnorr sign/verify.**
-> This is the only CUDA+OpenCL+Metal implementation with full signature support.
-
-*CUDA 12.0, sm_86;sm_89, batch=16K signatures, RTX 5060 Ti (36 SMs, 2602 MHz)*
-
-### OpenCL (NVIDIA RTX 5060 Ti) — Kernel-Only
-
-| Operation | Time/Op | Throughput |
-|-----------|---------|------------|
-| Field Mul | 0.2 ns | 4,137 M/s |
-| Field Add | 0.2 ns | 4,124 M/s |
-| Field Sqr | 0.2 ns | 5,985 M/s |
-| Field Inv | 14.3 ns | 69.97 M/s |
-| Point Add | 1.6 ns | 630.6 M/s |
-| Point Double | 0.9 ns | 1,139 M/s |
-| kG (Generator Mul) | 295.1 ns | 3.39 M/s |
-
-*OpenCL 3.0 CUDA, Driver 580.126.09, PTX inline asm, batch=256K–1M*
-
-### CUDA vs OpenCL — Kernel-Only Comparison (RTX 5060 Ti)
-
-| Operation | CUDA | OpenCL | Faster |
-|-----------|------|--------|--------|
-| Field Mul | 0.2 ns | 0.2 ns | Tie |
-| Field Add | 0.2 ns | 0.2 ns | Tie |
-| Field Inv | 10.2 ns | 14.3 ns | **CUDA 1.40×** |
-| Point Double | 0.8 ns | 0.9 ns | **CUDA 1.13×** |
-| Point Add | 1.6 ns | 1.6 ns | Tie |
-| kG (Generator Mul) | 217.7 ns | 295.1 ns | **CUDA 1.36×** |
-
-> **Note:** Both measurements are kernel-only (no buffer allocation/copy overhead). CUDA uses local-variable optimization for zero pointer-aliasing overhead.
-
-*Benchmarks: 2026-02-14, Linux x86_64, NVIDIA Driver 580.126.09*
-
-### Apple Metal (Apple M3 Pro) — Kernel-Only
-
-| Operation | Time/Op | Throughput |
-|-----------|---------|------------|
-| Field Mul | 1.9 ns | 527 M/s |
-| Field Add | 1.0 ns | 990 M/s |
-| Field Sub | 1.1 ns | 892 M/s |
-| Field Sqr | 1.1 ns | 872 M/s |
-| Field Inv | 106.4 ns | 9.40 M/s |
-| Point Add | 10.1 ns | 98.6 M/s |
-| Point Double | 5.1 ns | 196 M/s |
-| Scalar Mul (P×k) | 2.94 μs | 0.34 M/s |
-| Generator Mul (G×k) | 3.00 μs | 0.33 M/s |
-
-*Metal 2.4, 8×32-bit Comba limbs, Apple M3 Pro (18 GPU cores, Unified Memory 18 GB)*
-
-### Available Benchmark Targets
-
-| Target | Description | Run Command |
-|--------|-------------|-------------|
-| `bench_comprehensive` | Full field/point/batch/signature benchmark suite | `./bench_comprehensive` |
-| `bench_scalar_mul` | k×G and k×P with wNAF analysis | `./bench_scalar_mul` |
-| `bench_ct` | Fast-vs-CT layer overhead comparison | `./bench_ct` |
-| `bench_atomic_operations` | Individual ECC building block latencies | `./bench_atomic_operations` |
-| `bench_field_52` | 4×64 vs 5×52 field representation comparison | `./bench_field_52` |
-| `bench_field_26` | 4×64 vs 10×26 field representation comparison | `./bench_field_26` |
-| `bench_field_mul_kernels` | BMI2 kernel micro-benchmark | `./bench_field_mul_kernels` |
-| `bench_ecdsa_multiscalar` | k₁×G + k₂×Q (Shamir vs separate) | `./bench_ecdsa_multiscalar` |
-| `bench_jsf_vs_shamir` | JSF vs Windowed Shamir comparison | `./bench_jsf_vs_shamir` |
-| `bench_adaptive_glv` | GLV window size sweep (8–20) | `./bench_adaptive_glv` |
-| `bench_glv_decomp_profile` | GLV decomposition analysis | `./bench_glv_decomp_profile` |
-| `bench_comprehensive_riscv` | RISC-V optimized benchmark suite | `./bench_comprehensive_riscv` |
-
-## 🏗️ Architecture
-
-```
-secp256k1-fast/
-├── cpu/                 # CPU-optimized implementation
-│   ├── include/         # Public headers
-│   ├── src/            # Implementation
-│   │   ├── field.cpp           # Field arithmetic
-│   │   ├── scalar.cpp          # Scalar arithmetic
-│   │   ├── point.cpp           # Point operations
-│   │   ├── field_asm_x64.asm   # x64 assembly
-│   │   ├── field_asm_x64_gas.S # x64 GAS syntax
-│   │   └── field_asm_riscv64.S # RISC-V assembly
-│   └── tests/          # Unit tests
-├── cuda/               # CUDA GPU acceleration
-│   ├── include/        # CUDA headers
-│   ├── src/           # CUDA kernels
-│   └── tests/         # CUDA tests
-├── opencl/            # OpenCL GPU acceleration
-│   ├── kernels/       # OpenCL kernel sources (.cl)
-│   ├── include/       # OpenCL headers
-│   ├── src/           # Host-side OpenCL code
-│   └── tests/         # OpenCL tests
-└── examples/
-    ├── esp32_test/    # ESP32-S3 Xtensa LX7 port
-    └── stm32_test/    # STM32F103ZET6 ARM Cortex-M3 port
-```
-
-## 🔬 Research Statement
-
-This library explores the performance ceiling of secp256k1 across CPU architectures (x64, ARM64, RISC-V, Cortex-M, Xtensa) and GPUs (CUDA, OpenCL, Metal, ROCm). Zero external dependencies.
-
-## 📚 Variant Overview
-
-Internal 32-bit arithmetic variants (historical optimization stages):
-
-| Variant | Description |
-|---------|-------------|
-| `secp256k1_32_fast` | Speed-first, variable-time |
-| `secp256k1_32_hybrid_smart` | Mixed strategy experiments |
-| `secp256k1_32_hybrid_final` | Stabilized hybrid arithmetic |
-| `secp256k1_32_really_final` | Most mature 32-bit variant |
-
-## 🪙 Supported Coins
-
-All 27 secp256k1-based cryptocurrencies with native address generation (P2PKH, P2WPKH, P2TR, EIP-55):
+## secp256k1 Supported Coins (27 Blockchains)
 
 | # | Coin | Ticker | Address Types | BIP-44 |
 |---|------|--------|---------------|--------|
@@ -1234,111 +586,59 @@ All 27 secp256k1-based cryptocurrencies with native address generation (P2PKH, P
 
 All EVM chains (ETH, BNB, MATIC, AVAX, FTM, ARB, OP) share the same address format (EIP-55 checksummed hex).
 
-## 🚫 Scope
+---
 
-This is an ECC arithmetic library. It provides field/scalar/point operations, signature schemes (ECDSA, Schnorr, MuSig2, FROST, Adaptor), Pedersen commitments, Taproot, HD derivation (BIP-32/44), and 27-coin address generation.
-It does not include key storage, wallet software, network protocols, or attack tools.
+## secp256k1 Architecture
 
-## ⚠️ API Stability
+```
+UltrafastSecp256k1/
+├── cpu/                 # CPU-optimized implementation
+│   ├── include/         # Public headers (field.hpp, scalar.hpp, point.hpp, ecdsa.hpp, schnorr.hpp)
+│   ├── src/             # Implementation (field_asm_x64.asm, field_asm_riscv64.S, ...)
+│   ├── fuzz/            # libFuzzer harnesses
+│   └── tests/           # Unit tests
+├── cuda/                # CUDA GPU acceleration
+├── opencl/              # OpenCL GPU acceleration
+├── metal/               # Apple Metal GPU acceleration
+├── wasm/                # WebAssembly (Emscripten)
+├── android/             # Android NDK (ARM64)
+├── include/ufsecp/      # Stable C ABI
+├── examples/
+│   ├── esp32_test/      # ESP32-S3 Xtensa LX7 port
+│   └── stm32_test/      # STM32F103 ARM Cortex-M3 port
+└── docs/                # Documentation
+```
 
-**C++ API**: Not yet stable. Breaking changes may occur in any minor release before **v4.0**. Core layers (field, scalar, point, ECDSA, Schnorr) have mature interfaces unlikely to change. Experimental layers (MuSig2, FROST, Adaptor, Pedersen, Taproot, HD, Coins) may see breaking changes.
+---
 
-**C ABI (`ufsecp`)**: Stable from v3.4.0. ABI version is tracked separately — minor version bumps add new functions without breaking existing ones. See [SUPPORTED_GUARANTEES.md](include/ufsecp/SUPPORTED_GUARANTEES.md) for tier details.
-
-Pin your dependency version and review changelogs before upgrading.
-
-## 📚 Documentation
-
-- [Documentation Index](docs/README.md)
-- [API Reference](docs/API_REFERENCE.md)
-- [Build Guide](docs/BUILDING.md)
-- [Benchmarks](docs/BENCHMARKS.md)
-- [Threat Model](THREAT_MODEL.md)
-- [Contributing](CONTRIBUTING.md)
-- [Security Policy](SECURITY.md)
-- [Changelog](CHANGELOG.md)
-
-## 🧪 Testing
+## secp256k1 Testing & Verification
 
 ### Built-in Selftest
 
-The library includes a comprehensive self-test (`Selftest()`) that runs **deterministic KAT vectors** covering all arithmetic operations. Every test/bench executable runs this selftest on startup.
-
-### Three Modes
+Every executable runs a deterministic **Known Answer Test (KAT)** on startup, covering all arithmetic operations:
 
 | Mode | Time | When | What |
 |------|------|------|------|
-| **smoke** | ~1-2s | App startup, embedded | Core KAT (10 scalar mul, field/scalar identities, point ops, batch inverse, boundary vectors) |
-| **ci** | ~30-90s | Every push (CI) | Smoke + cross-checks, bilinearity, NAF/wNAF, batch sweeps, fast-vs-generic, algebraic stress |
-| **stress** | ~10-60min | Nightly / manual | CI + 1000 random scalar muls, 500 field triples, 100 bilinearity pairs, batch inverse up to 8192 |
+| **smoke** | ~1-2s | App startup, embedded | Core KAT (10 scalar mul, field/scalar identities, boundary vectors) |
+| **ci** | ~30-90s | Every push (CI) | Smoke + cross-checks, bilinearity, NAF/wNAF, batch sweeps, algebraic stress |
+| **stress** | ~10-60min | Nightly / manual | CI + 1000 random scalar muls, 500 field triples, batch inverse up to 8192 |
 
 ```cpp
 #include "secp256k1/selftest.hpp"
 using namespace secp256k1::fast;
 
-// Legacy (runs ci mode):
-Selftest(true);
-
-// Explicit mode + seed:
 Selftest(true, SelftestMode::smoke);              // Fast startup check
 Selftest(true, SelftestMode::ci);                  // Full CI suite
 Selftest(true, SelftestMode::stress, 0xDEADBEEF); // Nightly with custom seed
 ```
 
-### Repro Bundle
-
-On verbose output, selftest prints everything needed to reproduce a failure:
-
-```
-  Mode:     ci
-  Seed:     0x53454350324b3147
-  Compiler: Clang 17.0.6
-  Platform: Linux x64
-  Build:    Release
-  ASM:      enabled
-  Repro:    Selftest(true, SelftestMode::ci, 0x53454350324b3147)
-```
-
 ### Sanitizer Builds
 
 ```bash
-# ASan + UBSan (catches UB, out-of-bounds, use-after-free)
-cmake --preset cpu-asan
-cmake --build build/cpu-asan -j
+cmake --preset cpu-asan && cmake --build build/cpu-asan -j    # ASan + UBSan
+cmake --preset cpu-tsan && cmake --build build/cpu-tsan -j    # TSan (data races)
 ctest --test-dir build/cpu-asan --output-on-failure
-
-# TSan (catches data races in multi-threaded code)
-cmake --preset cpu-tsan
-cmake --build build/cpu-tsan -j
-ctest --test-dir build/cpu-tsan --output-on-failure
 ```
-
-### Running Tests
-
-```bash
-# Build and run all tests (ci mode)
-cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DSECP256K1_BUILD_TESTS=ON
-cmake --build build -j
-ctest --test-dir build --output-on-failure
-```
-
-### Platform Coverage Dashboard
-
-| Platform | Backend | Compiler | Selftest CI | Stress | Notes |
-|----------|---------|----------|-------------|--------|-------|
-| Linux x64 | CPU | GCC 13 | ✅ CI | - | Debug + Release |
-| Linux x64 | CPU | Clang 17 | ✅ CI | - | Debug + Release |
-| Linux x64 | CPU | Clang 17 (ASan+UBSan) | ✅ CI | - | Sanitizer build |
-| Linux x64 | CPU | Clang 17 (TSan) | ✅ CI | - | Thread sanitizer |
-| Windows x64 | CPU | MSVC 2022 | ✅ CI | - | Release |
-| macOS ARM64 | CPU + Metal | AppleClang | ✅ CI | - | Apple Silicon |
-| macOS ARM64 | Metal GPU | AppleClang | ✅ CI | - | GPU shader tests |
-| iOS ARM64 | CPU | Xcode | ✅ CI | - | Device + Simulator |
-| Android ARM64 | CPU | NDK r27c | ✅ CI | - | arm64-v8a |
-| WebAssembly | CPU | Emscripten | ✅ CI | - | Build + WASM benchmark |
-| ROCm/HIP | CPU + GPU | ROCm 6.3 | ✅ CI | - | Compile + CPU test |
-
-> Community-tested platforms: if you run selftest on a new platform, submit the log via PR and we'll add a row.
 
 ### Fuzz Testing
 
@@ -1346,63 +646,102 @@ libFuzzer harnesses cover core arithmetic (`cpu/fuzz/`):
 
 | Target | What it tests |
 |--------|---------------|
-| `fuzz_field` | add/sub round-trip, mul identity, square equivalence, inverse |
+| `fuzz_field` | add/sub round-trip, mul identity, square, inverse |
 | `fuzz_scalar` | add/sub, mul identity, distributive law |
 | `fuzz_point` | on-curve check, negate, compress round-trip, dbl vs add |
 
-```bash
-clang++ -fsanitize=fuzzer,address -O2 -std=c++20 \
-  -I cpu/include cpu/fuzz/fuzz_field.cpp cpu/src/field.cpp cpu/src/field_asm.cpp \
-  -o fuzz_field && ./fuzz_field -max_len=64 -runs=10000000
-```
+### Platform CI Coverage
 
-## 🤝 Contributing
+| Platform | Backend | Compiler | Status |
+|----------|---------|----------|--------|
+| Linux x64 | CPU | GCC 13 / Clang 17 | ✅ CI |
+| Linux x64 | CPU | Clang 17 (ASan+UBSan) | ✅ CI |
+| Linux x64 | CPU | Clang 17 (TSan) | ✅ CI |
+| Windows x64 | CPU | MSVC 2022 | ✅ CI |
+| macOS ARM64 | CPU + Metal | AppleClang | ✅ CI |
+| iOS ARM64 | CPU | Xcode | ✅ CI |
+| Android ARM64 | CPU | NDK r27c | ✅ CI |
+| WebAssembly | CPU | Emscripten | ✅ CI |
+| ROCm/HIP | CPU + GPU | ROCm 6.3 | ✅ CI |
 
-Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+---
 
-### Development Setup
+## secp256k1 Benchmark Targets
+
+| Target | Description |
+|--------|-------------|
+| `bench_comprehensive` | Full field/point/batch/signature suite |
+| `bench_scalar_mul` | k×G and k×P with wNAF analysis |
+| `bench_ct` | Fast-vs-CT overhead comparison |
+| `bench_atomic_operations` | Individual ECC building block latencies |
+| `bench_field_52` | 4×64 vs 5×52 field representation |
+| `bench_ecdsa_multiscalar` | k₁×G + k₂×Q (Shamir vs separate) |
+| `bench_jsf_vs_shamir` | JSF vs Windowed Shamir comparison |
+| `bench_adaptive_glv` | GLV window size sweep (8–20) |
+| `bench_comprehensive_riscv` | RISC-V optimized benchmark suite |
+
+---
+
+## Research Statement
+
+This library explores the **performance ceiling of secp256k1** across CPU architectures (x64, ARM64, RISC-V, Cortex-M, Xtensa) and GPUs (CUDA, OpenCL, Metal, ROCm). Zero external dependencies. Pure C++20.
+
+---
+
+## API Stability
+
+**C++ API**: Not yet stable. Breaking changes may occur before **v4.0**. Core layers (field, scalar, point, ECDSA, Schnorr) are mature. Experimental layers (MuSig2, FROST, Adaptor, Pedersen, Taproot, HD, Coins) may change.
+
+**C ABI (`ufsecp`)**: Stable from v3.4.0. ABI version tracked separately. See [SUPPORTED_GUARANTEES.md](include/ufsecp/SUPPORTED_GUARANTEES.md).
+
+---
+
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| [API Reference](docs/API_REFERENCE.md) | Full C++ and C ABI reference |
+| [Build Guide](docs/BUILDING.md) | Detailed build instructions for all platforms |
+| [Benchmarks](docs/BENCHMARKS.md) | Complete benchmark results and methodology |
+| [Threat Model](THREAT_MODEL.md) | Layer-by-layer security risk assessment |
+| [Security Policy](SECURITY.md) | Vulnerability reporting and audit status |
+| [Porting Guide](PORTING.md) | Add new platforms, architectures, GPU backends |
+| [RISC-V Optimizations](RISCV_OPTIMIZATIONS.md) | RISC-V assembly details |
+| [ESP32 Setup](docs/ESP32_SETUP.md) | ESP32 embedded development guide |
+| [Contributing](CONTRIBUTING.md) | Development guidelines |
+| [Changelog](CHANGELOG.md) | Version history |
+
+---
+
+## Contributing
+
+Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ```bash
 git clone https://github.com/shrec/UltrafastSecp256k1.git
 cd UltrafastSecp256k1
 cmake -S . -B build-dev -G Ninja -DCMAKE_BUILD_TYPE=Debug
 cmake --build build-dev -j
+ctest --test-dir build-dev --output-on-failure
 ```
 
-## 📄 License
+---
 
-This project is licensed under the **GNU Affero General Public License v3.0 (AGPL-3.0)**.
+## License
 
-### Open Source License
+**GNU Affero General Public License v3.0 (AGPL-3.0)**
 
-The library is free to use under AGPL-3.0 for open source projects. This means:
-- ✅ You can use, modify, and distribute the code
-- ✅ You must disclose your source code
-- ✅ You must license your project under AGPL-3.0 or compatible license
-- ✅ You must provide network access to your source code if you run it as a service
+- ✅ Use, modify, and distribute under AGPL-3.0
+- ✅ Must disclose source code
+- ✅ Must provide network access to source if run as a service
+
+**Commercial License**: For proprietary use without AGPL obligations, contact [payysoon@gmail.com](mailto:payysoon@gmail.com).
 
 See [LICENSE](LICENSE) for full details.
 
-### Commercial License
+---
 
-**For commercial/proprietary use without AGPL-3.0 obligations:**
-
-If you want to use this library in a proprietary/closed-source product or service without disclosing your source code, please contact us for a commercial license.
-
-📧 **Contact for commercial licensing:**
-- Email: [payysoon@gmail.com](mailto:payysoon@gmail.com)
-- GitHub: https://github.com/shrec/UltrafastSecp256k1
-
-We offer flexible licensing options for commercial applications.
-
-## 🙏 Acknowledgments
-
-- Based on optimized secp256k1 implementations
-- Inspired by Bitcoin Core's libsecp256k1
-- RISC-V assembly contributions
-- CUDA kernel optimizations
-
-## 📧 Contact & Community
+## Contact & Community
 
 | Channel | Link |
 |---------|------|
@@ -1410,20 +749,33 @@ We offer flexible licensing options for commercial applications.
 | Discussions | [GitHub Discussions](https://github.com/shrec/UltrafastSecp256k1/discussions) |
 | Wiki | [Documentation Wiki](https://github.com/shrec/UltrafastSecp256k1/wiki) |
 | Benchmarks | [Live Dashboard](https://shrec.github.io/UltrafastSecp256k1/dev/bench/) |
-| API Docs | [Doxygen](https://shrec.github.io/UltrafastSecp256k1/docs/) |
 | Security | [Report Vulnerability](https://github.com/shrec/UltrafastSecp256k1/security/advisories/new) |
 | Commercial | [payysoon@gmail.com](mailto:payysoon@gmail.com) |
 
-## ☕ Support the Project
+---
 
-If you find this library useful, consider supporting development!
+## Acknowledgements
+
+UltrafastSecp256k1 is an independent implementation — written from scratch with our own architecture, GPU pipeline, embedded ports, and optimization techniques. At the same time, no project exists in a vacuum. The published research, specifications, and open discussions from the wider cryptographic community helped us refine our own ideas and validate our results.
+
+We want to acknowledge the teams whose public work informed parts of our journey:
+
+- **[bitcoin-core/secp256k1](https://github.com/bitcoin-core/secp256k1)** — The reference C library whose published research on constant-time field arithmetic and endomorphism-based scalar multiplication (GLV, Strauss, Pippenger) helped us benchmark and verify our own independent implementations on GPU and embedded targets.
+- **[Bitcoin Core](https://github.com/bitcoin/bitcoin)** contributors — For open specifications (BIP-340 Schnorr, BIP-341 Taproot, RFC 6979) and a correctness-first engineering culture that benefits everyone building in this space.
+- **Pieter Wuille, Jonas Nick, Tim Ruffing** and the libsecp256k1 maintainers — For publicly sharing their research on side-channel resistance, exhaustive testing, and field representation trade-offs. Their published findings helped us make better decisions when designing our own architecture.
+
+We share our optimizations, GPU kernels, embedded ports, and cross-platform techniques freely — because open-source cryptography grows stronger when knowledge flows in every direction.
+
+---
+
+## Support the Project
 
 [![Sponsor](https://img.shields.io/badge/Sponsor-GitHub%20Sponsors-ea4aaa.svg?logo=github)](https://github.com/sponsors/shrec)
 [![PayPal](https://img.shields.io/badge/PayPal-Donate-blue.svg?logo=paypal)](https://paypal.me/IChkheidze)
 
 ---
 
-**UltrafastSecp256k1** — The fastest open-source secp256k1 library. GPU-accelerated ECDSA & Schnorr signatures for Bitcoin, Ethereum, and 25+ blockchains.
+**UltrafastSecp256k1** — The fastest open-source secp256k1 library. GPU-accelerated ECDSA & Schnorr signatures for Bitcoin, Ethereum, and 25+ blockchains. Zero dependencies. Constant-time layer. 12+ platforms.
 
-<!-- SEO keywords (not rendered) -->
-<!-- secp256k1 CUDA GPU ECDSA sign verify Schnorr BIP-340 Bitcoin Ethereum signature acceleration OpenCL Metal batch verification elliptic curve cryptography C++ high performance library blockchain cryptocurrency libsecp256k1 alternative GPU accelerated digital signatures NVIDIA AMD Apple Silicon embedded RISC-V ARM64 WebAssembly cross-platform multi-coin address generation BIP-32 BIP-44 HD wallet derivation key recovery EIP-155 RFC-6979 transaction signing fastest secp256k1 -->
+<!-- SEO keywords (not rendered by GitHub) -->
+<!-- secp256k1 library fastest GPU CUDA OpenCL Metal ROCm ECDSA sign verify Schnorr BIP-340 Bitcoin Ethereum signature acceleration elliptic curve cryptography C++ high performance zero dependency batch verification constant time side channel resistance embedded ESP32 STM32 ARM Cortex-M RISC-V ARM64 WebAssembly WASM cross-platform multi-coin address generation BIP-32 BIP-44 HD wallet derivation key recovery EIP-155 RFC-6979 transaction signing blockchain cryptocurrency libsecp256k1 alternative NVIDIA AMD Apple Silicon MuSig2 FROST threshold signatures Taproot BIP-341 Pedersen commitments adaptor signatures ECDH key exchange secp256k1 GPU acceleration secp256k1 on embedded secp256k1 benchmarks secp256k1 constant time secp256k1 WASM secp256k1 C ABI FFI bindings Python Go Rust Java Node.js -->
