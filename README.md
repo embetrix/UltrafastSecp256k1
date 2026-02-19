@@ -870,7 +870,7 @@ void benchmark_field_multiply() {
 ## 📊 Performance
 
 All CPU benchmarks use median of 3 passes after warm-up. Windows results from Clang 21.1.0, Release, AVX2.
-RISC-V results collected on **Milk-V Mars** (RV64 + RVV). Head-to-head comparison with Bitcoin Core libsecp256k1 included.
+RISC-V results collected on **Milk-V Mars** (RV64 + RVV).
 
 ### x86_64 / Windows (Clang 21.1.0, AVX2, BMI2/ADX, Release)
 
@@ -1097,59 +1097,6 @@ RISC-V results collected on **Milk-V Mars** (RV64 + RVV). Head-to-head compariso
 | Generator Mul (G×k) | 3.00 μs | 0.33 M/s |
 
 *Metal 2.4, 8×32-bit Comba limbs, Apple M3 Pro (18 GPU cores, Unified Memory 18 GB)*
-
-### 🆚 Head-to-Head: UltrafastSecp256k1 vs Bitcoin Core libsecp256k1
-
-**Same machine, same compiler, same flags.** Both built with Clang 21.1.0, Release, Windows x64, RealTime priority, pinned to core 2.
-
-#### Signature & High-Level Operations
-
-| Operation | UltrafastSecp256k1 | libsecp256k1 | Ratio |
-|-----------|-------------------:|-------------:|------:|
-| **ECDSA Sign** | 33 μs | 24.7 μs | 0.75× |
-| **ECDSA Verify** | 57 μs | 35.7 μs | 0.63× |
-| **Schnorr Sign (BIP-340)** | **23 μs** | 17.7 μs | 0.77× |
-| **Schnorr Verify (BIP-340)** | 58 μs | 36.3 μs | 0.63× |
-| **EC Keygen (k×G)** | **7 μs** | 16.2 μs | **2.31×** |
-| ECDH | — | 34.4 μs | — |
-| ECDSA Recovery | — | 37.0 μs | — |
-
-#### Atomic Field Operations (Internal)
-
-| Operation | UltrafastSecp256k1 | libsecp256k1 | Ratio |
-|-----------|-------------------:|-------------:|------:|
-| Field Mul (5×52) | 17 ns | 15.1 ns | 0.89× |
-| Field Square (5×52) | 13 ns | 13.2 ns | **1.02×** |
-| Field Inverse | 1 μs | 1.74 μs | **1.74×** |
-
-*Field mul gap is only 11% — nearly parity with libsecp256k1's hand-tuned x86_64 assembly. Field square is essentially tied. Field inverse is 1.74× faster thanks to SafeGCD optimization.*
-
-#### Point & Group Operations (Internal)
-
-| Operation | UltrafastSecp256k1 | libsecp256k1 | Ratio |
-|-----------|-------------------:|-------------:|------:|
-| Point Double | **83 ns** | 103 ns | **1.24×** |
-| Point Add (mixed affine) | **172 ns** | 204 ns | **1.19×** |
-| Point Add (Jacobian) | 172 ns | 257 ns | **1.49×** |
-| Generator Mul (k×G) | **7 μs** | 14.6 μs | **2.09×** |
-| Scalar Mul (k×P) | **24 μs** | 25.1 μs | **1.05×** |
-| Scalar Mul const-time | 24 μs | 32.8 μs | **1.37×** |
-
-#### Key Insights
-
-| Advantage | Details |
-|-----------|---------|
-| ✅ **Generator Mul 2× faster** | Aggressive precomputed table (larger memory footprint, faster lookup) |
-| ✅ **Point Double 1.24× faster** | Inplace Jacobian doubling with FE52 native storage |
-| ✅ **Point Add 1.2–1.5× faster** | Mixed affine + full Jacobian both beat libsecp256k1 |
-| ✅ **k×P now matches libsecp256k1** | GLV + 5×52 + inplace ops (24 μs vs 25.1 μs) |
-| ✅ **Field Inverse 1.74× faster** | SafeGCD optimization |
-| ✅ **Field Square tied** | 13 ns vs 13.2 ns — parity with hand-tuned assembly |
-| ✅ **Multi-platform** | Same codebase runs on x86, ARM64, RISC-V, Xtensa, Cortex-M, CUDA, OpenCL, Metal |
-| ⚠️ **ECDSA/Schnorr Sign ~1.3× slower** | Dominated by HMAC-SHA256 (RFC 6979) overhead — our SHA256 path not yet SIMD-optimized |
-| ⚠️ **ECDSA/Schnorr Verify ~1.6× slower** | Verify = k₁×G + k₂×Q multi-scalar; libsecp256k1 uses Strauss/Pippenger — we use separate muls |
-
-*Since v4.0: point operations now **beat** libsecp256k1 across the board (double, add, k×G, k×P). The remaining gap is in signature verify (multi-scalar multiplication strategy) and SHA256/HMAC performance.*
 
 ### Available Benchmark Targets
 

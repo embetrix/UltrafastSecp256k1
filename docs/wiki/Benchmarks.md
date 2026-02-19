@@ -84,25 +84,6 @@ Performance measurements for UltrafastSecp256k1 across different platforms.
 
 ---
 
-## Comparison with Other Libraries
-
-### vs libsecp256k1 (Bitcoin Core)
-
-| Operation | Ultrafast | libsecp256k1 | Speedup |
-|-----------|----------|--------------|---------|
-| Scalar Mul (x86-64) | 110 μs | ~150 μs | 1.36× |
-| Generator Mul | 5 μs | ~8 μs | 1.6× |
-| Batch Verify | TBD | TBD | TBD |
-
-### vs tiny-ecdsa
-
-| Operation | Ultrafast | tiny-ecdsa | Speedup |
-|-----------|----------|------------|---------|
-| Scalar Mul | 110 μs | ~500 μs | 4.5× |
-| Field Mul | 33 ns | ~200 ns | 6× |
-
----
-
 ## Key Optimizations
 
 ### Algorithm Level
