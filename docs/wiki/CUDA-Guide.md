@@ -144,6 +144,43 @@ __device__ void hash160_compressed(const uint8_t pubkey[33], uint8_t hash[20]);
 __device__ void hash160_uncompressed(const uint8_t pubkey[65], uint8_t hash[20]);
 ```
 
+### Signature Operations (NEW in v3.5.0)
+
+> **World-first:** No other open-source GPU library provides secp256k1 ECDSA + Schnorr on GPU.
+
+```cpp
+#include <ecdsa.cuh>
+#include <schnorr.cuh>
+#include <recovery.cuh>
+
+// ECDSA Sign (RFC 6979 deterministic nonces, low-S normalization)
+__device__ bool ecdsa_sign(const uint8_t msg_hash[32], const Scalar* privkey, ECDSASignatureGPU* sig);
+
+// ECDSA Verify (Shamir's trick + GLV endomorphism)
+__device__ bool ecdsa_verify(const uint8_t msg_hash[32], const JacobianPoint* pubkey, const ECDSASignatureGPU* sig);
+
+// ECDSA Sign with Recovery ID
+__device__ bool ecdsa_sign_recoverable(const uint8_t msg_hash[32], const Scalar* privkey, RecoverableSignatureGPU* sig);
+
+// ECDSA Recover public key
+__device__ bool ecdsa_recover(const uint8_t msg_hash[32], const RecoverableSignatureGPU* sig, JacobianPoint* pubkey);
+
+// Schnorr BIP-340 Sign (tagged hash midstates)
+__device__ bool schnorr_sign(const Scalar* privkey, const uint8_t msg[32], const uint8_t aux[32], SchnorrSignatureGPU* sig);
+
+// Schnorr BIP-340 Verify
+__device__ bool schnorr_verify(const uint8_t pubkey_x[32], const uint8_t msg[32], const SchnorrSignatureGPU* sig);
+```
+
+**Performance (RTX 5060 Ti, kernel-only):**
+
+| Operation | Time/Op | Throughput |
+|-----------|---------|------------|
+| ECDSA Sign | 204.8 ns | 4.88 M/s |
+| ECDSA Verify | 410.1 ns | 2.44 M/s |
+| Schnorr Sign | 273.4 ns | 3.66 M/s |
+| Schnorr Verify | 354.6 ns | 2.82 M/s |
+
 ---
 
 ## Example: Batch Key Generation

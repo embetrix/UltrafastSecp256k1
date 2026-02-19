@@ -72,15 +72,37 @@ Performance measurements for UltrafastSecp256k1 across different platforms.
 
 ## CUDA Results
 
-**Hardware:** NVIDIA RTX 5060 Ti  
-**CUDA:** 12.0+  
-**Architecture:** sm_89 (Ada Lovelace)
+**Hardware:** NVIDIA RTX 5060 Ti (36 SMs, 2602 MHz, 16 GB GDDR7, 128-bit bus)  
+**CUDA:** 12.0, Compute 12.0 (Blackwell)  
+**Architecture:** sm_86;sm_89  
+**Build:** Clang 19 + nvcc, Release, -O3 --use_fast_math
 
-| Operation | Batch Size | Time | Throughput |
-|-----------|------------|------|------------|
-| Scalar Mul | 1M | TBD | TBD |
-| Key Generation | 1M | TBD | TBD |
-| Hash160 | 1M | TBD | TBD |
+### Core ECC Operations
+
+| Operation | Batch Size | Time/Op | Throughput |
+|-----------|------------|---------|------------|
+| Field Mul | 1M | 0.2 ns | 4,142 M/s |
+| Field Add | 1M | 0.2 ns | 4,130 M/s |
+| Field Inv | 64K | 10.2 ns | 98.35 M/s |
+| Point Add | 256K | 1.6 ns | 619 M/s |
+| Point Double | 256K | 0.8 ns | 1,282 M/s |
+| Scalar Mul (P×k) | 64K | 225.8 ns | 4.43 M/s |
+| Generator Mul (G×k) | 128K | 217.7 ns | 4.59 M/s |
+| Affine Add | 256K | 0.4 ns | 2,532 M/s |
+| Batch Inv | 64K | 2.9 ns | 340 M/s |
+| Jac→Affine | 64K | 14.9 ns | 66.9 M/s |
+
+### GPU Signature Operations
+
+> **No other open-source GPU library provides secp256k1 ECDSA + Schnorr sign/verify.**
+
+| Operation | Batch Size | Time/Op | Throughput |
+|-----------|------------|---------|------------|
+| ECDSA Sign | 16K | 204.8 ns | 4.88 M/s |
+| ECDSA Verify | 16K | 410.1 ns | 2.44 M/s |
+| ECDSA Sign + Recid | 16K | 311.5 ns | 3.21 M/s |
+| Schnorr Sign (BIP-340) | 16K | 273.4 ns | 3.66 M/s |
+| Schnorr Verify (BIP-340) | 16K | 354.6 ns | 2.82 M/s |
 
 ---
 

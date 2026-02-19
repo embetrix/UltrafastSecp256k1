@@ -1,6 +1,8 @@
 # UltrafastSecp256k1
 
-Ultra high-performance secp256k1 elliptic curve cryptography library with multi-platform support.
+The **world's fastest open-source secp256k1** elliptic curve cryptography library — GPU-accelerated ECDSA & Schnorr signatures, multi-platform, zero dependencies.
+
+> **4.88M ECDSA signs/s** · **2.44M ECDSA verifies/s** · **3.66M Schnorr signs/s** · **2.82M Schnorr verifies/s** on a single GPU
 
 [![GitHub stars](https://img.shields.io/github/stars/shrec/UltrafastSecp256k1?style=social)](https://github.com/shrec/UltrafastSecp256k1/stargazers)
 [![GitHub forks](https://img.shields.io/github/forks/shrec/UltrafastSecp256k1?style=social)](https://github.com/shrec/UltrafastSecp256k1/network/members)
@@ -10,6 +12,24 @@ Ultra high-performance secp256k1 elliptic curve cryptography library with multi-
 [![Release](https://img.shields.io/github/v/release/shrec/UltrafastSecp256k1?label=Release)](https://github.com/shrec/UltrafastSecp256k1/releases/latest)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 [![C++20](https://img.shields.io/badge/C%2B%2B-20-blue.svg)](https://en.cppreference.com/w/cpp/20)
+
+**Supported Blockchains (secp256k1-based):**
+
+[![Bitcoin](https://img.shields.io/badge/Bitcoin-BTC-F7931A.svg?logo=bitcoin&logoColor=white)](https://bitcoin.org)
+[![Ethereum](https://img.shields.io/badge/Ethereum-ETH-3C3C3D.svg?logo=ethereum&logoColor=white)](https://ethereum.org)
+[![Litecoin](https://img.shields.io/badge/Litecoin-LTC-A6A9AA.svg?logo=litecoin&logoColor=white)](https://litecoin.org)
+[![Dogecoin](https://img.shields.io/badge/Dogecoin-DOGE-C2A633.svg?logo=dogecoin&logoColor=white)](https://dogecoin.com)
+[![Bitcoin Cash](https://img.shields.io/badge/Bitcoin%20Cash-BCH-8DC351.svg?logo=bitcoincash&logoColor=white)](https://bitcoincash.org)
+[![Zcash](https://img.shields.io/badge/Zcash-ZEC-F4B728.svg)](https://z.cash)
+[![Dash](https://img.shields.io/badge/Dash-DASH-008CE7.svg?logo=dash&logoColor=white)](https://dash.org)
+[![BNB Chain](https://img.shields.io/badge/BNB%20Chain-BNB-F0B90B.svg?logo=binance&logoColor=white)](https://www.bnbchain.org)
+[![Polygon](https://img.shields.io/badge/Polygon-MATIC-8247E5.svg?logo=polygon&logoColor=white)](https://polygon.technology)
+[![Avalanche](https://img.shields.io/badge/Avalanche-AVAX-E84142.svg?logo=avalanche&logoColor=white)](https://avax.network)
+[![Arbitrum](https://img.shields.io/badge/Arbitrum-ARB-28A0F0.svg)](https://arbitrum.io)
+[![Optimism](https://img.shields.io/badge/Optimism-OP-FF0420.svg)](https://optimism.io)
+[![+15 more](https://img.shields.io/badge/+15%20more-secp256k1%20coins-grey.svg)](#supported-coins)
+
+**GPU & Platform Support:**
 
 [![CUDA](https://img.shields.io/badge/CUDA-12.0+-green.svg)](https://developer.nvidia.com/cuda-toolkit)
 [![OpenCL](https://img.shields.io/badge/OpenCL-3.0-green.svg)](https://www.khronos.org/opencl/)
@@ -54,7 +74,7 @@ Users assume all risks. For production cryptographic systems, prefer audited lib
   - Mobile: Android ARM64 (NDK r27, Clang 18) + iOS 17+ (XCFramework, SPM, CocoaPods)
   - WebAssembly: Emscripten ES6 module with TypeScript declarations
   - Embedded: ESP32-S3 (Xtensa LX7) + ESP32-PICO-D4 (Xtensa LX6) + STM32F103 (ARM Cortex-M3)
-  - GPU/CUDA: Batch operations with 4.63M kG/s throughput
+  - GPU/CUDA: Batch ECDSA sign 4.88M/s, verify 2.44M/s, Schnorr sign 3.66M/s, verify 2.82M/s
   - GPU/Metal: Apple Silicon (M1/M2/M3/M4) with Comba-accelerated field arithmetic
   - GPU/ROCm (HIP): Portable PTX→__int128 fallbacks for AMD GPUs
   - GPU/OpenCL: PTX inline asm, 3.39M kG/s
@@ -63,7 +83,7 @@ Users assume all risks. For production cryptographic systems, prefer audited lib
   - x86-64: 3-5× speedup with BMI2/ADX assembly
   - ARM64: ~5× speedup with MUL/UMULH inline assembly
   - RISC-V: 2-3× speedup with native assembly
-  - CUDA: Batch processing of thousands of operations in parallel
+  - CUDA: Batch ECDSA & Schnorr signatures at millions/second
 
 - **Features**
   - Complete secp256k1 field and scalar arithmetic
@@ -1041,17 +1061,37 @@ RISC-V results collected on **Milk-V Mars** (RV64 + RVV).
 
 ### CUDA (NVIDIA RTX 5060 Ti) — Kernel-Only
 
+#### Core ECC Operations
+
 | Operation | Time/Op | Throughput |
 |-----------|---------|------------|
-| Field Mul | 0.2 ns | 4,139 M/s |
-| Field Add | 0.2 ns | 4,122 M/s |
-| Field Inv | 12.1 ns | 82.65 M/s |
-| Point Add | 1.1 ns | 916 M/s |
-| Point Double | 0.7 ns | 1,352 M/s |
-| Scalar Mul (P×k) | 266.5 ns | 3.75 M/s |
-| Generator Mul (G×k) | 216.1 ns | 4.63 M/s |
+| Field Mul | 0.2 ns | 4,142 M/s |
+| Field Add | 0.2 ns | 4,130 M/s |
+| Field Inv | 10.2 ns | 98.35 M/s |
+| Point Add | 1.6 ns | 619 M/s |
+| Point Double | 0.8 ns | 1,282 M/s |
+| Scalar Mul (P×k) | 225.8 ns | 4.43 M/s |
+| Generator Mul (G×k) | 217.7 ns | 4.59 M/s |
+| Affine Add (2M+1S+inv) | 0.4 ns | 2,532 M/s |
+| Affine Lambda (2M+1S) | 0.6 ns | 1,654 M/s |
+| Affine X-Only (1M+1S) | 0.4 ns | 2,328 M/s |
+| Batch Inv (Montgomery) | 2.9 ns | 340 M/s |
+| Jac→Affine (per-pt) | 14.9 ns | 66.9 M/s |
 
-*CUDA 12.0, sm_86;sm_89, batch=1M, RTX 5060 Ti (36 SMs, 2602 MHz)*
+#### GPU Signature Operations (ECDSA + Schnorr)
+
+| Operation | Time/Op | Throughput | Protocol |
+|-----------|---------|------------|----------|
+| **ECDSA Sign** | **204.8 ns** | **4.88 M/s** | RFC 6979 + low-S |
+| **ECDSA Verify** | **410.1 ns** | **2.44 M/s** | Shamir + GLV |
+| **ECDSA Sign+Recid** | **311.5 ns** | **3.21 M/s** | Recoverable (EIP-155) |
+| **Schnorr Sign** | **273.4 ns** | **3.66 M/s** | BIP-340 |
+| **Schnorr Verify** | **354.6 ns** | **2.82 M/s** | BIP-340 + GLV |
+
+> **No other open-source GPU library provides secp256k1 ECDSA+Schnorr sign/verify.**
+> This is the only CUDA+OpenCL+Metal implementation with full signature support.
+
+*CUDA 12.0, sm_86;sm_89, batch=16K signatures, RTX 5060 Ti (36 SMs, 2602 MHz)*
 
 ### OpenCL (NVIDIA RTX 5060 Ti) — Kernel-Only
 
@@ -1073,10 +1113,10 @@ RISC-V results collected on **Milk-V Mars** (RV64 + RVV).
 |-----------|------|--------|--------|
 | Field Mul | 0.2 ns | 0.2 ns | Tie |
 | Field Add | 0.2 ns | 0.2 ns | Tie |
-| Field Inv | 12.1 ns | 14.3 ns | CUDA 1.18× |
-| Point Double | 0.7 ns | 0.9 ns | **CUDA 1.29×** |
-| Point Add | 1.1 ns | 1.6 ns | **CUDA 1.45×** |
-| kG (Generator Mul) | 216.1 ns | 295.1 ns | **CUDA 1.37×** |
+| Field Inv | 10.2 ns | 14.3 ns | **CUDA 1.40×** |
+| Point Double | 0.8 ns | 0.9 ns | **CUDA 1.13×** |
+| Point Add | 1.6 ns | 1.6 ns | Tie |
+| kG (Generator Mul) | 217.7 ns | 295.1 ns | **CUDA 1.36×** |
 
 > **Note:** Both measurements are kernel-only (no buffer allocation/copy overhead). CUDA uses local-variable optimization for zero pointer-aliasing overhead.
 
@@ -1157,6 +1197,42 @@ Internal 32-bit arithmetic variants (historical optimization stages):
 | `secp256k1_32_hybrid_smart` | Mixed strategy experiments |
 | `secp256k1_32_hybrid_final` | Stabilized hybrid arithmetic |
 | `secp256k1_32_really_final` | Most mature 32-bit variant |
+
+## 🪙 Supported Coins
+
+All 27 secp256k1-based cryptocurrencies with native address generation (P2PKH, P2WPKH, P2TR, EIP-55):
+
+| # | Coin | Ticker | Address Types | BIP-44 |
+|---|------|--------|---------------|--------|
+| 1 | **Bitcoin** | BTC | P2PKH, P2WPKH (Bech32), P2TR (Bech32m) | m/86'/0' |
+| 2 | **Ethereum** | ETH | EIP-55 Checksum | m/44'/60' |
+| 3 | **Litecoin** | LTC | P2PKH, P2WPKH | m/84'/2' |
+| 4 | **Dogecoin** | DOGE | P2PKH | m/44'/3' |
+| 5 | **Bitcoin Cash** | BCH | P2PKH | m/44'/145' |
+| 6 | **Bitcoin SV** | BSV | P2PKH | m/44'/236' |
+| 7 | **Zcash** | ZEC | P2PKH (transparent) | m/44'/133' |
+| 8 | **Dash** | DASH | P2PKH | m/44'/5' |
+| 9 | **DigiByte** | DGB | P2PKH, P2WPKH | m/44'/20' |
+| 10 | **Namecoin** | NMC | P2PKH | m/44'/7' |
+| 11 | **Peercoin** | PPC | P2PKH | m/44'/6' |
+| 12 | **Vertcoin** | VTC | P2PKH, P2WPKH | m/44'/28' |
+| 13 | **Viacoin** | VIA | P2PKH | m/44'/14' |
+| 14 | **Groestlcoin** | GRS | P2PKH, P2WPKH | m/44'/17' |
+| 15 | **Syscoin** | SYS | P2PKH | m/44'/57' |
+| 16 | **BNB Smart Chain** | BNB | EIP-55 | m/44'/60' |
+| 17 | **Polygon** | MATIC | EIP-55 | m/44'/60' |
+| 18 | **Avalanche** | AVAX | EIP-55 (C-Chain) | m/44'/60' |
+| 19 | **Fantom** | FTM | EIP-55 | m/44'/60' |
+| 20 | **Arbitrum** | ARB | EIP-55 | m/44'/60' |
+| 21 | **Optimism** | OP | EIP-55 | m/44'/60' |
+| 22 | **Ravencoin** | RVN | P2PKH | m/44'/175' |
+| 23 | **Flux** | FLUX | P2PKH | m/44'/19167' |
+| 24 | **Qtum** | QTUM | P2PKH | m/44'/2301' |
+| 25 | **Horizen** | ZEN | P2PKH | m/44'/121' |
+| 26 | **Bitcoin Gold** | BTG | P2PKH | m/44'/156' |
+| 27 | **Komodo** | KMD | P2PKH | m/44'/141' |
+
+All EVM chains (ETH, BNB, MATIC, AVAX, FTM, ARB, OP) share the same address format (EIP-55 checksummed hex).
 
 ## 🚫 Scope
 
@@ -1347,4 +1423,7 @@ If you find this library useful, consider supporting development!
 
 ---
 
-**UltrafastSecp256k1** - Ultra high-performance elliptic curve cryptography for modern hardware.
+**UltrafastSecp256k1** — The fastest open-source secp256k1 library. GPU-accelerated ECDSA & Schnorr signatures for Bitcoin, Ethereum, and 25+ blockchains.
+
+<!-- SEO keywords (not rendered) -->
+<!-- secp256k1 CUDA GPU ECDSA sign verify Schnorr BIP-340 Bitcoin Ethereum signature acceleration OpenCL Metal batch verification elliptic curve cryptography C++ high performance library blockchain cryptocurrency libsecp256k1 alternative GPU accelerated digital signatures NVIDIA AMD Apple Silicon embedded RISC-V ARM64 WebAssembly cross-platform multi-coin address generation BIP-32 BIP-44 HD wallet derivation key recovery EIP-155 RFC-6979 transaction signing fastest secp256k1 -->

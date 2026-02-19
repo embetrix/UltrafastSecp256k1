@@ -18,6 +18,9 @@
 
 #include "secp256k1.cuh"
 #include "affine_add.cuh"
+#include "ecdsa.cuh"
+#include "schnorr.cuh"
+#include "recovery.cuh"
 #include <cuda_runtime.h>
 #include <chrono>
 #include <iostream>
@@ -804,6 +807,498 @@ BenchResult bench_jacobian_to_affine(const BenchConfig& cfg) {
 }
 
 // ============================================================================
+// Signature benchmarks (ECDSA + Schnorr) — 64-bit limb mode only
+// ============================================================================
+
+// Forward-declare batch kernels (defined in secp256k1.cu, namespace secp256k1::cuda)
+namespace secp256k1 { namespace cuda {
+extern __global__ void ecdsa_sign_batch_kernel(
+    const uint8_t*, const Scalar*, ECDSASignatureGPU*, bool*, int);
+extern __global__ void ecdsa_verify_batch_kernel(
+    const uint8_t*, const JacobianPoint*, const ECDSASignatureGPU*, bool*, int);
+extern __global__ void schnorr_sign_batch_kernel(
+    const Scalar*, const uint8_t*, const uint8_t*, SchnorrSignatureGPU*, bool*, int);
+extern __global__ void schnorr_verify_batch_kernel(
+    const uint8_t*, const uint8_t*, const SchnorrSignatureGPU*, bool*, int);
+extern __global__ void ecdsa_sign_recoverable_batch_kernel(
+    const uint8_t*, const Scalar*, RecoverableSignatureGPU*, bool*, int);
+extern __global__ void ecdsa_recover_batch_kernel(
+    const uint8_t*, const ECDSASignatureGPU*, const int*, JacobianPoint*, bool*, int);
+}} // namespace secp256k1::cuda
+
+// Helper: generate test keys and sign messages on GPU for verify benchmarks
+static void prepare_ecdsa_test_data(
+    int batch,
+    std::vector<uint8_t>& h_msgs,
+    std::vector<Scalar>& h_privkeys,
+    std::vector<JacobianPoint>& h_pubkeys,
+    std::vector<ECDSASignatureGPU>& h_sigs)
+{
+    h_msgs.resize(batch * 32);
+    h_privkeys.resize(batch);
+    h_pubkeys.resize(batch);
+    h_sigs.resize(batch);
+
+    std::mt19937_64 rng(0xECD5A);
+    for (int i = 0; i < batch; ++i) {
+        // Random message
+        for (int j = 0; j < 32; j++) h_msgs[i * 32 + j] = (uint8_t)(rng() & 0xFF);
+        // Random private key
+        for (int j = 0; j < 4; j++) h_privkeys[i].limbs[j] = rng();
+        h_privkeys[i].limbs[3] &= 0x7FFFFFFFFFFFFFFFULL;
+        // Prevent zero keys
+        if (h_privkeys[i].limbs[0] == 0 && h_privkeys[i].limbs[1] == 0 &&
+            h_privkeys[i].limbs[2] == 0 && h_privkeys[i].limbs[3] == 0)
+            h_privkeys[i].limbs[0] = 1;
+    }
+
+    // Sign all on GPU to get sigs + gen pubkeys
+    uint8_t *d_msgs; Scalar *d_priv; ECDSASignatureGPU *d_sigs; bool *d_res;
+    CUDA_CHECK(cudaMalloc(&d_msgs, batch * 32));
+    CUDA_CHECK(cudaMalloc(&d_priv, batch * sizeof(Scalar)));
+    CUDA_CHECK(cudaMalloc(&d_sigs, batch * sizeof(ECDSASignatureGPU)));
+    CUDA_CHECK(cudaMalloc(&d_res, batch * sizeof(bool)));
+
+    CUDA_CHECK(cudaMemcpy(d_msgs, h_msgs.data(), batch * 32, cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_priv, h_privkeys.data(), batch * sizeof(Scalar), cudaMemcpyHostToDevice));
+
+    int blocks = (batch + 127) / 128;
+    ecdsa_sign_batch_kernel<<<blocks, 128>>>(d_msgs, d_priv, d_sigs, d_res, batch);
+    CUDA_CHECK(cudaGetLastError());
+    CUDA_CHECK(cudaDeviceSynchronize());
+
+    CUDA_CHECK(cudaMemcpy(h_sigs.data(), d_sigs, batch * sizeof(ECDSASignatureGPU), cudaMemcpyDeviceToHost));
+
+    // Generate public keys: Q = privkey * G
+    JacobianPoint *d_pubs;
+    CUDA_CHECK(cudaMalloc(&d_pubs, batch * sizeof(JacobianPoint)));
+    generator_mul_batch_kernel<<<blocks, 128>>>(d_priv, d_pubs, batch);
+    CUDA_CHECK(cudaGetLastError());
+    CUDA_CHECK(cudaDeviceSynchronize());
+    CUDA_CHECK(cudaMemcpy(h_pubkeys.data(), d_pubs, batch * sizeof(JacobianPoint), cudaMemcpyDeviceToHost));
+
+    CUDA_CHECK(cudaFree(d_msgs));
+    CUDA_CHECK(cudaFree(d_priv));
+    CUDA_CHECK(cudaFree(d_sigs));
+    CUDA_CHECK(cudaFree(d_res));
+    CUDA_CHECK(cudaFree(d_pubs));
+}
+
+BenchResult bench_ecdsa_sign(const BenchConfig& cfg) {
+    constexpr int kThreads = 128;
+    int batch = std::min(cfg.batch_size, 1 << 14);  // Max 16K (heavy)
+
+    std::vector<uint8_t> h_msgs(batch * 32);
+    std::vector<Scalar> h_privkeys(batch);
+
+    std::mt19937_64 rng(0xEC01);
+    for (int i = 0; i < batch; ++i) {
+        for (int j = 0; j < 32; j++) h_msgs[i * 32 + j] = (uint8_t)(rng() & 0xFF);
+        for (int j = 0; j < 4; j++) h_privkeys[i].limbs[j] = rng();
+        h_privkeys[i].limbs[3] &= 0x7FFFFFFFFFFFFFFFULL;
+        if (h_privkeys[i].limbs[0] == 0 && h_privkeys[i].limbs[1] == 0 &&
+            h_privkeys[i].limbs[2] == 0 && h_privkeys[i].limbs[3] == 0)
+            h_privkeys[i].limbs[0] = 1;
+    }
+
+    uint8_t *d_msgs; Scalar *d_priv; ECDSASignatureGPU *d_sigs; bool *d_res;
+    CUDA_CHECK(cudaMalloc(&d_msgs, batch * 32));
+    CUDA_CHECK(cudaMalloc(&d_priv, batch * sizeof(Scalar)));
+    CUDA_CHECK(cudaMalloc(&d_sigs, batch * sizeof(ECDSASignatureGPU)));
+    CUDA_CHECK(cudaMalloc(&d_res, batch * sizeof(bool)));
+
+    CUDA_CHECK(cudaMemcpy(d_msgs, h_msgs.data(), batch * 32, cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_priv, h_privkeys.data(), batch * sizeof(Scalar), cudaMemcpyHostToDevice));
+
+    int blocks = (batch + kThreads - 1) / kThreads;
+
+    for (int i = 0; i < cfg.warmup_iterations; ++i) {
+        ecdsa_sign_batch_kernel<<<blocks, kThreads>>>(d_msgs, d_priv, d_sigs, d_res, batch);
+    }
+    CUDA_CHECK(cudaGetLastError());
+    CUDA_CHECK(cudaDeviceSynchronize());
+
+    CudaTimer timer;
+    timer.start();
+    for (int i = 0; i < cfg.measure_iterations; ++i) {
+        ecdsa_sign_batch_kernel<<<blocks, kThreads>>>(d_msgs, d_priv, d_sigs, d_res, batch);
+    }
+    float total_ms = timer.stop();
+
+    double avg_ms = total_ms / cfg.measure_iterations;
+    double throughput = (batch / avg_ms) / 1000.0;
+    double ns_per_op = (avg_ms * 1e6) / batch;
+
+    CUDA_CHECK(cudaFree(d_msgs));
+    CUDA_CHECK(cudaFree(d_priv));
+    CUDA_CHECK(cudaFree(d_sigs));
+    CUDA_CHECK(cudaFree(d_res));
+
+    return {"ECDSA Sign", avg_ms, batch, throughput, ns_per_op};
+}
+
+BenchResult bench_ecdsa_verify(const BenchConfig& cfg) {
+    constexpr int kThreads = 128;
+    int batch = std::min(cfg.batch_size, 1 << 14);
+
+    std::vector<uint8_t> h_msgs;
+    std::vector<Scalar> h_privkeys;
+    std::vector<JacobianPoint> h_pubkeys;
+    std::vector<ECDSASignatureGPU> h_sigs;
+    prepare_ecdsa_test_data(batch, h_msgs, h_privkeys, h_pubkeys, h_sigs);
+
+    uint8_t *d_msgs;
+    JacobianPoint *d_pubs;
+    ECDSASignatureGPU *d_sigs_d;
+    bool *d_res;
+
+    CUDA_CHECK(cudaMalloc(&d_msgs, batch * 32));
+    CUDA_CHECK(cudaMalloc(&d_pubs, batch * sizeof(JacobianPoint)));
+    CUDA_CHECK(cudaMalloc(&d_sigs_d, batch * sizeof(ECDSASignatureGPU)));
+    CUDA_CHECK(cudaMalloc(&d_res, batch * sizeof(bool)));
+
+    CUDA_CHECK(cudaMemcpy(d_msgs, h_msgs.data(), batch * 32, cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_pubs, h_pubkeys.data(), batch * sizeof(JacobianPoint), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_sigs_d, h_sigs.data(), batch * sizeof(ECDSASignatureGPU), cudaMemcpyHostToDevice));
+
+    int blocks = (batch + kThreads - 1) / kThreads;
+
+    for (int i = 0; i < cfg.warmup_iterations; ++i) {
+        ecdsa_verify_batch_kernel<<<blocks, kThreads>>>(d_msgs, d_pubs, d_sigs_d, d_res, batch);
+    }
+    CUDA_CHECK(cudaGetLastError());
+    CUDA_CHECK(cudaDeviceSynchronize());
+
+    CudaTimer timer;
+    timer.start();
+    for (int i = 0; i < cfg.measure_iterations; ++i) {
+        ecdsa_verify_batch_kernel<<<blocks, kThreads>>>(d_msgs, d_pubs, d_sigs_d, d_res, batch);
+    }
+    float total_ms = timer.stop();
+
+    double avg_ms = total_ms / cfg.measure_iterations;
+    double throughput = (batch / avg_ms) / 1000.0;
+    double ns_per_op = (avg_ms * 1e6) / batch;
+
+    CUDA_CHECK(cudaFree(d_msgs));
+    CUDA_CHECK(cudaFree(d_pubs));
+    CUDA_CHECK(cudaFree(d_sigs_d));
+    CUDA_CHECK(cudaFree(d_res));
+
+    return {"ECDSA Verify", avg_ms, batch, throughput, ns_per_op};
+}
+
+BenchResult bench_schnorr_sign(const BenchConfig& cfg) {
+    constexpr int kThreads = 128;
+    int batch = std::min(cfg.batch_size, 1 << 14);
+
+    std::vector<Scalar> h_privkeys(batch);
+    std::vector<uint8_t> h_msgs(batch * 32);
+    std::vector<uint8_t> h_aux(batch * 32);
+
+    std::mt19937_64 rng(0xBEEF);
+    for (int i = 0; i < batch; ++i) {
+        for (int j = 0; j < 32; j++) h_msgs[i * 32 + j] = (uint8_t)(rng() & 0xFF);
+        for (int j = 0; j < 32; j++) h_aux[i * 32 + j] = (uint8_t)(rng() & 0xFF);
+        for (int j = 0; j < 4; j++) h_privkeys[i].limbs[j] = rng();
+        h_privkeys[i].limbs[3] &= 0x7FFFFFFFFFFFFFFFULL;
+        if (h_privkeys[i].limbs[0] == 0 && h_privkeys[i].limbs[1] == 0 &&
+            h_privkeys[i].limbs[2] == 0 && h_privkeys[i].limbs[3] == 0)
+            h_privkeys[i].limbs[0] = 1;
+    }
+
+    Scalar *d_priv;
+    uint8_t *d_msgs, *d_aux;
+    SchnorrSignatureGPU *d_sigs;
+    bool *d_res;
+
+    CUDA_CHECK(cudaMalloc(&d_priv, batch * sizeof(Scalar)));
+    CUDA_CHECK(cudaMalloc(&d_msgs, batch * 32));
+    CUDA_CHECK(cudaMalloc(&d_aux, batch * 32));
+    CUDA_CHECK(cudaMalloc(&d_sigs, batch * sizeof(SchnorrSignatureGPU)));
+    CUDA_CHECK(cudaMalloc(&d_res, batch * sizeof(bool)));
+
+    CUDA_CHECK(cudaMemcpy(d_priv, h_privkeys.data(), batch * sizeof(Scalar), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_msgs, h_msgs.data(), batch * 32, cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_aux, h_aux.data(), batch * 32, cudaMemcpyHostToDevice));
+
+    int blocks = (batch + kThreads - 1) / kThreads;
+
+    for (int i = 0; i < cfg.warmup_iterations; ++i) {
+        schnorr_sign_batch_kernel<<<blocks, kThreads>>>(d_priv, d_msgs, d_aux, d_sigs, d_res, batch);
+    }
+    CUDA_CHECK(cudaGetLastError());
+    CUDA_CHECK(cudaDeviceSynchronize());
+
+    CudaTimer timer;
+    timer.start();
+    for (int i = 0; i < cfg.measure_iterations; ++i) {
+        schnorr_sign_batch_kernel<<<blocks, kThreads>>>(d_priv, d_msgs, d_aux, d_sigs, d_res, batch);
+    }
+    float total_ms = timer.stop();
+
+    double avg_ms = total_ms / cfg.measure_iterations;
+    double throughput = (batch / avg_ms) / 1000.0;
+    double ns_per_op = (avg_ms * 1e6) / batch;
+
+    CUDA_CHECK(cudaFree(d_priv));
+    CUDA_CHECK(cudaFree(d_msgs));
+    CUDA_CHECK(cudaFree(d_aux));
+    CUDA_CHECK(cudaFree(d_sigs));
+    CUDA_CHECK(cudaFree(d_res));
+
+    return {"Schnorr Sign", avg_ms, batch, throughput, ns_per_op};
+}
+
+BenchResult bench_schnorr_verify(const BenchConfig& cfg) {
+    constexpr int kThreads = 128;
+    int batch = std::min(cfg.batch_size, 1 << 14);
+
+    // Prepare: sign on GPU first to get valid sigs + pubkeys
+    std::vector<Scalar> h_privkeys(batch);
+    std::vector<uint8_t> h_msgs(batch * 32);
+    std::vector<uint8_t> h_aux(batch * 32);
+
+    std::mt19937_64 rng(0xBEEF02);
+    for (int i = 0; i < batch; ++i) {
+        for (int j = 0; j < 32; j++) h_msgs[i * 32 + j] = (uint8_t)(rng() & 0xFF);
+        for (int j = 0; j < 32; j++) h_aux[i * 32 + j] = (uint8_t)(rng() & 0xFF);
+        for (int j = 0; j < 4; j++) h_privkeys[i].limbs[j] = rng();
+        h_privkeys[i].limbs[3] &= 0x7FFFFFFFFFFFFFFFULL;
+        if (h_privkeys[i].limbs[0] == 0 && h_privkeys[i].limbs[1] == 0 &&
+            h_privkeys[i].limbs[2] == 0 && h_privkeys[i].limbs[3] == 0)
+            h_privkeys[i].limbs[0] = 1;
+    }
+
+    // Sign on GPU
+    Scalar *d_priv;
+    uint8_t *d_msgs, *d_aux;
+    SchnorrSignatureGPU *d_sigs;
+    bool *d_res;
+
+    CUDA_CHECK(cudaMalloc(&d_priv, batch * sizeof(Scalar)));
+    CUDA_CHECK(cudaMalloc(&d_msgs, batch * 32));
+    CUDA_CHECK(cudaMalloc(&d_aux, batch * 32));
+    CUDA_CHECK(cudaMalloc(&d_sigs, batch * sizeof(SchnorrSignatureGPU)));
+    CUDA_CHECK(cudaMalloc(&d_res, batch * sizeof(bool)));
+
+    CUDA_CHECK(cudaMemcpy(d_priv, h_privkeys.data(), batch * sizeof(Scalar), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_msgs, h_msgs.data(), batch * 32, cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_aux, h_aux.data(), batch * 32, cudaMemcpyHostToDevice));
+
+    int blocks = (batch + kThreads - 1) / kThreads;
+    schnorr_sign_batch_kernel<<<blocks, kThreads>>>(d_priv, d_msgs, d_aux, d_sigs, d_res, batch);
+    CUDA_CHECK(cudaGetLastError());
+    CUDA_CHECK(cudaDeviceSynchronize());
+
+    // Generate x-only pubkeys from private keys
+    JacobianPoint *d_pubs;
+    CUDA_CHECK(cudaMalloc(&d_pubs, batch * sizeof(JacobianPoint)));
+    generator_mul_batch_kernel<<<blocks, kThreads>>>(d_priv, d_pubs, batch);
+    CUDA_CHECK(cudaGetLastError());
+    CUDA_CHECK(cudaDeviceSynchronize());
+
+    // Convert to x-only pubkeys on host
+    std::vector<JacobianPoint> h_pubs(batch);
+    CUDA_CHECK(cudaMemcpy(h_pubs.data(), d_pubs, batch * sizeof(JacobianPoint), cudaMemcpyDeviceToHost));
+
+    // For Schnorr verify, we need x-only pubkeys as 32-byte big-endian
+    // We'll use the Jacobian x-coordinate as-is (already normalized during sign)
+    // Actually we need affine x. Let's extract from the sign output instead.
+    // Simpler: use the field_to_bytes approach inline on GPU.
+    // For simplicity and correctness: use a small helper kernel.
+    // But the Schnorr verify bench needs only timing of verify, so we can:
+    // 1. Transfer signed sigs to host
+    // 2. Compute pubkey x-only bytes on host (rough approximation)
+    // Actually, let's just do a sign+extract approach on device side.
+
+    // Generate pubkey_x bytes: we need to do scalar_mul + convert to affine + field_to_bytes
+    // This is complex. Simpler: use a known test vector approach.
+    // For benchmark purposes, we'll use a trick: sign first, extract pubkeys via sign's P computation.
+    // The cleanest way: create a small extraction kernel.
+
+    // Actually, Schnorr verify's pubkey_x is just the x-coordinate in big-endian bytes.
+    // We have Jacobian points. Let's convert to affine on host (too slow for batch).
+    // Better: allocate a separate extraction kernel that does G*k -> affine -> x_bytes.
+
+    // For now, let's do a simpler approach with a small helper kernel in this file.
+    // We'll create pubkey x bytes using a GPU helper and then benchmark verify.
+
+    // Instead of complexity, let's just create test inputs where we know the pubkey.
+    // Use the BIP-340 test approach: derive pubkey from privkey on GPU.
+
+    // Clean approach: generate x-only pubkeys using a local kernel
+    struct XOnlyExtractHelper {
+        // We can't define a kernel here, so let's just copy Jacobian points to host
+        // and extract x-only manually. For benchmark purposes this prep time doesn't matter.
+    };
+
+    // Simple host-side x extraction (only for test data prep — not benchmarked)
+    // This is a rough approximation: the actual Jacobian->affine involves field_inv
+    // which we can't call from host. So let's use a different approach:
+    // Sign a known message with privkey, the sign function internally computes P.
+    // The schnorr_verify takes pubkey_x as bytes — we need the x-only pubkey.
+    // Let's compute it by running scalar_mul on GPU and converting to affine.
+
+    // Actually, let's just allocate and generate x-only pubkeys on GPU with a custom approach.
+    // The simplest: create byte arrays from the sign operation.
+    // schnorr_sign internally computes P = d * G and gets px as bytes.
+    // We can extract px from a modified sign or just compute G*k and extract.
+
+    // Simpler approach: use ecdsa_sign which gives us Q, then extract x bytes.
+    // Or even simpler: use generator_mul + jac_to_affine + field_to_bytes all on GPU.
+
+    // Let's do it the clean way with a dedicated extraction kernel defined in bench file:
+    // No, we can't define __global__ functions inside other functions.
+    // Let's just compute pubkey bytes using the jacobian_to_affine bench kernel + memcpy.
+
+    // SIMPLEST APPROACH: extract x-only bytes from JacobianPoint on CPU
+    // by using field inversions. But we don't have CPU field_inv...
+    // OK, the simplest correct approach: use the bench_jac_to_affine_kernel to convert,
+    // then read back and extract x bytes.
+
+    // Step 1: Convert Jacobian to affine x,y using existing bench kernel
+    FieldElement *d_x, *d_y, *d_z;
+    CUDA_CHECK(cudaMalloc(&d_x, batch * sizeof(FieldElement)));
+    CUDA_CHECK(cudaMalloc(&d_y, batch * sizeof(FieldElement)));
+    CUDA_CHECK(cudaMalloc(&d_z, batch * sizeof(FieldElement)));
+
+    // Extract x, y, z from JacobianPoints on host then upload
+    std::vector<FieldElement> h_x(batch), h_y(batch), h_z(batch);
+    for (int i = 0; i < batch; i++) {
+        h_x[i] = h_pubs[i].x;
+        h_y[i] = h_pubs[i].y;
+        h_z[i] = h_pubs[i].z;
+    }
+    CUDA_CHECK(cudaMemcpy(d_x, h_x.data(), batch * sizeof(FieldElement), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_y, h_y.data(), batch * sizeof(FieldElement), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_z, h_z.data(), batch * sizeof(FieldElement), cudaMemcpyHostToDevice));
+
+    bench_jac_to_affine_kernel<<<blocks, kThreads>>>(d_x, d_y, d_z, batch);
+    CUDA_CHECK(cudaGetLastError());
+    CUDA_CHECK(cudaDeviceSynchronize());
+
+    // Read back affine x coordinates
+    CUDA_CHECK(cudaMemcpy(h_x.data(), d_x, batch * sizeof(FieldElement), cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(h_y.data(), d_y, batch * sizeof(FieldElement), cudaMemcpyDeviceToHost));
+
+    CUDA_CHECK(cudaFree(d_x));
+    CUDA_CHECK(cudaFree(d_y));
+    CUDA_CHECK(cudaFree(d_z));
+    CUDA_CHECK(cudaFree(d_pubs));
+
+    // Convert affine x to big-endian bytes for schnorr_verify
+    // FieldElement limbs are LE; field_to_bytes produces BE.
+    // We need to replicate field_to_bytes on host.
+    std::vector<uint8_t> h_pubkey_x(batch * 32);
+    for (int i = 0; i < batch; i++) {
+        // Schnorr BIP-340 requires even Y; if Y is odd, negate the private key.
+        // The sign function already handles this internally, but we need the
+        // correct x-only pubkey that matches what Schnorr sign used.
+        // field_to_bytes: BE bytes from LE limbs
+        for (int limb = 3; limb >= 0; limb--) {
+            uint64_t v = h_x[i].limbs[limb];
+            int offset = i * 32 + (3 - limb) * 8;
+            for (int b = 7; b >= 0; b--) {
+                h_pubkey_x[offset + (7 - b)] = (uint8_t)(v >> (b * 8));
+            }
+        }
+    }
+
+    // Upload verify data
+    uint8_t *d_pubkey_x;
+    CUDA_CHECK(cudaMalloc(&d_pubkey_x, batch * 32));
+    CUDA_CHECK(cudaMemcpy(d_pubkey_x, h_pubkey_x.data(), batch * 32, cudaMemcpyHostToDevice));
+
+    // Verify benchmark
+    bool *d_vres;
+    CUDA_CHECK(cudaMalloc(&d_vres, batch * sizeof(bool)));
+
+    for (int i = 0; i < cfg.warmup_iterations; ++i) {
+        schnorr_verify_batch_kernel<<<blocks, kThreads>>>(d_pubkey_x, d_msgs, d_sigs, d_vres, batch);
+    }
+    CUDA_CHECK(cudaGetLastError());
+    CUDA_CHECK(cudaDeviceSynchronize());
+
+    CudaTimer timer;
+    timer.start();
+    for (int i = 0; i < cfg.measure_iterations; ++i) {
+        schnorr_verify_batch_kernel<<<blocks, kThreads>>>(d_pubkey_x, d_msgs, d_sigs, d_vres, batch);
+    }
+    float total_ms = timer.stop();
+
+    double avg_ms = total_ms / cfg.measure_iterations;
+    double throughput = (batch / avg_ms) / 1000.0;
+    double ns_per_op = (avg_ms * 1e6) / batch;
+
+    CUDA_CHECK(cudaFree(d_priv));
+    CUDA_CHECK(cudaFree(d_msgs));
+    CUDA_CHECK(cudaFree(d_aux));
+    CUDA_CHECK(cudaFree(d_sigs));
+    CUDA_CHECK(cudaFree(d_res));
+    CUDA_CHECK(cudaFree(d_pubkey_x));
+    CUDA_CHECK(cudaFree(d_vres));
+
+    return {"Schnorr Verify", avg_ms, batch, throughput, ns_per_op};
+}
+
+BenchResult bench_ecdsa_sign_recoverable(const BenchConfig& cfg) {
+    constexpr int kThreads = 128;
+    int batch = std::min(cfg.batch_size, 1 << 14);
+
+    std::vector<uint8_t> h_msgs(batch * 32);
+    std::vector<Scalar> h_privkeys(batch);
+
+    std::mt19937_64 rng(0xBEC0);
+    for (int i = 0; i < batch; ++i) {
+        for (int j = 0; j < 32; j++) h_msgs[i * 32 + j] = (uint8_t)(rng() & 0xFF);
+        for (int j = 0; j < 4; j++) h_privkeys[i].limbs[j] = rng();
+        h_privkeys[i].limbs[3] &= 0x7FFFFFFFFFFFFFFFULL;
+        if (h_privkeys[i].limbs[0] == 0 && h_privkeys[i].limbs[1] == 0 &&
+            h_privkeys[i].limbs[2] == 0 && h_privkeys[i].limbs[3] == 0)
+            h_privkeys[i].limbs[0] = 1;
+    }
+
+    uint8_t *d_msgs; Scalar *d_priv;
+    RecoverableSignatureGPU *d_rsigs;
+    bool *d_res;
+
+    CUDA_CHECK(cudaMalloc(&d_msgs, batch * 32));
+    CUDA_CHECK(cudaMalloc(&d_priv, batch * sizeof(Scalar)));
+    CUDA_CHECK(cudaMalloc(&d_rsigs, batch * sizeof(RecoverableSignatureGPU)));
+    CUDA_CHECK(cudaMalloc(&d_res, batch * sizeof(bool)));
+
+    CUDA_CHECK(cudaMemcpy(d_msgs, h_msgs.data(), batch * 32, cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_priv, h_privkeys.data(), batch * sizeof(Scalar), cudaMemcpyHostToDevice));
+
+    int blocks = (batch + kThreads - 1) / kThreads;
+
+    for (int i = 0; i < cfg.warmup_iterations; ++i) {
+        ecdsa_sign_recoverable_batch_kernel<<<blocks, kThreads>>>(d_msgs, d_priv, d_rsigs, d_res, batch);
+    }
+    CUDA_CHECK(cudaGetLastError());
+    CUDA_CHECK(cudaDeviceSynchronize());
+
+    CudaTimer timer;
+    timer.start();
+    for (int i = 0; i < cfg.measure_iterations; ++i) {
+        ecdsa_sign_recoverable_batch_kernel<<<blocks, kThreads>>>(d_msgs, d_priv, d_rsigs, d_res, batch);
+    }
+    float total_ms = timer.stop();
+
+    double avg_ms = total_ms / cfg.measure_iterations;
+    double throughput = (batch / avg_ms) / 1000.0;
+    double ns_per_op = (avg_ms * 1e6) / batch;
+
+    CUDA_CHECK(cudaFree(d_msgs));
+    CUDA_CHECK(cudaFree(d_priv));
+    CUDA_CHECK(cudaFree(d_rsigs));
+    CUDA_CHECK(cudaFree(d_res));
+
+    return {"ECDSA Sign+Recid", avg_ms, batch, throughput, ns_per_op};
+}
+
+// ============================================================================
 // Print results
 // ============================================================================
 void print_device_info() {
@@ -946,6 +1441,24 @@ int main(int argc, char** argv) {
     print_result(results.back());
 
     results.push_back(bench_jacobian_to_affine(cfg));
+    print_result(results.back());
+
+    // Signature operations
+    std::cout << "\n=== ECDSA Signatures ===\n";
+    results.push_back(bench_ecdsa_sign(cfg));
+    print_result(results.back());
+
+    results.push_back(bench_ecdsa_verify(cfg));
+    print_result(results.back());
+
+    results.push_back(bench_ecdsa_sign_recoverable(cfg));
+    print_result(results.back());
+
+    std::cout << "\n=== Schnorr Signatures (BIP-340) ===\n";
+    results.push_back(bench_schnorr_sign(cfg));
+    print_result(results.back());
+
+    results.push_back(bench_schnorr_verify(cfg));
     print_result(results.back());
 
     // Print summary table

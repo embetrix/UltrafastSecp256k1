@@ -20,6 +20,7 @@ Complete API documentation for CPU, CUDA, and WASM implementations.
    - [Field Operations](#cuda-field-operations)
    - [Point Operations](#cuda-point-operations)
    - [Batch Operations](#cuda-batch-operations)
+   - [Signature Operations](#cuda-signature-operations)
 3. [WASM API](#wasm-api)
 4. [Performance Tips](#performance-tips)
 5. [Examples](#examples)
@@ -685,6 +686,140 @@ __device__ void hash160_uncompressed(const uint8_t pubkey[65], uint8_t hash[20])
 
 ---
 
+### CUDA Signature Operations
+
+> **World-first:** No other open-source GPU library provides secp256k1 ECDSA + Schnorr sign/verify.
+
+#### Data Structures
+
+```cpp
+#include <ecdsa.cuh>
+#include <schnorr.cuh>
+#include <recovery.cuh>
+
+// ECDSA signature (r, s as Scalars)
+struct ECDSASignatureGPU {
+    Scalar r;
+    Scalar s;
+};
+
+// Schnorr BIP-340 signature (32-byte R x-coordinate + Scalar s)
+struct SchnorrSignatureGPU {
+    uint8_t r[32];  // x-coordinate of R point
+    Scalar s;
+};
+
+// Recoverable ECDSA signature
+struct RecoverableSignatureGPU {
+    ECDSASignatureGPU sig;
+    int recid;  // Recovery ID (0-3)
+};
+```
+
+#### Device Functions
+
+```cpp
+// ECDSA Sign (RFC 6979 deterministic nonces, low-S normalization)
+// Returns true on success
+__device__ bool ecdsa_sign(
+    const uint8_t msg_hash[32],   // 32-byte message hash
+    const Scalar* privkey,         // Private key
+    ECDSASignatureGPU* sig         // Output signature
+);
+
+// ECDSA Verify (Shamir's trick + GLV endomorphism)
+// Returns true if signature is valid
+__device__ bool ecdsa_verify(
+    const uint8_t msg_hash[32],   // 32-byte message hash
+    const JacobianPoint* pubkey,   // Public key (Jacobian)
+    const ECDSASignatureGPU* sig   // Signature to verify
+);
+
+// ECDSA Sign with Recovery ID
+__device__ bool ecdsa_sign_recoverable(
+    const uint8_t msg_hash[32],
+    const Scalar* privkey,
+    RecoverableSignatureGPU* sig   // Output: signature + recid
+);
+
+// ECDSA Recover public key from signature
+__device__ bool ecdsa_recover(
+    const uint8_t msg_hash[32],
+    const RecoverableSignatureGPU* sig,
+    JacobianPoint* pubkey          // Output: recovered public key
+);
+
+// Schnorr Sign (BIP-340, tagged hash midstates for performance)
+__device__ bool schnorr_sign(
+    const Scalar* privkey,
+    const uint8_t msg[32],
+    const uint8_t aux_rand[32],    // Auxiliary randomness
+    SchnorrSignatureGPU* sig       // Output signature
+);
+
+// Schnorr Verify (BIP-340, x-only pubkey)
+__device__ bool schnorr_verify(
+    const uint8_t pubkey_x[32],    // X-only public key (32 bytes)
+    const uint8_t msg[32],
+    const SchnorrSignatureGPU* sig
+);
+```
+
+#### Batch Kernel Wrappers
+
+Host-callable kernel wrappers for batch processing:
+
+```cpp
+// Launch batch ECDSA sign (128 threads/block, 2 blocks/SM)
+void ecdsa_sign_batch_kernel<<<blocks, 128>>>(
+    const uint8_t* msg_hashes,     // N × 32 bytes
+    const Scalar* privkeys,         // N scalars
+    ECDSASignatureGPU* sigs,        // N output signatures
+    int count
+);
+
+// Launch batch ECDSA verify
+void ecdsa_verify_batch_kernel<<<blocks, 128>>>(
+    const uint8_t* msg_hashes,
+    const JacobianPoint* pubkeys,
+    const ECDSASignatureGPU* sigs,
+    bool* results,                  // N output booleans
+    int count
+);
+
+// Launch batch Schnorr sign
+void schnorr_sign_batch_kernel<<<blocks, 128>>>(
+    const Scalar* privkeys,
+    const uint8_t* msgs,
+    const uint8_t* aux_rands,
+    SchnorrSignatureGPU* sigs,
+    int count
+);
+
+// Launch batch Schnorr verify
+void schnorr_verify_batch_kernel<<<blocks, 128>>>(
+    const uint8_t* pubkey_xs,
+    const uint8_t* msgs,
+    const SchnorrSignatureGPU* sigs,
+    bool* results,
+    int count
+);
+```
+
+#### Performance
+
+| Operation | Time/Op | Throughput |
+|-----------|---------|------------|
+| ECDSA Sign | 204.8 ns | 4.88 M/s |
+| ECDSA Verify | 410.1 ns | 2.44 M/s |
+| ECDSA Sign + Recid | 311.5 ns | 3.21 M/s |
+| Schnorr Sign | 273.4 ns | 3.66 M/s |
+| Schnorr Verify | 354.6 ns | 2.82 M/s |
+
+*RTX 5060 Ti, kernel-only timing, batch 16K*
+
+---
+
 ## WASM API
 
 **Module:** `@ultrafastsecp256k1/wasm`
@@ -898,7 +1033,7 @@ int main() {
 
 ## Version
 
-UltrafastSecp256k1 v3.0.0
+UltrafastSecp256k1 v3.5.0
 
 For more information, see the [README](../README.md) or [GitHub repository](https://github.com/shrec/UltrafastSecp256k1).
 

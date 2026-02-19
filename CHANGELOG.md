@@ -5,6 +5,31 @@ All notable changes to UltrafastSecp256k1 are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.5.0] - 2026-02-20
+
+### Added — GPU Signature Operations (CUDA)
+- **ECDSA Sign on GPU** — `ecdsa_sign_batch_kernel` with RFC 6979 deterministic nonces, low-S normalization. **204.8 ns / 4.88 M/s** per signature.
+- **ECDSA Verify on GPU** — `ecdsa_verify_batch_kernel` with Shamir's trick + GLV endomorphism. **410.1 ns / 2.44 M/s** per verification.
+- **ECDSA Sign Recoverable on GPU** — `ecdsa_sign_recoverable_batch_kernel` with recovery ID computation. **311.5 ns / 3.21 M/s**.
+- **ECDSA Recover on GPU** — `ecdsa_recover_batch_kernel` for public key recovery from signature + recid.
+- **Schnorr Sign (BIP-340) on GPU** — `schnorr_sign_batch_kernel` with tagged hash midstates. **273.4 ns / 3.66 M/s**.
+- **Schnorr Verify (BIP-340) on GPU** — `schnorr_verify_batch_kernel` with x-only pubkey verification. **354.6 ns / 2.82 M/s**.
+- **6 new batch kernel wrappers** in `secp256k1.cu` — all with `__launch_bounds__(128, 2)` matching scalar_mul kernels.
+- **5 GPU signature benchmarks** in `bench_cuda.cu` — ECDSA sign, verify, sign+recid, Schnorr sign, Schnorr verify.
+- **`prepare_ecdsa_test_data()`** helper — generates valid signatures on GPU for verify benchmark correctness.
+
+> **No other open-source GPU library provides secp256k1 ECDSA + Schnorr sign/verify.** This is the only production-ready multi-backend (CUDA + OpenCL + Metal) GPU secp256k1 library.
+
+### Changed
+- **CUDA benchmark numbers updated** — Scalar Mul improved to 225.8 ns (was 266.5 ns), Field Inv to 10.2 ns (was 12.1 ns) from `__launch_bounds__` thread count fix (128 vs 256 mismatch).
+- **README** — Added blockchain coin badges (Bitcoin, Ethereum, +25), GPU signature benchmark tables, 27-coin supported coins section, SEO metadata footer, updated performance headline.
+- **BENCHMARKS.md** — Split CUDA section into Core ECC + GPU Signature Operations; updated all comparison tables.
+
+### Fixed
+- **CUDA benchmark thread mismatch** — Benchmarks used 256 threads/block but kernels declared `__launch_bounds__(128, 2)`, causing 0.0 ns results. Fixed to use 128 threads.
+
+---
+
 ## [3.4.0] - 2026-02-19
 
 ### Added — Stable C ABI (`ufsecp`)

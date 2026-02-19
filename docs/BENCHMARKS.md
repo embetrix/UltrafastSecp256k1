@@ -15,7 +15,7 @@ Benchmark results for UltrafastSecp256k1 across all supported platforms.
 | ESP32-S3 (LX7, 240 MHz) | 7,458 ns | 2,483 μs | — |
 | ESP32 (LX6, 240 MHz) | 6,993 ns | 6,203 μs | — |
 | STM32F103 (CM3, 72 MHz) | 15,331 ns | 37,982 μs | — |
-| CUDA (RTX 5060 Ti) | 0.2 ns | 216.1 ns | 266.5 ns |
+| CUDA (RTX 5060 Ti) | 0.2 ns | 217.7 ns | 225.8 ns |
 | OpenCL (RTX 5060 Ti) | 0.2 ns | 295.1 ns | — |
 | Metal (Apple M3 Pro) | 1.9 ns | 3.00 μs | 2.94 μs |
 
@@ -112,15 +112,34 @@ Benchmark results for UltrafastSecp256k1 across all supported platforms.
 **Architecture:** sm_86;sm89  
 **Build:** Clang 19 + nvcc, Release, -O3 --use_fast_math
 
+### Core ECC Operations
+
 | Operation | Time/Op | Throughput | Notes |
 |-----------|---------|------------|-------|
-| Field Mul | 0.2 ns | 4,139 M/s | Kernel-only, batch 1M |
-| Field Add | 0.2 ns | 4,122 M/s | Kernel-only, batch 1M |
-| Field Inv | 12.1 ns | 82.65 M/s | Kernel-only, batch 64K |
-| Point Add | 1.1 ns | 916 M/s | Kernel-only, batch 256K |
-| Point Double | 0.7 ns | 1,352 M/s | Kernel-only, batch 256K |
-| Scalar Mul (P*k) | 266.5 ns | 3.75 M/s | Kernel-only, batch 64K |
-| Generator Mul (G*k) | 216.1 ns | 4.63 M/s | Kernel-only, batch 128K |
+| Field Mul | 0.2 ns | 4,142 M/s | Kernel-only, batch 1M |
+| Field Add | 0.2 ns | 4,130 M/s | Kernel-only, batch 1M |
+| Field Inv | 10.2 ns | 98.35 M/s | Kernel-only, batch 64K |
+| Point Add | 1.6 ns | 619 M/s | Kernel-only, batch 256K |
+| Point Double | 0.8 ns | 1,282 M/s | Kernel-only, batch 256K |
+| Scalar Mul (P×k) | 225.8 ns | 4.43 M/s | Kernel-only, batch 64K |
+| Generator Mul (G×k) | 217.7 ns | 4.59 M/s | Kernel-only, batch 128K |
+| Affine Add | 0.4 ns | 2,532 M/s | Kernel-only, batch 256K |
+| Affine Lambda | 0.6 ns | 1,654 M/s | Kernel-only, batch 256K |
+| Affine X-Only | 0.4 ns | 2,328 M/s | Kernel-only, batch 256K |
+| Batch Inv | 2.9 ns | 340 M/s | Kernel-only, batch 64K |
+| Jac→Affine | 14.9 ns | 66.9 M/s | Kernel-only, batch 64K |
+
+### GPU Signature Operations
+
+> **No other open-source GPU library provides secp256k1 ECDSA + Schnorr sign/verify on GPU.**
+
+| Operation | Time/Op | Throughput | Notes |
+|-----------|---------|------------|-------|
+| ECDSA Sign | 204.8 ns | 4.88 M/s | RFC 6979, low-S, batch 16K |
+| ECDSA Verify | 410.1 ns | 2.44 M/s | Shamir + GLV, batch 16K |
+| ECDSA Sign + Recid | 311.5 ns | 3.21 M/s | Recoverable, batch 16K |
+| Schnorr Sign (BIP-340) | 273.4 ns | 3.66 M/s | Tagged hash midstates, batch 16K |
+| Schnorr Verify (BIP-340) | 354.6 ns | 2.82 M/s | X-only pubkey, batch 16K |
 
 ---
 
@@ -169,10 +188,14 @@ Benchmark results for UltrafastSecp256k1 across all supported platforms.
 |-----------|------|--------|--------|
 | Field Mul | 0.2 ns | 0.2 ns | Tie |
 | Field Add | 0.2 ns | 0.2 ns | Tie |
-| Field Inv | 12.1 ns | 14.3 ns | CUDA 1.18× |
-| Point Double | 0.7 ns | 0.9 ns | **CUDA 1.29×** |
-| Point Add | 1.1 ns | 1.6 ns | **CUDA 1.45×** |
-| Scalar Mul (kG) | 216.1 ns | 295.1 ns | **CUDA 1.37×** |
+| Field Inv | 10.2 ns | 14.3 ns | **CUDA 1.40×** |
+| Point Double | 0.8 ns | 0.9 ns | CUDA 1.13× |
+| Point Add | 1.6 ns | 1.6 ns | Tie |
+| Scalar Mul (kG) | 217.7 ns | 295.1 ns | **CUDA 1.36×** |
+| ECDSA Sign | 204.8 ns | — | CUDA only |
+| ECDSA Verify | 410.1 ns | — | CUDA only |
+| Schnorr Sign | 273.4 ns | — | CUDA only |
+| Schnorr Verify | 354.6 ns | — | CUDA only |
 
 ---
 
@@ -202,11 +225,15 @@ Benchmark results for UltrafastSecp256k1 across all supported platforms.
 |-----------|-------------------|---------------------|----------------|
 | Field Mul | 0.2 ns | 0.2 ns | 1.9 ns |
 | Field Add | 0.2 ns | 0.2 ns | 1.0 ns |
-| Field Inv | 12.1 ns | 14.3 ns | 106.4 ns |
-| Point Double | 0.7 ns | 0.9 ns | 5.1 ns |
-| Point Add | 1.1 ns | 1.6 ns | 10.1 ns |
-| Scalar Mul | 266.5 ns | 295.1 ns | 2.94 μs |
-| Generator Mul | 216.1 ns | 295.1 ns | 3.00 μs |
+| Field Inv | 10.2 ns | 14.3 ns | 106.4 ns |
+| Point Double | 0.8 ns | 0.9 ns | 5.1 ns |
+| Point Add | 1.6 ns | 1.6 ns | 10.1 ns |
+| Scalar Mul | 225.8 ns | 295.1 ns | 2.94 μs |
+| Generator Mul | 217.7 ns | 295.1 ns | 3.00 μs |
+| ECDSA Sign | 204.8 ns | — | — |
+| ECDSA Verify | 410.1 ns | — | — |
+| Schnorr Sign | 273.4 ns | — | — |
+| Schnorr Verify | 354.6 ns | — | — |
 
 > **შენიშვნა:** CUDA/OpenCL — RTX 5060 Ti (36 SMs, 2602 MHz, GDDR7 256 GB/s).  
 > Metal — M3 Pro (18 GPU cores, ~150 GB/s unified memory bandwidth).  
@@ -484,6 +511,6 @@ All targets registered in CMake. Build with `cmake --build build -j` then run fr
 
 ## Version
 
-UltrafastSecp256k1 v3.3.0  
-Benchmarks updated: 2026-02-18
+UltrafastSecp256k1 v3.5.0  
+Benchmarks updated: 2026-02-20
 
