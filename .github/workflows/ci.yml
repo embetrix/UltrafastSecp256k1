@@ -74,8 +74,7 @@ jobs:
             -DCMAKE_CXX_COMPILER=aarch64-linux-gnu-g++-13 \
             -DSECP256K1_BUILD_TESTS=ON \
             -DSECP256K1_BUILD_BENCH=ON \
-            -DSECP256K1_BUILD_METAL=OFF \
-            -DSECP256K1_USE_ASM=OFF
+            -DSECP256K1_BUILD_METAL=OFF
 
       - name: Build
         run: cmake --build build-arm64 -j$(nproc)
