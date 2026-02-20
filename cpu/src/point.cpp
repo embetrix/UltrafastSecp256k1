@@ -2251,85 +2251,100 @@ std::pair<std::array<uint8_t, 32>, bool> Point::x_bytes_and_parity() const {
     return {x_aff.to_bytes(), (y_bytes[31] & 1) != 0};
 }
 
-// ── 4-stream GLV Shamir: a*G + b*P ──────────────────────────────────────────
-// Computes a*G + b*P using a single ~128-bit doubling chain with 4 wNAF streams.
-// GLV decomposes both scalars: a = a1 + a2·λ, b = b1 + b2·λ
-// Then: a1*G + a2*ψ(G) + b1*P + b2*ψ(P) in one interleaved pass.
-// G/ψ(G) affine tables are cached statically (computed once).
+// ── 128-bit split Shamir: a*G + b*P ─────────────────────────────────────────
+// Computes a*G + b*P using a ~128-bit doubling chain with 4 wNAF streams.
+// a is split arithmetically: a = a_lo + a_hi·2^128  (no GLV for G-stream)
+// b is GLV-decomposed: b = b1 + b2·λ
+// Then: a_lo*G + a_hi*H + b1*P + b2*ψ(P) where H = 2^128·G
+// G/H affine tables are cached statically (computed once, w=15 → 8192 entries).
 #if defined(SECP256K1_FAST_52BIT)
 __attribute__((noinline))
 Point Point::dual_scalar_mul_gen_point(const Scalar& a, const Scalar& b, const Point& P) {
-    // ── GLV decompose both scalars ───────────────────────────────────
-    GLVDecomposition decomp_a = glv_decompose(a);
+    // ── 128-bit arithmetic split of a ────────────────────────────────
+    const auto& a_limbs = a.limbs();
+    Scalar a_lo = Scalar::from_limbs({a_limbs[0], a_limbs[1], 0, 0});
+    Scalar a_hi = Scalar::from_limbs({a_limbs[2], a_limbs[3], 0, 0});
+
+    // ── GLV decompose b only ─────────────────────────────────────────
     GLVDecomposition decomp_b = glv_decompose(b);
 
-    // ── Window widths: larger for G (precomputed), smaller for P (per-call) ─
-    constexpr unsigned WINDOW_G = 7;     // → 2^5 = 32 entries per G/ψG table
+    // ── Window widths: w=15 for G (precomputed), w=5 for P (per-call) ───
+    constexpr unsigned WINDOW_G = 15;    // → 2^13 = 8192 entries per G/H table
     constexpr unsigned WINDOW_P = 5;     // → 2^3 = 8 entries per P/ψP table
-    constexpr int G_TABLE_SIZE = (1 << (WINDOW_G - 2));  // 32
+    constexpr int G_TABLE_SIZE = (1 << (WINDOW_G - 2));  // 8192
     constexpr int P_TABLE_SIZE = (1 << (WINDOW_P - 2));  // 8
 
-    // ── Static generator tables (computed once, 32 entries) ──────────
-    static const auto gen_tables = []() {
-        struct GenTables {
-            std::array<AffinePoint52, G_TABLE_SIZE> tbl_G;
-            std::array<AffinePoint52, G_TABLE_SIZE> tbl_psiG;
-            std::array<AffinePoint52, G_TABLE_SIZE> neg_tbl_G;
-            std::array<AffinePoint52, G_TABLE_SIZE> neg_tbl_psiG;
-        };
-        GenTables t;
+    // ── Static generator tables (computed once, 8192 entries per base) ──
+    // Two bases: G (generator) and H = 2^128·G
+    // Uses effective-affine technique for efficient table building.
+    struct GenTables {
+        AffinePoint52 tbl_G[G_TABLE_SIZE];   // [G, 3G, 5G, ..., 16383G]
+        AffinePoint52 tbl_H[G_TABLE_SIZE];   // [H, 3H, 5H, ..., 16383H]
+    };
+    static const GenTables* const gen_tables = []() -> const GenTables* {
+        auto* t = new GenTables;
 
-        Point G = Point::generator();
-        JacobianPoint52 G52 = to_jac52(G);
+        // Helper: build odd-multiple table for base point B using effective-affine
+        auto build_table = [](const JacobianPoint52& B,
+                              AffinePoint52* out, int count) {
+            // d = 2·B, work on isomorphic curve where d is affine
+            JacobianPoint52 d = jac52_double(B);
+            FieldElement52 C  = d.z;
+            FieldElement52 C2 = C.square();
+            FieldElement52 C3 = C2 * C;
+            AffinePoint52 d_aff = {d.x, d.y};
 
-        // Build Jacobian table for G: [G, 3G, 5G, ..., (2*32-1)G]
-        std::array<JacobianPoint52, G_TABLE_SIZE> jtbl;
-        jtbl[0] = G52;
-        JacobianPoint52 dbl_G = jac52_double(G52);
-        for (int i = 1; i < G_TABLE_SIZE; i++) {
-            jtbl[i] = jac52_add(jtbl[i - 1], dbl_G);
-        }
-
-        // Batch affine conversion
-        {
-            std::array<FieldElement52, G_TABLE_SIZE> prods;
-            prods[0] = jtbl[0].z;
-            for (int i = 1; i < G_TABLE_SIZE; i++) {
-                prods[i] = prods[i - 1] * jtbl[i].z;
+            // iso[0] = φ(B) = (B.x·C², B.y·C³, B.z) on iso curve
+            auto* iso = new JacobianPoint52[count];
+            iso[0] = {B.x * C2, B.y * C3, B.z, false};
+            for (int i = 1; i < count; i++) {
+                iso[i] = iso[i - 1];
+                jac52_add_mixed_inplace(iso[i], d_aff);
             }
-            FieldElement inv_fe = prods[G_TABLE_SIZE - 1].to_fe().inverse();
+
+            // Batch-invert effective Z = Z_iso · C
+            auto* eff_z = new FieldElement52[count];
+            for (int i = 0; i < count; i++) {
+                eff_z[i] = iso[i].z * C;
+            }
+            auto* prods = new FieldElement52[count];
+            prods[0] = eff_z[0];
+            for (int i = 1; i < count; i++) {
+                prods[i] = prods[i - 1] * eff_z[i];
+            }
+            FieldElement inv_fe = prods[count - 1].to_fe().inverse();
             FieldElement52 inv = FieldElement52::from_fe(inv_fe);
-            std::array<FieldElement52, G_TABLE_SIZE> zs;
-            for (int i = G_TABLE_SIZE - 1; i > 0; --i) {
+            auto* zs = new FieldElement52[count];
+            for (int i = count - 1; i > 0; --i) {
                 zs[i] = prods[i - 1] * inv;
-                inv = inv * jtbl[i].z;
+                inv = inv * eff_z[i];
             }
             zs[0] = inv;
-            for (int i = 0; i < G_TABLE_SIZE; i++) {
+
+            for (int i = 0; i < count; i++) {
                 FieldElement52 zinv2 = zs[i].square();
                 FieldElement52 zinv3 = zinv2 * zs[i];
-                t.tbl_G[i].x = jtbl[i].x * zinv2;
-                t.tbl_G[i].y = jtbl[i].y * zinv3;
+                out[i].x = iso[i].x * zinv2;
+                out[i].y = iso[i].y * zinv3;
             }
-        }
 
-        // ψ(G) table: ψ(x,y) = (β·x, y)
-        static const FieldElement52 beta52 = FieldElement52::from_fe(
-            FieldElement::from_bytes(glv_constants::BETA));
-        for (int i = 0; i < G_TABLE_SIZE; i++) {
-            t.tbl_psiG[i].x = t.tbl_G[i].x * beta52;
-            t.tbl_psiG[i].y = t.tbl_G[i].y;
-        }
+            delete[] zs;
+            delete[] prods;
+            delete[] eff_z;
+            delete[] iso;
+        };
 
-        // Pre-negate all
-        for (int i = 0; i < G_TABLE_SIZE; i++) {
-            t.neg_tbl_G[i].x = t.tbl_G[i].x;
-            t.neg_tbl_G[i].y = t.tbl_G[i].y.negate(1);
-            t.neg_tbl_G[i].y.normalize_weak();
-            t.neg_tbl_psiG[i].x = t.tbl_psiG[i].x;
-            t.neg_tbl_psiG[i].y = t.tbl_psiG[i].y.negate(1);
-            t.neg_tbl_psiG[i].y.normalize_weak();
+        // Build tbl_G: odd multiples of G
+        Point G = Point::generator();
+        JacobianPoint52 G52 = to_jac52(G);
+        build_table(G52, t->tbl_G, G_TABLE_SIZE);
+
+        // Build tbl_H: odd multiples of H = 2^128·G
+        JacobianPoint52 H52 = G52;
+        for (int i = 0; i < 128; i++) {
+            jac52_double_inplace(H52);
         }
+        build_table(H52, t->tbl_H, G_TABLE_SIZE);
 
         return t;
     }();
@@ -2425,30 +2440,20 @@ Point Point::dual_scalar_mul_gen_point(const Scalar& a, const Scalar& b, const P
         neg_tbl_phiP[i].y.normalize_weak();
     }
 
-    // ── Compute wNAF for all 4 half-scalars (different windows) ─────
-    std::array<int32_t, 260> wnaf_a1{}, wnaf_a2{}, wnaf_b1{}, wnaf_b2{};
-    std::size_t len_a1 = 0, len_a2 = 0, len_b1 = 0, len_b2 = 0;
+    // ── Compute wNAF for all 4 half-scalars ─────────────────────────
+    std::array<int32_t, 260> wnaf_a_lo{}, wnaf_a_hi{}, wnaf_b1{}, wnaf_b2{};
+    std::size_t len_a_lo = 0, len_a_hi = 0, len_b1 = 0, len_b2 = 0;
 
-    compute_wnaf_into(decomp_a.k1, WINDOW_G, wnaf_a1.data(), wnaf_a1.size(), len_a1);
-    compute_wnaf_into(decomp_a.k2, WINDOW_G, wnaf_a2.data(), wnaf_a2.size(), len_a2);
+    compute_wnaf_into(a_lo,  WINDOW_G, wnaf_a_lo.data(), wnaf_a_lo.size(), len_a_lo);
+    compute_wnaf_into(a_hi,  WINDOW_G, wnaf_a_hi.data(), wnaf_a_hi.size(), len_a_hi);
     compute_wnaf_into(decomp_b.k1, WINDOW_P, wnaf_b1.data(), wnaf_b1.size(), len_b1);
     compute_wnaf_into(decomp_b.k2, WINDOW_P, wnaf_b2.data(), wnaf_b2.size(), len_b2);
 
     // Trim trailing zeros
-    while (len_a1 > 0 && wnaf_a1[len_a1 - 1] == 0) --len_a1;
-    while (len_a2 > 0 && wnaf_a2[len_a2 - 1] == 0) --len_a2;
+    while (len_a_lo > 0 && wnaf_a_lo[len_a_lo - 1] == 0) --len_a_lo;
+    while (len_a_hi > 0 && wnaf_a_hi[len_a_hi - 1] == 0) --len_a_hi;
     while (len_b1 > 0 && wnaf_b1[len_b1 - 1] == 0) --len_b1;
     while (len_b2 > 0 && wnaf_b2[len_b2 - 1] == 0) --len_b2;
-
-    // ── Select correct G/ψ(G) tables based on decomp_a signs ────────
-    // Static G tables are always-positive, so sign handling is independent:
-    //   G stream:    swap if k1_neg  (want -|a1|*G)
-    //   ψ(G) stream: swap if k2_neg  (want -|a2|*ψ(G))
-    const auto& ref_tbl_G     = decomp_a.k1_neg ? gen_tables.neg_tbl_G     : gen_tables.tbl_G;
-    const auto& ref_neg_tbl_G = decomp_a.k1_neg ? gen_tables.tbl_G         : gen_tables.neg_tbl_G;
-
-    const auto& ref_tbl_psiG     = decomp_a.k2_neg ? gen_tables.neg_tbl_psiG     : gen_tables.tbl_psiG;
-    const auto& ref_neg_tbl_psiG = decomp_a.k2_neg ? gen_tables.tbl_psiG         : gen_tables.neg_tbl_psiG;
 
     // ── 4-stream Shamir interleaved scan ─────────────────────────────
     JacobianPoint52 result52 = {
@@ -2456,31 +2461,37 @@ Point Point::dual_scalar_mul_gen_point(const Scalar& a, const Scalar& b, const P
         FieldElement52::zero(), true
     };
 
-    std::size_t max_len = len_a1;
-    if (len_a2 > max_len) max_len = len_a2;
+    std::size_t max_len = len_a_lo;
+    if (len_a_hi > max_len) max_len = len_a_hi;
     if (len_b1 > max_len) max_len = len_b1;
     if (len_b2 > max_len) max_len = len_b2;
 
     for (int i = static_cast<int>(max_len) - 1; i >= 0; --i) {
         jac52_double_inplace(result52);
 
-        // Stream 1: a1 * G
+        // Stream 1: a_lo * G (inline Y-negate for negative digits)
         {
-            int32_t d = wnaf_a1[static_cast<std::size_t>(i)];
+            int32_t d = wnaf_a_lo[static_cast<std::size_t>(i)];
             if (d > 0) {
-                jac52_add_mixed_inplace(result52, ref_tbl_G[(d - 1) >> 1]);
+                jac52_add_mixed_inplace(result52, gen_tables->tbl_G[(d - 1) >> 1]);
             } else if (d < 0) {
-                jac52_add_mixed_inplace(result52, ref_neg_tbl_G[(-d - 1) >> 1]);
+                AffinePoint52 entry = gen_tables->tbl_G[(-d - 1) >> 1];
+                entry.y = entry.y.negate(1);
+                entry.y.normalize_weak();
+                jac52_add_mixed_inplace(result52, entry);
             }
         }
 
-        // Stream 2: a2 * ψ(G)
+        // Stream 2: a_hi * H (inline Y-negate for negative digits)
         {
-            int32_t d = wnaf_a2[static_cast<std::size_t>(i)];
+            int32_t d = wnaf_a_hi[static_cast<std::size_t>(i)];
             if (d > 0) {
-                jac52_add_mixed_inplace(result52, ref_tbl_psiG[(d - 1) >> 1]);
+                jac52_add_mixed_inplace(result52, gen_tables->tbl_H[(d - 1) >> 1]);
             } else if (d < 0) {
-                jac52_add_mixed_inplace(result52, ref_neg_tbl_psiG[(-d - 1) >> 1]);
+                AffinePoint52 entry = gen_tables->tbl_H[(-d - 1) >> 1];
+                entry.y = entry.y.negate(1);
+                entry.y.normalize_weak();
+                jac52_add_mixed_inplace(result52, entry);
             }
         }
 

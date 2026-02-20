@@ -152,6 +152,9 @@ int main() {
     }
 
     // ── Pre-generate test data ───────────────────────────────────────────
+    // NOTE: Every benchmark rotates through a POOL of random 256-bit scalars
+    // to prevent branch-predictor / cache warming artifacts.
+    // Both libraries receive identical treatment for fair comparison.
     constexpr int N_KEYGEN   = 5000;
     constexpr int N_SIGN     = 2000;
     constexpr int N_VERIFY   = 2000;
@@ -159,75 +162,93 @@ int main() {
     constexpr int N_SCMUL    = 1000;
     constexpr int N_PRIM     = 100000;
 
-    // Common secret key (valid for both libraries)
-    uint8_t seckey_bytes[32];
-    random_seckey(seckey_bytes, ctx);
-    auto our_sk = Scalar::from_bytes(std::array<uint8_t,32>{});
-    std::memcpy(const_cast<uint8_t*>(reinterpret_cast<const uint8_t*>(&our_sk)),
-                seckey_bytes, 32);
-    our_sk = Scalar::from_bytes([&]{
-        std::array<uint8_t,32> a{};
-        std::memcpy(a.data(), seckey_bytes, 32);
-        return a;
-    }());
+    // ── Pool of random 256-bit secret keys ───────────────────────────────
+    constexpr int POOL = 64;  // rotate through 64 different keys
+
+    // Secret key pool (valid for both libraries)
+    uint8_t seckey_pool[POOL][32];
+    Scalar  our_sk_pool[POOL];
+    for (int i = 0; i < POOL; ++i) {
+        random_seckey(seckey_pool[i], ctx);
+        our_sk_pool[i] = Scalar::from_bytes([&]{
+            std::array<uint8_t,32> a{};
+            std::memcpy(a.data(), seckey_pool[i], 32);
+            return a;
+        }());
+    }
+
+    // Use pool[0] as the "primary" key for setup
+    auto& seckey_bytes = seckey_pool[0];
+    auto  our_sk = our_sk_pool[0];
 
     auto G = Point::generator();
 
-    // libsecp256k1 pubkey
-    secp256k1_pubkey lib_pk;
-    secp256k1_ec_pubkey_create(ctx, &lib_pk, seckey_bytes);
+    // libsecp256k1 pubkey pool (for ECDH counterparty)
+    secp256k1_pubkey lib_pk_pool[POOL];
+    Point            our_pk_pool[POOL];
+    for (int i = 0; i < POOL; ++i) {
+        secp256k1_ec_pubkey_create(ctx, &lib_pk_pool[i], seckey_pool[i]);
+        our_pk_pool[i] = G.scalar_mul(our_sk_pool[i]);
+    }
 
-    // libsecp256k1 keypair for schnorr
-    secp256k1_keypair lib_keypair;
-    secp256k1_keypair_create(ctx, &lib_keypair, seckey_bytes);
+    // libsecp256k1 keypair pool for schnorr sign
+    secp256k1_keypair lib_keypair_pool[POOL];
+    secp256k1::SchnorrKeypair our_schnorr_kp_pool[POOL];
+    for (int i = 0; i < POOL; ++i) {
+        secp256k1_keypair_create(ctx, &lib_keypair_pool[i], seckey_pool[i]);
+        our_schnorr_kp_pool[i] = secp256k1::schnorr_keypair_create(our_sk_pool[i]);
+    }
 
-    // libsecp256k1 xonly pubkey
+    // libsecp256k1 primary pubkey/keypair/xonly
+    secp256k1_pubkey& lib_pk = lib_pk_pool[0];
+    secp256k1_keypair& lib_keypair = lib_keypair_pool[0];
+
     secp256k1_xonly_pubkey lib_xonly_pk;
     secp256k1_keypair_xonly_pub(ctx, &lib_xonly_pk, nullptr, &lib_keypair);
 
-    // Our pubkey
-    auto our_pk = G.scalar_mul(our_sk);
+    auto our_pk = our_pk_pool[0];
 
-    // Message
-    std::array<uint8_t, 32> msg{};
-    random_bytes(msg.data(), 32);
+    // Message pool (different message per iteration)
+    std::array<uint8_t, 32> msg_pool[POOL];
+    for (int i = 0; i < POOL; ++i) random_bytes(msg_pool[i].data(), 32);
+    auto& msg = msg_pool[0];
 
     // Aux randomness for schnorr
     std::array<uint8_t, 32> aux{};
     random_bytes(aux.data(), 32);
 
-    // Pre-sign for verify benchmarks
-    secp256k1_ecdsa_signature lib_ecdsa_sig;
-    secp256k1_ecdsa_sign(ctx, &lib_ecdsa_sig, msg.data(), seckey_bytes, nullptr, nullptr);
+    // Pre-sign for verify benchmarks — pool of different sigs on different msgs
+    secp256k1_ecdsa_signature lib_ecdsa_sig_pool[POOL];
+    secp256k1::ECDSASignature our_ecdsa_sig_pool[POOL];
+    for (int i = 0; i < POOL; ++i) {
+        secp256k1_ecdsa_sign(ctx, &lib_ecdsa_sig_pool[i], msg_pool[i].data(), seckey_pool[i], nullptr, nullptr);
+        our_ecdsa_sig_pool[i] = secp256k1::ecdsa_sign(msg_pool[i], our_sk_pool[i]);
+    }
+    auto& our_ecdsa_sig = our_ecdsa_sig_pool[0];
 
-    auto our_ecdsa_sig = secp256k1::ecdsa_sign(msg, our_sk);
+    // Schnorr signatures pool
+    uint8_t lib_schnorr_sig_pool[POOL][64];
+    secp256k1::SchnorrSignature our_schnorr_sig_pool[POOL];
+    secp256k1::SchnorrXonlyPubkey our_schnorr_xpk_pool[POOL];
+    secp256k1_xonly_pubkey lib_xonly_pk_pool[POOL];
+    for (int i = 0; i < POOL; ++i) {
+        secp256k1_schnorrsig_sign32(ctx, lib_schnorr_sig_pool[i], msg_pool[i].data(), &lib_keypair_pool[i], aux.data());
+        our_schnorr_sig_pool[i] = secp256k1::schnorr_sign(our_schnorr_kp_pool[i], msg_pool[i], aux);
+        auto pkx = secp256k1::schnorr_pubkey(our_sk_pool[i]);
+        secp256k1::schnorr_xonly_pubkey_parse(our_schnorr_xpk_pool[i], pkx);
+        secp256k1_keypair_xonly_pub(ctx, &lib_xonly_pk_pool[i], nullptr, &lib_keypair_pool[i]);
+    }
+    auto& our_schnorr_sig = our_schnorr_sig_pool[0];
+    auto& our_schnorr_xpk = our_schnorr_xpk_pool[0];
 
-    uint8_t lib_schnorr_sig[64];
-    secp256k1_schnorrsig_sign32(ctx, lib_schnorr_sig, msg.data(), &lib_keypair, aux.data());
+    // Random scalar pool for scalar_mul
+    Scalar scalar_pool[POOL];
+    for (int i = 0; i < POOL; ++i) scalar_pool[i] = random_scalar();
 
-    auto our_schnorr_pkx = secp256k1::schnorr_pubkey(our_sk);
-    auto our_schnorr_kp = secp256k1::schnorr_keypair_create(our_sk);
-    auto our_schnorr_sig = secp256k1::schnorr_sign(our_schnorr_kp, msg, aux);
-
-    // Pre-cache xonly pubkey (like libsecp's secp256k1_xonly_pubkey)
-    secp256k1::SchnorrXonlyPubkey our_schnorr_xpk;
-    secp256k1::schnorr_xonly_pubkey_parse(our_schnorr_xpk, our_schnorr_pkx);
-
-    // Second key for ECDH
-    uint8_t seckey2_bytes[32];
-    random_seckey(seckey2_bytes, ctx);
-    secp256k1_pubkey lib_pk2;
-    secp256k1_ec_pubkey_create(ctx, &lib_pk2, seckey2_bytes);
-
-    auto our_sk2 = Scalar::from_bytes([&]{
-        std::array<uint8_t,32> a{};
-        std::memcpy(a.data(), seckey2_bytes, 32);
-        return a;
-    }());
-    auto our_pk2 = G.scalar_mul(our_sk2);
-
-    printf("  იტერაციები: keygen=%d, sign=%d, verify=%d, ecdh=%d, scalar_mul=%d, primitives=%d\n\n",
+    printf("  იტერაციები: keygen=%d, sign=%d, verify=%d, ecdh=%d, scalar_mul=%d, primitives=%d\n",
            N_KEYGEN, N_SIGN, N_VERIFY, N_ECDH, N_SCMUL, N_PRIM);
+    printf("  სკალარების პული: %d სხვადასხვა 256-ბიტიანი შემთხვევითი სკალარი (თითო ოპერაციისთვის სხვადასხვა)\n\n",
+           POOL);
 
     print_header();
 
@@ -236,19 +257,19 @@ int main() {
     // ═════════════════════════════════════════════════════════════════════
 
     auto r_keygen_ours = BENCH("keygen_ct", N_KEYGEN, {}, {
-        volatile auto p = secp256k1::ct::generator_mul(our_sk);
+        volatile auto p = secp256k1::ct::generator_mul(our_sk_pool[_i % POOL]);
     });
 
     auto r_keygen_lib = BENCH("keygen_lib", N_KEYGEN, {}, {
         secp256k1_pubkey pk_tmp;
-        volatile int ok = secp256k1_ec_pubkey_create(ctx, &pk_tmp, seckey_bytes);
+        volatile int ok = secp256k1_ec_pubkey_create(ctx, &pk_tmp, seckey_pool[_i % POOL]);
     });
 
     print_row("Key generation (CT)", r_keygen_ours, r_keygen_lib);
 
     // Fast keygen for reference
     auto r_keygen_fast = BENCH("keygen_fast", N_KEYGEN, {}, {
-        volatile auto p = G.scalar_mul(our_sk);
+        volatile auto p = G.scalar_mul(scalar_pool[_i % POOL]);
     });
     print_row_single("Key generation (fast)", r_keygen_fast);
 
@@ -259,12 +280,12 @@ int main() {
     // ═════════════════════════════════════════════════════════════════════
 
     auto r_ecdsa_sign_ours = BENCH("ecdsa_sign", N_SIGN, {}, {
-        volatile auto s = secp256k1::ecdsa_sign(msg, our_sk);
+        volatile auto s = secp256k1::ecdsa_sign(msg_pool[_i % POOL], our_sk_pool[_i % POOL]);
     });
 
     auto r_ecdsa_sign_lib = BENCH("ecdsa_sign_lib", N_SIGN, {}, {
         secp256k1_ecdsa_signature sig_tmp;
-        volatile int ok = secp256k1_ecdsa_sign(ctx, &sig_tmp, msg.data(), seckey_bytes, nullptr, nullptr);
+        volatile int ok = secp256k1_ecdsa_sign(ctx, &sig_tmp, msg_pool[_i % POOL].data(), seckey_pool[_i % POOL], nullptr, nullptr);
     });
 
     print_row("ECDSA sign", r_ecdsa_sign_ours, r_ecdsa_sign_lib);
@@ -274,11 +295,13 @@ int main() {
     // ═════════════════════════════════════════════════════════════════════
 
     auto r_ecdsa_verify_ours = BENCH("ecdsa_verify", N_VERIFY, {}, {
-        volatile bool v = secp256k1::ecdsa_verify(msg, our_pk, our_ecdsa_sig);
+        int idx = _i % POOL;
+        volatile bool v = secp256k1::ecdsa_verify(msg_pool[idx], our_pk_pool[idx], our_ecdsa_sig_pool[idx]);
     });
 
     auto r_ecdsa_verify_lib = BENCH("ecdsa_verify_lib", N_VERIFY, {}, {
-        volatile int v = secp256k1_ecdsa_verify(ctx, &lib_ecdsa_sig, msg.data(), &lib_pk);
+        int idx = _i % POOL;
+        volatile int v = secp256k1_ecdsa_verify(ctx, &lib_ecdsa_sig_pool[idx], msg_pool[idx].data(), &lib_pk_pool[idx]);
     });
 
     print_row("ECDSA verify", r_ecdsa_verify_ours, r_ecdsa_verify_lib);
@@ -290,12 +313,14 @@ int main() {
     // ═════════════════════════════════════════════════════════════════════
 
     auto r_schnorr_sign_ours = BENCH("schnorr_sign", N_SIGN, {}, {
-        volatile auto s = secp256k1::schnorr_sign(our_schnorr_kp, msg, aux);
+        int idx = _i % POOL;
+        volatile auto s = secp256k1::schnorr_sign(our_schnorr_kp_pool[idx], msg_pool[idx], aux);
     });
 
     auto r_schnorr_sign_lib = BENCH("schnorr_sign_lib", N_SIGN, {}, {
+        int idx = _i % POOL;
         uint8_t sig_tmp[64];
-        volatile int ok = secp256k1_schnorrsig_sign32(ctx, sig_tmp, msg.data(), &lib_keypair, aux.data());
+        volatile int ok = secp256k1_schnorrsig_sign32(ctx, sig_tmp, msg_pool[idx].data(), &lib_keypair_pool[idx], aux.data());
     });
 
     print_row("Schnorr sign", r_schnorr_sign_ours, r_schnorr_sign_lib);
@@ -305,11 +330,13 @@ int main() {
     // ═════════════════════════════════════════════════════════════════════
 
     auto r_schnorr_verify_ours = BENCH("schnorr_verify", N_VERIFY, {}, {
-        volatile bool v = secp256k1::schnorr_verify(our_schnorr_xpk, msg, our_schnorr_sig);
+        int idx = _i % POOL;
+        volatile bool v = secp256k1::schnorr_verify(our_schnorr_xpk_pool[idx], msg_pool[idx], our_schnorr_sig_pool[idx]);
     });
 
     auto r_schnorr_verify_lib = BENCH("schnorr_verify_lib", N_VERIFY, {}, {
-        volatile int v = secp256k1_schnorrsig_verify(ctx, lib_schnorr_sig, msg.data(), 32, &lib_xonly_pk);
+        int idx = _i % POOL;
+        volatile int v = secp256k1_schnorrsig_verify(ctx, lib_schnorr_sig_pool[idx], msg_pool[idx].data(), 32, &lib_xonly_pk_pool[idx]);
     });
 
     print_row("Schnorr verify", r_schnorr_verify_ours, r_schnorr_verify_lib);
@@ -321,12 +348,16 @@ int main() {
     // ═════════════════════════════════════════════════════════════════════
 
     auto r_ecdh_ours = BENCH("ecdh", N_ECDH, {}, {
-        volatile auto s = secp256k1::ecdh_compute(our_sk, our_pk2);
+        int idx = _i % POOL;
+        int idx2 = (_i + 1) % POOL;  // counterparty
+        volatile auto s = secp256k1::ecdh_compute(our_sk_pool[idx], our_pk_pool[idx2]);
     });
 
     auto r_ecdh_lib = BENCH("ecdh_lib", N_ECDH, {}, {
+        int idx = _i % POOL;
+        int idx2 = (_i + 1) % POOL;
         uint8_t out[32];
-        volatile int ok = secp256k1_ecdh(ctx, out, &lib_pk2, seckey_bytes, nullptr, nullptr);
+        volatile int ok = secp256k1_ecdh(ctx, out, &lib_pk_pool[idx2], seckey_pool[idx], nullptr, nullptr);
     });
 
     print_row("ECDH", r_ecdh_ours, r_ecdh_lib);
@@ -337,30 +368,28 @@ int main() {
     // Section 7: CT Scalar Multiplication
     // ═════════════════════════════════════════════════════════════════════
 
-    auto r_ct_scmul_ours = BENCH("ct_scalar_mul", N_SCMUL, auto k = random_scalar(), {
-        volatile auto p = secp256k1::ct::scalar_mul(G, k);
+    auto r_ct_scmul_ours = BENCH("ct_scalar_mul", N_SCMUL, {}, {
+        volatile auto p = secp256k1::ct::scalar_mul(G, scalar_pool[_i % POOL]);
     });
 
     // libsecp256k1's ec_pubkey_tweak_mul is the closest scalar_mul equivalent
-    auto r_ct_scmul_lib = BENCH("ct_scmul_lib", N_SCMUL, {
-        secp256k1_pubkey pk_tmp = lib_pk;
-    }, {
-        secp256k1_pubkey pk_copy = lib_pk;
-        volatile int ok = secp256k1_ec_pubkey_tweak_mul(ctx, &pk_copy, seckey_bytes);
+    auto r_ct_scmul_lib = BENCH("ct_scmul_lib", N_SCMUL, {}, {
+        secp256k1_pubkey pk_copy = lib_pk_pool[_i % POOL];
+        volatile int ok = secp256k1_ec_pubkey_tweak_mul(ctx, &pk_copy, seckey_pool[_i % POOL]);
     });
 
     print_row("CT scalar_mul", r_ct_scmul_ours, r_ct_scmul_lib);
 
     // CT generator_mul vs ec_pubkey_create (both are k*G)
-    auto r_ct_genmul_ours = BENCH("ct_generator_mul", N_SCMUL, auto k = random_scalar(), {
-        volatile auto p = secp256k1::ct::generator_mul(k);
+    auto r_ct_genmul_ours = BENCH("ct_generator_mul", N_SCMUL, {}, {
+        volatile auto p = secp256k1::ct::generator_mul(scalar_pool[_i % POOL]);
     });
 
     print_row("CT generator_mul", r_ct_genmul_ours, r_keygen_lib);
 
     // Fast scalar_mul for comparison
-    auto r_fast_scmul = BENCH("fast_scalar_mul", N_SCMUL, auto k = random_scalar(), {
-        volatile auto p = G.scalar_mul(k);
+    auto r_fast_scmul = BENCH("fast_scalar_mul", N_SCMUL, {}, {
+        volatile auto p = G.scalar_mul(scalar_pool[_i % POOL]);
     });
     print_row_single("Fast scalar_mul", r_fast_scmul);
 

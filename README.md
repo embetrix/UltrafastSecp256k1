@@ -11,7 +11,7 @@
 - **Dual-layer security** — variable-time FAST path for throughput, constant-time CT path for secret-key operations
 - **12+ platforms** — x86-64, ARM64, RISC-V, WASM, iOS, Android, ESP32, STM32, CUDA, Metal, OpenCL, ROCm
 
-**Quick links:** [Benchmarks](docs/BENCHMARKS.md) · [Build Guide](docs/BUILDING.md) · [API Reference](docs/API_REFERENCE.md) · [Security Policy](SECURITY.md) · [Threat Model](THREAT_MODEL.md) · [Porting Guide](PORTING.md)
+**Quick links:** [Discord](https://discord.gg/sUmW7cc5) · [Benchmarks](docs/BENCHMARKS.md) · [Build Guide](docs/BUILDING.md) · [API Reference](docs/API_REFERENCE.md) · [Security Policy](SECURITY.md) · [Threat Model](THREAT_MODEL.md) · [Porting Guide](PORTING.md)
 
 ---
 
@@ -22,6 +22,7 @@
 [![Release](https://img.shields.io/github/v/release/shrec/UltrafastSecp256k1?label=Release)](https://github.com/shrec/UltrafastSecp256k1/releases/latest)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 [![C++20](https://img.shields.io/badge/C%2B%2B-20-blue.svg)](https://en.cppreference.com/w/cpp/20)
+[![Discord](https://img.shields.io/badge/Discord-Join%20Us-5865F2?logo=discord&logoColor=white)](https://discord.gg/sUmW7cc5)
 
 **Supported Blockchains (secp256k1-based):**
 
