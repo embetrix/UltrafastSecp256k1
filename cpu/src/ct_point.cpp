@@ -40,6 +40,12 @@
 
 #include <mutex>
 
+// AVX2 vectorized CT table lookup (x86-64 with -march=native)
+#if defined(__x86_64__) && defined(__AVX2__)
+#include <immintrin.h>
+#define SECP256K1_CT_AVX2 1
+#endif
+
 namespace secp256k1::ct {
 
 // ─── Type aliases ────────────────────────────────────────────────────────────
@@ -537,6 +543,73 @@ CTAffinePoint affine_table_lookup_signed(const CTAffinePoint* table,
 
 // ─── In-Place Signed-Digit Affine Table Lookup ───────────────────────────────
 // Writes directly into *out — zero return copies.
+// AVX2 path: vectorized 256-bit cmov using VPAND/VPXOR over full CTAffinePoint
+// (x.n[5] + y.n[5] = 80 bytes = 2.5 × ymm256 registers).
+// Scalar fallback: original 5-limb XOR/AND per field element.
+
+#if SECP256K1_CT_AVX2
+
+void affine_table_lookup_signed_into(CTAffinePoint* out,
+                                      const CTAffinePoint* table,
+                                      std::size_t table_size,
+                                      std::uint64_t n,
+                                      unsigned group_size) noexcept {
+    std::uint64_t negative = ((n >> (group_size - 1)) ^ 1u) & 1u;
+    std::uint64_t neg_mask = static_cast<std::uint64_t>(-negative);
+
+    unsigned index_bits = group_size - 1;
+    std::uint64_t index = (static_cast<std::uint64_t>(-negative) ^ n) &
+                          ((1ULL << index_bits) - 1u);
+
+    // Load first entry (80 bytes = x.n[5] + y.n[5]) into 3 ymm registers
+    // Layout: [x.n[0..3]] [x.n[4], y.n[0..2]] [y.n[3..4], padding]
+    const auto* src0 = reinterpret_cast<const __m256i*>(&table[0].x.n[0]);
+    __m256i r0 = _mm256_loadu_si256(src0);         // x.n[0..3] (32 bytes)
+    __m256i r1 = _mm256_loadu_si256(src0 + 1);     // x.n[4], y.n[0..2]
+    // Last 16 bytes: y.n[3], y.n[4]
+    // Use 128-bit load for the remaining 16 bytes to avoid reading past struct
+    __m128i r2lo = _mm_loadu_si128(reinterpret_cast<const __m128i*>(src0 + 2));
+    __m256i r2 = _mm256_castsi128_si256(r2lo);
+
+    // CT linear scan: cmov each entry using vectorized AND/XOR
+    for (std::size_t m = 1; m < table_size; ++m) {
+        std::uint64_t eq = eq_mask(static_cast<std::uint64_t>(m),
+                                   static_cast<std::uint64_t>(index));
+        __m256i vmask = _mm256_set1_epi64x(static_cast<long long>(eq));
+        __m128i vmask128 = _mm_set1_epi64x(static_cast<long long>(eq));
+
+        const auto* src = reinterpret_cast<const __m256i*>(&table[m].x.n[0]);
+        __m256i s0 = _mm256_loadu_si256(src);
+        __m256i s1 = _mm256_loadu_si256(src + 1);
+        __m128i s2lo = _mm_loadu_si128(reinterpret_cast<const __m128i*>(src + 2));
+        __m256i s2 = _mm256_castsi128_si256(s2lo);
+
+        // r = (r ^ s) & mask ^ r  ≡  mask ? s : r
+        r0 = _mm256_xor_si256(r0, _mm256_and_si256(_mm256_xor_si256(r0, s0), vmask));
+        r1 = _mm256_xor_si256(r1, _mm256_and_si256(_mm256_xor_si256(r1, s1), vmask));
+        // For the last partial register, use 128-bit ops
+        __m128i r2_128 = _mm256_castsi256_si128(r2);
+        __m128i s2_128 = _mm256_castsi256_si128(s2);
+        r2_128 = _mm_xor_si128(r2_128, _mm_and_si128(_mm_xor_si128(r2_128, s2_128), vmask128));
+        r2 = _mm256_castsi128_si256(r2_128);
+    }
+
+    // Store back into out (80 bytes)
+    auto* dst = reinterpret_cast<__m256i*>(&out->x.n[0]);
+    _mm256_storeu_si256(dst, r0);
+    _mm256_storeu_si256(dst + 1, r1);
+    _mm_storeu_si128(reinterpret_cast<__m128i*>(dst + 2), _mm256_castsi256_si128(r2));
+
+    // Conditional Y-negate (sign handling) — scalar, runs once
+    FE52 neg_y = out->y;
+    neg_y.normalize_weak();
+    neg_y = neg_y.negate(1);
+    fe52_cmov(&out->y, neg_y, neg_mask);
+
+    out->infinity = 0;
+}
+
+#else // Scalar fallback
 
 void affine_table_lookup_signed_into(CTAffinePoint* out,
                                       const CTAffinePoint* table,
@@ -568,6 +641,8 @@ void affine_table_lookup_signed_into(CTAffinePoint* out,
 
     out->infinity = 0;
 }
+
+#endif // SECP256K1_CT_AVX2
 
 // ─── Complete Addition (Jacobian, a=0, 5×52) ────────────────────────────────
 // Complete formula for y²=x³+b on Jacobian coordinates.
