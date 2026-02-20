@@ -100,6 +100,14 @@ CTJacobianPoint point_add_mixed_complete(const CTJacobianPoint& p,
 // Branchless doubling (handles identity via cmov, no branch)
 CTJacobianPoint point_dbl(const CTJacobianPoint& p) noexcept;
 
+// ─── Brier-Joye Unified Mixed Addition (Jacobian + Affine, a=0) ─────────────
+// Cost: 7M + 5S (vs 9M+8S for complete formula)
+// Unified: handles both addition and doubling in one codepath.
+// Precondition: b MUST NOT be infinity. a may be infinity.
+// When b might be infinity, use cmov after call to skip the result.
+CTJacobianPoint point_add_mixed_unified(const CTJacobianPoint& a,
+                                         const CTAffinePoint& b) noexcept;
+
 // ─── CT Point Negation ───────────────────────────────────────────────────────
 CTJacobianPoint point_neg(const CTJacobianPoint& p) noexcept;
 

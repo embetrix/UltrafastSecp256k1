@@ -103,6 +103,35 @@ inline FE52 fe52_cneg(const FE52& a, std::uint64_t mask, unsigned mag) noexcept 
     return fe52_select(neg, a, mask);
 }
 
+// ─── FE52 Batch Inversion (Montgomery's trick) ──────────────────────────────
+// Computes z_inv[i] = z[i]^{-1} mod p for all i in [0, n).
+// Cost: 1 inversion + 3(n-1) multiplications (vs n inversions).
+// All z[i] MUST be non-zero (caller ensures by excluding infinity entries).
+inline void fe52_batch_inverse(FE52* z_inv, const FE52* z, std::size_t n) noexcept {
+    if (n == 0) return;
+    if (n == 1) {
+        z_inv[0] = FE52::from_fe(z[0].to_fe().inverse());
+        return;
+    }
+
+    // Forward accumulation: use z_inv[] as scratch for partial products
+    //   z_inv[i] = z[0] * z[1] * ... * z[i]
+    z_inv[0] = z[0];
+    for (std::size_t i = 1; i < n; ++i) {
+        z_inv[i] = z_inv[i - 1] * z[i];   // M=1 after mul
+    }
+
+    // Single inversion of the accumulated product (via 4×64 path)
+    FE52 acc = FE52::from_fe(z_inv[n - 1].to_fe().inverse());
+
+    // Backward propagation: extract individual inverses
+    for (std::size_t i = n - 1; i > 0; --i) {
+        z_inv[i] = z_inv[i - 1] * acc;   // z_inv[i] = (z[0]..z[i-1]) * (z[0]..z[i])^{-1} = z[i]^{-1}
+        acc = acc * z[i];                 // acc = (z[0]..z[i-1])^{-1}
+    }
+    z_inv[0] = acc;
+}
+
 } // anonymous namespace (FE52 CT helpers)
 
 
@@ -451,6 +480,95 @@ CTJacobianPoint point_dbl(const CTJacobianPoint& p) noexcept {
     return result;
 }
 
+// ─── Brier-Joye Unified Mixed Addition (Jacobian + Affine, a=0) ─────────────
+// Cost: 7M + 5S (vs 9M+8S for complete formula) — ~40% cheaper
+//
+// Unified: handles both addition (a ≠ ±b) and doubling (a == b) in one path.
+// Degenerates only when y1 == -y2 (M = 0), handled via alternate lambda cmov.
+// Detects a = -b (result = infinity) via Z3 == 0.
+//
+// Precondition: b MUST NOT be infinity.
+//   a may be infinity (handled via cmov at end → result = b).
+//
+// Based on: E. Brier, M. Joye "Weierstrass Elliptic Curves and Side-Channel
+// Attacks" (PKC 2002). Formula from bitcoin-core/secp256k1 group_impl.h.
+
+CTJacobianPoint point_add_mixed_unified(const CTJacobianPoint& a,
+                                         const CTAffinePoint& b) noexcept {
+    // Normalize a's coords to M=1 (b is already M=1 from table/precomp)
+    FE52 X1 = a.x; X1.normalize_weak();
+    FE52 Y1 = a.y; Y1.normalize_weak();
+    FE52 Z1 = a.z; Z1.normalize_weak();
+
+    // ── Shared intermediates ──
+    FE52 zz = Z1.square();                          // Z1²       [1S]
+    FE52 u1 = X1;                                   // U1 = X1 (Z2=1)
+    FE52 u2 = b.x * zz;                             // U2 = x2·Z1²  [1M]
+    FE52 s1 = Y1;                                   // S1 = Y1 (Z2=1)
+    FE52 s2 = (b.y * zz) * Z1;                      // S2 = y2·Z1³   [2M]
+
+    FE52 t_val = u1 + u2;                           // T = U1+U2; M=2
+    FE52 m_val = s1 + s2;                            // M = S1+S2; M=2
+
+    // R = T² - U1·U2
+    FE52 rr = t_val.square();                        // T²; M=1      [1S]
+    FE52 neg_u2 = u2.negate(1);                      // -U2; M=2
+    FE52 tt = u1 * neg_u2;                           // -U1·U2; M=1  [1M]
+    rr = rr + tt;                                    // R = T²-U1U2; M=2
+
+    // ── Degenerate case: M≈0 (y1=-y2) ──
+    // When M=0, lambda = R/M is undefined. Use alternate:
+    //   lambda_alt = (y1-y2)/(x1-x2) = 2·S1/(U1-U2)
+    std::uint64_t degen = fe52_is_zero(m_val);
+
+    FE52 rr_alt = s1 + s1;                          // 2·S1; M=2
+    FE52 m_alt  = u1 + neg_u2;                      // U1-U2; M=1+2=3
+
+    // Select: if NOT degenerate, use main (rr, m_val)
+    fe52_cmov(&rr_alt, rr, ~degen);
+    fe52_cmov(&m_alt, m_val, ~degen);
+
+    // ── Compute result ──
+    FE52 n = m_alt.square();                         // Malt²; M=1   [1S]
+    FE52 neg_t = t_val.negate(2);                    // -T; M=3
+    FE52 q = neg_t * n;                              // Q=-T·Malt²; M=1 [1M]
+
+    // n = Malt⁴ (normal) or M³·Malt=0 (degenerate, since M=0)
+    // Key: either M==Malt (not degen) or M==0 (degen)
+    // So: M³·Malt = degenerate ? 0 : Malt⁴
+    // Compute Malt⁴ by squaring, cmov to M (≈0) when degenerate
+    n = n.square();                                  // Malt⁴; M=1   [1S]
+    fe52_cmov(&n, m_val, degen);                     // if degen: n=M≈0
+
+    // X3 = Ralt² + Q
+    FE52 x3 = rr_alt.square() + q;                  // M=1+1=2     [1S]
+
+    // Z3 = Malt · Z1
+    FE52 z3 = m_alt * Z1;                           // M=1         [1M]
+
+    // Y3 = -(Ralt·(2·X3+Q) + n) / 2
+    FE52 x3_2 = x3 + x3;                            // 2·X3; M=4
+    FE52 tq = x3_2 + q;                             // 2·X3+Q; M=4+1=5
+    FE52 y3_pre = (rr_alt * tq) + n;                // M=1+2=3     [1M=7th]
+    FE52 y3 = y3_pre.negate(3).half();               // Y3; half normalizes
+
+    // ── Handle a=infinity: replace result with (b.x, b.y, 1) ──
+    FE52 one52 = FE52::one();
+    fe52_cmov(&x3, b.x, a.infinity);
+    fe52_cmov(&y3, b.y, a.infinity);
+    fe52_cmov(&z3, one52, a.infinity);
+
+    // Infinity detection: Z3==0 means a=-b (result should be infinity)
+    std::uint64_t result_inf = fe52_is_zero(z3);
+
+    CTJacobianPoint result;
+    result.x = x3;
+    result.y = y3;
+    result.z = z3;
+    result.infinity = result_inf;
+    return result;
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // CT GLV Endomorphism — Helpers & Decomposition
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -731,37 +849,52 @@ Point scalar_mul(const Point& p, const Scalar& k) noexcept {
     // GLV Decomposition (CT)
     auto [k1, k2, k1_neg, k2_neg] = ct_glv_decompose(k);
 
-    // Endomorphism: φ(P) = (β·Px, Py, Pz)
-    Point phiP = secp256k1::fast::apply_endomorphism(p);
-
-    // Build affine precomputation tables (public data, fast-path)
+    // ── Build T1 table via batch inversion (fast) ────────────────────────
+    // Step 1: Compute P, 2P, 3P, ..., 15P in Jacobian (fast-path, public data)
     CTAffinePoint T1[TABLE_SIZE];
     CTAffinePoint T2[TABLE_SIZE];
 
-    T1[0] = CTAffinePoint::make_infinity();
-    T1[1] = CTAffinePoint::from_point(p);
+    Point jac[TABLE_SIZE];
+    jac[0] = Point::infinity();
+    jac[1] = p;
     {
         Point p2 = p;
         p2.dbl_inplace();
-        T1[2] = CTAffinePoint::from_point(p2);
+        jac[2] = p2;
         Point running = p2;
         for (std::size_t i = 3; i < TABLE_SIZE; ++i) {
             running = running.add(p);
-            T1[i] = CTAffinePoint::from_point(running);
+            jac[i] = running;
         }
     }
 
+    // Step 2: Batch-invert Z coordinates (1 inversion + 3×14 muls ≈ 1.3μs)
+    constexpr std::size_t NZ = TABLE_SIZE - 1;  // 15 entries (skip infinity)
+    FE52 zs[NZ];
+    FE52 z_invs[NZ];
+    for (std::size_t i = 0; i < NZ; ++i) {
+        zs[i] = jac[i + 1].Z52();
+    }
+    fe52_batch_inverse(z_invs, zs, NZ);
+
+    // Step 3: Convert to affine via x_aff = X·Z^{-2}, y_aff = Y·Z^{-3}
+    T1[0] = CTAffinePoint::make_infinity();
+    for (std::size_t i = 0; i < NZ; ++i) {
+        FE52 zinv2 = z_invs[i].square();
+        FE52 zinv3 = zinv2 * z_invs[i];
+        T1[i + 1].x = jac[i + 1].X52() * zinv2;     // M=1
+        T1[i + 1].y = jac[i + 1].Y52() * zinv3;     // M=1
+        T1[i + 1].infinity = 0;
+    }
+
+    // Step 4: Compute T2 via endomorphism φ(x,y) = (β·x, y)
+    // Since φ is an endomorphism: φ(kP) = k·φ(P), so T2[i] = φ(T1[i])
+    const FE52& beta = get_beta_fe52();
     T2[0] = CTAffinePoint::make_infinity();
-    T2[1] = CTAffinePoint::from_point(phiP);
-    {
-        Point phiP2 = phiP;
-        phiP2.dbl_inplace();
-        T2[2] = CTAffinePoint::from_point(phiP2);
-        Point running = phiP2;
-        for (std::size_t i = 3; i < TABLE_SIZE; ++i) {
-            running = running.add(phiP);
-            T2[i] = CTAffinePoint::from_point(running);
-        }
+    for (std::size_t i = 1; i < TABLE_SIZE; ++i) {
+        T2[i].x = T1[i].x * beta;      // M=1
+        T2[i].y = T1[i].y;             // M=1
+        T2[i].infinity = 0;
     }
 
     // CT sign handling: if k1/k2 was negated, negate table Y-coords
@@ -773,7 +906,10 @@ Point scalar_mul(const Point& p, const Scalar& k) noexcept {
     SECP256K1_DECLASSIFY(T1, sizeof(T1));
     SECP256K1_DECLASSIFY(T2, sizeof(T2));
 
-    // Strauss interleaving (32 windows × 2 lookups)
+    // Strauss interleaving (32 windows × 2 unified additions)
+    // Uses Brier-Joye unified formula (7M+5S) instead of complete (9M+8S).
+    // Unified handles a=infinity (cmov at end). For b=infinity (digit=0),
+    // we compute garbage and cmov to keep R unchanged — fully CT.
     CTJacobianPoint R = CTJacobianPoint::make_infinity();
 
     for (int i = static_cast<int>(GLV_WINDOWS) - 1; i >= 0; --i) {
@@ -788,8 +924,13 @@ Point scalar_mul(const Point& p, const Scalar& k) noexcept {
         CTAffinePoint A1 = affine_table_lookup(T1, TABLE_SIZE, w1);
         CTAffinePoint A2 = affine_table_lookup(T2, TABLE_SIZE, w2);
 
-        R = point_add_mixed_complete(R, A1);
-        R = point_add_mixed_complete(R, A2);
+        // Unified addition: b must not be infinity. When digit=0,
+        // table returns infinity → compute garbage, then cmov ignore.
+        CTJacobianPoint R1 = point_add_mixed_unified(R, A1);
+        point_cmov(&R, R1, ~A1.infinity);   // update only if A1 was valid
+
+        CTJacobianPoint R2 = point_add_mixed_unified(R, A2);
+        point_cmov(&R, R2, ~A2.infinity);   // update only if A2 was valid
     }
 
     Point result = R.to_point();
@@ -818,17 +959,37 @@ void build_gen_table() noexcept {
     Point base = G;
 
     for (unsigned w = 0; w < GEN_WINDOWS; ++w) {
-        g_gen_table.entries[w][0] = CTAffinePoint::make_infinity();
-        g_gen_table.entries[w][1] = CTAffinePoint::from_point(base);
+        // Build entries 1..15 in Jacobian
+        Point jac[GEN_TABLE_SIZE];
+        jac[0] = Point::infinity();
+        jac[1] = base;
 
         Point doubled = base;
         doubled.dbl_inplace();
-        g_gen_table.entries[w][2] = CTAffinePoint::from_point(doubled);
+        jac[2] = doubled;
 
         Point running = doubled;
         for (std::size_t j = 3; j < GEN_TABLE_SIZE; ++j) {
             running = running.add(base);
-            g_gen_table.entries[w][j] = CTAffinePoint::from_point(running);
+            jac[j] = running;
+        }
+
+        // Batch-invert Z coordinates for entries 1..15
+        constexpr std::size_t NZ = GEN_TABLE_SIZE - 1;
+        FE52 zs[NZ], z_invs[NZ];
+        for (std::size_t j = 0; j < NZ; ++j) {
+            zs[j] = jac[j + 1].Z52();
+        }
+        fe52_batch_inverse(z_invs, zs, NZ);
+
+        // Convert to affine
+        g_gen_table.entries[w][0] = CTAffinePoint::make_infinity();
+        for (std::size_t j = 0; j < NZ; ++j) {
+            FE52 zinv2 = z_invs[j].square();
+            FE52 zinv3 = zinv2 * z_invs[j];
+            g_gen_table.entries[w][j + 1].x = jac[j + 1].X52() * zinv2;
+            g_gen_table.entries[w][j + 1].y = jac[j + 1].Y52() * zinv3;
+            g_gen_table.entries[w][j + 1].infinity = 0;
         }
 
         base.dbl_inplace();
@@ -857,7 +1018,10 @@ Point generator_mul(const Scalar& k) noexcept {
         CTAffinePoint T = affine_table_lookup(g_gen_table.entries[i],
                                               GEN_TABLE_SIZE, digit);
 
-        R = point_add_mixed_complete(R, T);
+        // Unified addition: handles R=infinity (first iterations) via internal cmov.
+        // When digit=0, T=infinity → compute garbage, cmov ignore.
+        CTJacobianPoint R_new = point_add_mixed_unified(R, T);
+        point_cmov(&R, R_new, ~T.infinity);
     }
 
     Point result = R.to_point();
