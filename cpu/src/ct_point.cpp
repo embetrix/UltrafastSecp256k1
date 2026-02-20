@@ -189,6 +189,35 @@ inline JacFE52 jac_add_ge_var(const JacFE52& a,
 }
 // Total: 3S + 8M per addition (vs 5S+12M for Jac+Jac)
 
+// Version that also outputs the Z-ratio (h) for global-Z normalization.
+// The Z-ratio satisfies: result.z = a.z * zr_out.
+inline JacFE52 jac_add_ge_var_zr(const JacFE52& a,
+                                  const FE52& bx, const FE52& by,
+                                  FE52* zr_out) noexcept {
+    FE52 z1sq = a.z.square();
+    FE52 u2   = bx * z1sq;
+    FE52 z1cu = z1sq * a.z;
+    FE52 s2   = by * z1cu;
+
+    FE52 h  = u2 + a.x.negate(7);
+    FE52 r  = s2 + a.y.negate(3);
+
+    FE52 h2  = h.square();
+    FE52 h3  = h * h2;
+    FE52 u1h2 = a.x * h2;
+
+    FE52 r2  = r.square();
+    FE52 x3  = r2 + h3.negate(1) + u1h2.negate(1) + u1h2.negate(1);
+
+    FE52 diff = u1h2 + x3.negate(7);
+    FE52 y3  = (r * diff) + (a.y * h3).negate(1);
+
+    FE52 z3  = a.z * h;
+
+    *zr_out = h;  // Z-ratio: result.z = a.z * h
+    return {x3, y3, z3};
+}
+
 // ─── FE52 Native Field Inversion (Fermat's little theorem) ──────────────────
 // Computes a^(-1) = a^(p-2) mod p using optimal addition chain.
 // p = 2^256 - 2^32 - 977. Binary structure of p-2 has blocks of 1s with
@@ -1487,30 +1516,53 @@ Point scalar_mul(const Point& p, const Scalar& k) noexcept {
     iso[0] = { p.X52() * C2, p.Y52() * C3, p.Z52() };
 
     // 2.3 — Build rest of table using mixed adds on iso curve (3S+8M each)
+    //        Also track Z-ratios for backward normalization (no field inverse!).
+    FE52 zr[TABLE_SIZE]; // Z-ratio: iso[i].z = iso[i-1].z * zr[i]
     for (std::size_t i = 1; i < TABLE_SIZE; ++i) {
-        iso[i] = jac_add_ge_var(iso[i - 1], d_x, d_y);
+        iso[i] = jac_add_ge_var_zr(iso[i - 1], d_x, d_y, &zr[i]);
     }
 
-    // 2.4 — Batch-invert effective Z's: true Z on secp256k1 = Z_iso · C
-    //       Variable-time OK since point P is public (only scalar is secret).
-    FE52 zs[TABLE_SIZE], z_invs[TABLE_SIZE];
-    for (std::size_t i = 0; i < TABLE_SIZE; ++i) {
-        zs[i] = iso[i].z * C;       // effective Z = Z_iso · C
-    }
-    fe52_batch_inverse_var(z_invs, zs, TABLE_SIZE);
+    // 2.4 — Compute global Z for secp256k1 (iso→secp conversion)
+    //        global_z = Z_last · C, where Z_last = iso[TABLE_SIZE-1].z
+    //        All table entries share this implicit Z denominator.
+    FE52 global_z = iso[TABLE_SIZE - 1].z * C;
 
-    // 2.5 — Convert to secp256k1 affine: x = X/(Z·C)², y = Y/(Z·C)³
+    // 2.5 — Backward normalization via Z-ratios (replaces batch inverse!)
+    //
+    // Principle: entry i's Z on iso curve = iso[0].z * zr[1] * ... * zr[i].
+    // To normalize all entries to the same Z = Z_last, multiply entry i
+    // by (zr[i+1] * ... * zr[n-1])² for x and ³ for y.  Then ALL entries
+    // effectively have Z = Z_last on the iso curve (or global_z on secp256k1).
+    // The main loop treats them as affine — correct up to the global Z factor.
+    // Final correction: R.z *= global_z after the main loop.
+    //
+    // Cost: (TABLE_SIZE-2) muls (accumulate) + (TABLE_SIZE-1) × (1S + 2M)
+    //   ≈ 14M + 15S + 30M = 44M + 15S  (vs batch inverse: 30M + ~250S inverse)
     const FE52& beta = get_beta_fe52();
-    for (std::size_t i = 0; i < TABLE_SIZE; ++i) {
-        FE52 zinv2 = z_invs[i].square();
-        FE52 zinv3 = zinv2 * z_invs[i];
-        pre_a[i].x = iso[i].x * zinv2;
-        pre_a[i].y = iso[i].y * zinv3;
+
+    // Last entry: already at Z_last, just store directly.
+    pre_a[TABLE_SIZE - 1].x = iso[TABLE_SIZE - 1].x;
+    pre_a[TABLE_SIZE - 1].y = iso[TABLE_SIZE - 1].y;
+    pre_a[TABLE_SIZE - 1].y.normalize_weak();
+    pre_a[TABLE_SIZE - 1].infinity = 0;
+    pre_a_lam[TABLE_SIZE - 1].x = pre_a[TABLE_SIZE - 1].x * beta;
+    pre_a_lam[TABLE_SIZE - 1].y = pre_a[TABLE_SIZE - 1].y;
+    pre_a_lam[TABLE_SIZE - 1].infinity = 0;
+
+    // Backward accumulation: zs = product of Z-ratios from end to current+1.
+    FE52 zs_acc = zr[TABLE_SIZE - 1];
+    for (int i = static_cast<int>(TABLE_SIZE) - 2; i >= 0; --i) {
+        FE52 zs2 = zs_acc.square();
+        FE52 zs3 = zs2 * zs_acc;
+        pre_a[i].x = iso[i].x * zs2;
+        pre_a[i].y = iso[i].y * zs3;
         pre_a[i].infinity = 0;
-        // Lambda table: φ(x,y) = (β·x, y)
         pre_a_lam[i].x = pre_a[i].x * beta;
         pre_a_lam[i].y = pre_a[i].y;
         pre_a_lam[i].infinity = 0;
+        if (i > 0) {
+            zs_acc = zs_acc * zr[i];
+        }
     }
 
     // NOTE: No table Y-negation needed.
@@ -1563,6 +1615,11 @@ Point scalar_mul(const Point& p, const Scalar& k) noexcept {
         table_lookup_core<false>(&t, pre_a_lam, TABLE_SIZE, bits2, GROUP_SIZE);
         unified_add_core<false>(&R, R, t);
     }
+
+    // Apply global Z correction: undo the isomorphism.
+    // The main loop computed on the iso curve with implicit Z = global_z.
+    // Correct by: Z_secp256k1 = Z_loop * global_z.
+    R.z = R.z * global_z;
 
     Point result = R.to_point();
     SECP256K1_DECLASSIFY(&result, sizeof(result));
