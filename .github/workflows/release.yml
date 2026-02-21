@@ -590,6 +590,7 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Publish to npmjs.com (public registry)
+        continue-on-error: true
         run: |
           cd bindings/nodejs
           # Restore original unscoped name for npmjs.com
@@ -690,6 +691,7 @@ jobs:
             --skip-duplicate
 
       - name: Publish to nuget.org (public registry)
+        continue-on-error: true
         run: |
           dotnet nuget push bindings/csharp/Ufsecp/nupkgs/*.nupkg \
             --source "https://api.nuget.org/v3/index.json" \
@@ -1277,6 +1279,7 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Publish to npmjs.com (public registry — React Native)
+        continue-on-error: true
         run: |
           cd bindings/react-native
           # Restore original unscoped name for npmjs.com
@@ -1425,6 +1428,7 @@ jobs:
   # ══════════════════════════════════════════════════════════════════════════
   release:
     needs: [build-desktop, build-linux-arm64, build-android, build-ios, build-wasm, pack-python, pack-npm, pack-nuget, pack-gem, pack-java, pack-go, pack-rust, pack-dart, pack-php, pack-react-native, pack-swift, pack-c-headers]
+    if: ${{ always() && !cancelled() }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
