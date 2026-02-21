@@ -804,6 +804,11 @@ static inline JacobianPoint52 jac52_negate(const JacobianPoint52& p) {
 // Windows, without which the large stack frame triggers a GS-cookie fault.
 __attribute__((noinline))
 static Point scalar_mul_glv52(const Point& base, const Scalar& scalar) {
+    // Guard: infinity base or zero scalar → result is always infinity
+    if (SECP256K1_UNLIKELY(base.is_infinity() || scalar.is_zero())) {
+        return Point::infinity();
+    }
+
     try {
     // ── GLV decomposition ────────────────────────────────────────────
     GLVDecomposition decomp = glv_decompose(scalar);
