@@ -221,33 +221,33 @@ bool schnorr_verify(const std::array<uint8_t, 32>& pubkey_x,
 
     if (R.is_infinity()) return false;
 
-    // Step 5: Fast Z²-based X check (no field inverse needed!)
+    // Steps 5+6: Combined X-check + Y-parity via single Z inverse (all FE52)
+    // One SafeGCD inverse (~3μs) shared between both checks.
 #if defined(SECP256K1_FAST_52BIT)
-    // Direct bytes→FE52: avoids FieldElement construction overhead
+    FE52 z_inv52 = R.Z52().inverse_safegcd();
+    FE52 z_inv2 = z_inv52.square();         // Z⁻²
+
+    // X-check: X * Z⁻² == sig.r  (affine x)
+    FE52 x_aff = R.X52() * z_inv2;
+    x_aff.normalize();
     FE52 r52 = FE52::from_bytes(sig.r);
-    FE52 z2 = R.Z52().square();
-    FE52 lhs = r52 * z2;       // sig.r * Z²
-    lhs.normalize();
+    r52.normalize();
+    if (!(x_aff == r52)) return false;
 
-    FE52 rx = R.X52();
-    rx.normalize();
-
-    if (!(lhs == rx)) return false;
+    // Y-parity: Y * Z⁻³ must be even
+    FE52 y_aff = (R.Y52() * z_inv2) * z_inv52;
+    y_aff.normalize();
+    return (y_aff.n[0] & 1) == 0;
 #else
     auto rx_fe = R.x();
     auto r_fe = FieldElement::from_bytes(sig.r);
     if (!(r_fe == rx_fe)) return false;
-#endif
-
-    // Step 6: Check R has even Y
-    // SafeGCD inverse in 4×64 (~2-3μs), then check lowest bit of affine Y.
-    // Avoids to_bytes() overhead — parity is the lowest bit of limbs[0].
     FieldElement z_inv = R.z_raw().inverse();
     FieldElement z_inv2 = z_inv;
     z_inv2.square_inplace();
     FieldElement y_aff = R.y_raw() * z_inv2 * z_inv;
-    // 4×64 FE is always canonical after multiply — limbs[0] bit 0 = parity
     return (y_aff.limbs()[0] & 1) == 0;
+#endif
 }
 
 // ── Pre-cached X-only Pubkey ─────────────────────────────────────────────────
@@ -336,30 +336,32 @@ bool schnorr_verify(const SchnorrXonlyPubkey& pubkey,
 
     if (R.is_infinity()) return false;
 
-    // Z²-based X check
+    // Combined X-check + Y-parity via single Z inverse (all FE52)
 #if defined(SECP256K1_FAST_52BIT)
-    FE52 r52 = FE52::from_fe(FieldElement::from_bytes(sig.r));
-    FE52 z2 = R.Z52().square();
-    FE52 lhs = r52 * z2;
-    lhs.normalize();
+    FE52 z_inv52 = R.Z52().inverse_safegcd();
+    FE52 z_inv2 = z_inv52.square();         // Z⁻²
 
-    FE52 rx = R.X52();
-    rx.normalize();
+    // X-check: X * Z⁻² == sig.r
+    FE52 x_aff = R.X52() * z_inv2;
+    x_aff.normalize();
+    FE52 r52 = FE52::from_bytes(sig.r);
+    r52.normalize();
+    if (!(x_aff == r52)) return false;
 
-    if (!(lhs == rx)) return false;
+    // Y-parity: Y * Z⁻³ must be even
+    FE52 y_aff = (R.Y52() * z_inv2) * z_inv52;
+    y_aff.normalize();
+    return (y_aff.n[0] & 1) == 0;
 #else
     auto rx_fe = R.x();
     auto r_fe = FieldElement::from_bytes(sig.r);
     if (!(r_fe == rx_fe)) return false;
-#endif
-
-    // Y parity check (SafeGCD inverse — faster than FE52 Fermat)
     FieldElement z_inv = R.z_raw().inverse();
     FieldElement z_inv2 = z_inv;
     z_inv2.square_inplace();
     FieldElement y_aff = R.y_raw() * z_inv2 * z_inv;
-    auto y_bytes = y_aff.to_bytes();
-    return (y_bytes[31] & 1) == 0;
+    return (y_aff.limbs()[0] & 1) == 0;
+#endif
 }
 
 } // namespace secp256k1
