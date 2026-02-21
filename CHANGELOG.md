@@ -5,6 +5,46 @@ All notable changes to UltrafastSecp256k1 are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.10.0] - 2026-02-21
+
+### Performance — CT Hot-Path Optimization (Phases 5–15)
+- **5×52 field representation** — switched point internals from 4×64 to `FieldElement52`, enabling `__int128` lazy reduction across all CT operations
+- **Direct asm bypass** — CT `field_mul`/`field_sqr` now call hand-tuned 5×52 multiply/square directly: **70 ns → 33 ns**
+- **GLV endomorphism** — CT `scalar_mul` via λ-decomposition + interleaved double-and-add: **304 μs → 20 μs**
+- **CT generator_mul precomputed table** — 16-entry precomputed-G table with batch inversion: **310 μs → 9.8 μs (31× speedup)**
+- **Batch inversion + Brier-Joye unified add** — Montgomery's trick for multi-point normalization
+- **Hamburg signed-digit + batch doubling** — compact signed-digit recoding with merged double passes
+- **128-bit split + w=15 for G-stream verify** — Shamir-style dual-stream with wider window: **~14% verify speedup**
+- **AVX2 CT table lookup** — `_mm256_cmpeq_epi64` + `_mm256_and_si256` constant-time table scan
+- **Effective-affine P table** — batch-normalize P-multiples to skip Z-coordinate arithmetic in main loop
+- **Schnorr keypair/pubkey caching + FE52 sqrt** — avoid redundant serialization in sign/verify
+- **FE52-native inverse + isomorphic table build + GCD `inv_var`** — SafeGCD field inverse stays in 52-bit form
+- **Format conversion elimination** — removed `to_fe()`/`from_fe()` round-trips on every CT hot path
+- **Redundant normalize elimination** — `ct_field_mul_impl`/`square_impl` produce already-reduced results
+- **Schnorr X-check + Y-parity combined** — single Z-inverse for both x-coordinate check and y-parity in FE52
+
+### Performance — I-Cache Optimization
+- **`noinline` on `jac52_add_mixed_inplace`** — prevents inlining of 800+ byte function body into tight loops: **59% I-cache miss reduction**
+
+### Fixed
+- **`scalar_mul_glv52` infinity guard** — early return on `base.is_infinity() || scalar.is_zero()` prevents zero-inverse crash in Montgomery batch trick (CI #128–131 regression)
+- **CT `complete_add` fallback** — uses affine `x()`/`y()` instead of raw Jacobian `X()`/`Y()`
+- **MSVC fallback** — `field_neg` arity, `is_equal_mask`, GLV decompose, `y_bytes` redefinition
+- **Cross-platform FE52 guard** — `SECP256K1_FAST_52BIT` gating prevents compilation on 32-bit targets
+
+### Changed
+- **Dead code removal** — removed functions superseded by Z-ratio normalization path
+- **Barrett → specialized GLV multiplies** — replaced generic Barrett reduction with curve-specific multiply
+
+### CI / Infrastructure
+- **npm/nuget publishing fix** — corrected CI workflow for package publishing
+- **Comprehensive audit suite** — 8 suites, 641K checks, cryptographic correctness validation
+- **CT operations benchmark** — `bench_ct_vs_libsecp` with per-operation ns/op and throughput
+- **dudect timing test** — side-channel timing leakage detection for CT operations
+- **Doxyfile version auto-injection** — `VERSION.txt` → `Doxyfile` at configure time
+
+---
+
 ## [3.6.0] - 2026-02-20
 
 ### Added — GPU Signature Operations (CUDA)

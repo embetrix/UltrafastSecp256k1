@@ -176,16 +176,19 @@ Full signature support across CPU and GPU:
 - **Batch verification**: ECDSA and Schnorr batch verify
 - **Multi-scalar**: Shamir's trick (k₁×G + k₂×Q) for fast verification
 
-### CPU Signature Benchmarks (x86-64, Clang 21, AVX2, Release)
+### CPU Signature Benchmarks (x86-64, Clang 19, AVX2, Release)
 
-| Operation | Time | Notes |
-|-----------|------:|-------|
-| ECDSA Sign (RFC 6979) | 33 μs | Deterministic nonce, low-S |
-| ECDSA Verify | 57 μs | Accepts low-S and high-S |
-| Schnorr Sign (BIP-340) | 23 μs | Tagged hashing, x-only |
-| Schnorr Verify (BIP-340) | 58 μs | BIP-340 verification |
+| Operation | Time | Throughput |
+|-----------|------:|----------:|
+| ECDSA Sign (RFC 6979) | 8.5 μs | 118,000 op/s |
+| ECDSA Verify | 23.6 μs | 42,400 op/s |
+| Schnorr Sign (BIP-340) | 6.8 μs | 146,000 op/s |
+| Schnorr Verify (BIP-340) | 24.0 μs | 41,600 op/s |
+| Key Generation (CT) | 9.5 μs | 105,500 op/s |
+| Key Generation (fast) | 5.5 μs | 182,000 op/s |
+| ECDH | 23.9 μs | 41,800 op/s |
 
-*Schnorr sign is ~30% faster than ECDSA sign due to simpler nonce derivation (no modular inverse).*
+*Schnorr sign is ~25% faster than ECDSA sign due to simpler nonce derivation (no modular inverse). Measured single-core, pinned, 2026-02-21.*
 
 ---
 
@@ -195,11 +198,11 @@ The `ct::` namespace provides constant-time operations for secret-key material �
 
 | Operation | Fast | CT | Overhead |
 |-----------|------:|------:|--------:|
-| Field Mul | 36 ns | 55 ns | 1.50× |
-| Field Inverse | 3.0 μs | 14.2 μs | 4.80× |
-| Point Add | 0.65 μs | 1.63 μs | 2.50× |
-| Scalar Mul (k×P) | 130 μs | 322 μs | 2.49× |
-| Generator Mul (k×G) | 7.6 μs | 310 μs | 40.8× |
+| Field Mul | 15 ns | 33 ns | 2.20× |
+| Field Inverse | 3.0 μs | 7.7 μs | 2.57× |
+| Complete Addition | — | 290 ns | — |
+| Scalar Mul (k×P) | 5.6 μs | 20.2 μs | 3.61× |
+| Generator Mul (k×G) | 5.5 μs | 9.8 μs | 1.78× |
 
 **CT layer provides:** `ct::field_mul`, `ct::field_inv`, `ct::scalar_mul`, `ct::point_add_complete`, `ct::point_dbl`
 
