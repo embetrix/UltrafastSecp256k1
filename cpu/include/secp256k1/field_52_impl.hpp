@@ -343,18 +343,20 @@ bool FieldElement52::normalizes_to_zero() const noexcept {
 
 SECP256K1_FE52_FORCE_INLINE
 FieldElement52 FieldElement52::half() const noexcept {
-    FieldElement52 tmp = *this;
-    tmp.normalize_weak();
+    // Note: no normalize_weak needed — parity of n[0] is the parity of the
+    // value regardless of carry overflow, and conditional p-add + carry + shift
+    // are safe for magnitudes up to ~40000 (limbs < 2^58).
+    const std::uint64_t* src = n;
 
     // mask = 0 if even, all-ones if odd
-    std::uint64_t mask = -(tmp.n[0] & 1ULL);
+    std::uint64_t mask = -(src[0] & 1ULL);
 
     // Conditionally add p
-    std::uint64_t t0 = tmp.n[0] + (P0 & mask);
-    std::uint64_t t1 = tmp.n[1] + (P1 & mask);
-    std::uint64_t t2 = tmp.n[2] + (P2 & mask);
-    std::uint64_t t3 = tmp.n[3] + (P3 & mask);
-    std::uint64_t t4 = tmp.n[4] + (P4 & mask);
+    std::uint64_t t0 = src[0] + (P0 & mask);
+    std::uint64_t t1 = src[1] + (P1 & mask);
+    std::uint64_t t2 = src[2] + (P2 & mask);
+    std::uint64_t t3 = src[3] + (P3 & mask);
+    std::uint64_t t4 = src[4] + (P4 & mask);
 
     // Carry propagation
     t1 += (t0 >> 52); t0 &= M52;
@@ -455,6 +457,73 @@ FieldElement FieldElement52::to_fe() const noexcept {
     L[2] = (tmp.n[2] >> 24) | (tmp.n[3] << 28);
     L[3] = (tmp.n[3] >> 36) | (tmp.n[4] << 16);
     return FieldElement::from_limbs_raw(L);  // already canonical — skip redundant normalize
+}
+
+// ── Direct 4×64 limbs → 5×52 (no FieldElement construction) ─────────────
+// Same bit-slicing as from_fe but takes raw uint64_t[4] pointer.
+// Avoids FieldElement copy + normalization when caller knows value < p.
+
+SECP256K1_FE52_FORCE_INLINE
+FieldElement52 FieldElement52::from_4x64_limbs(const std::uint64_t* L) noexcept {
+    FieldElement52 r;
+    r.n[0] =  L[0]                           & M52;
+    r.n[1] = (L[0] >> 52) | ((L[1] & 0xFFFFFFFFFFULL) << 12);
+    r.n[2] = (L[1] >> 40) | ((L[2] & 0xFFFFFFFULL)    << 24);
+    r.n[3] = (L[2] >> 28) | ((L[3] & 0xFFFFULL)       << 36);
+    r.n[4] =  L[3] >> 16;
+    return r;
+}
+
+// ── Direct bytes (big-endian) → 5×52 conversion ────────────────────────
+// Combines FieldElement::from_bytes + from_fe into a single step.
+
+SECP256K1_FE52_FORCE_INLINE
+FieldElement52 FieldElement52::from_bytes(const std::uint8_t* bytes) noexcept {
+    // Read 4 uint64_t limbs from big-endian bytes (same layout as FieldElement::from_bytes)
+    std::uint64_t L[4];
+    for (int i = 0; i < 4; ++i) {
+        std::uint64_t limb = 0;
+        for (int j = 0; j < 8; ++j) {
+            limb = (limb << 8) | static_cast<std::uint64_t>(bytes[i * 8 + j]);
+        }
+        L[3 - i] = limb;
+    }
+    // Reduce mod p if value >= p.
+    // p = {0xFFFFFFFEFFFFFC2F, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF}
+    static constexpr std::uint64_t P[4] = {
+        0xFFFFFFFEFFFFFC2FULL, 0xFFFFFFFFFFFFFFFFULL,
+        0xFFFFFFFFFFFFFFFFULL, 0xFFFFFFFFFFFFFFFFULL
+    };
+    // ge(L, P): check L >= P lexicographically from high limb
+    bool ge_p = true;
+    for (int i = 3; i >= 0; --i) {
+        if (L[i] < P[i]) { ge_p = false; break; }
+        if (L[i] > P[i]) { break; }
+    }
+    if (ge_p) {
+        // L -= P (with borrow)
+        unsigned __int128 acc = static_cast<unsigned __int128>(L[0]) + (~P[0]) + 1;
+        L[0] = static_cast<std::uint64_t>(acc);
+        acc = static_cast<unsigned __int128>(L[1]) + (~P[1]) + (acc >> 64);
+        L[1] = static_cast<std::uint64_t>(acc);
+        acc = static_cast<unsigned __int128>(L[2]) + (~P[2]) + (acc >> 64);
+        L[2] = static_cast<std::uint64_t>(acc);
+        L[3] = L[3] + (~P[3]) + static_cast<std::uint64_t>(acc >> 64);
+    }
+    return from_4x64_limbs(L);
+}
+
+SECP256K1_FE52_FORCE_INLINE
+FieldElement52 FieldElement52::from_bytes(const std::array<std::uint8_t, 32>& bytes) noexcept {
+    return from_bytes(bytes.data());
+}
+
+// ── Inverse via safegcd (4×64 round-trip, single wrapper) ───────────────
+// Replaces the common pattern: FieldElement52::from_fe(x.to_fe().inverse())
+
+SECP256K1_FE52_FORCE_INLINE
+FieldElement52 FieldElement52::inverse_safegcd() const noexcept {
+    return from_fe(to_fe().inverse());
 }
 
 } // namespace secp256k1::fast

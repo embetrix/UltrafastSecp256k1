@@ -67,6 +67,21 @@ struct alignas(8) FieldElement52 {
     static FieldElement52 from_fe(const FieldElement& fe) noexcept;
     FieldElement to_fe() const noexcept;  // Normalizes first!
 
+    // Direct 4×64 limbs → 5×52 conversion (zero-copy, no FieldElement construction).
+    // Input: 4 little-endian uint64_t limbs representing a value < p.
+    // Use for Scalar→FE52 where we know value < n < p.
+    static FieldElement52 from_4x64_limbs(const std::uint64_t* limbs) noexcept;
+
+    // Direct bytes (big-endian) → 5×52 conversion (no FieldElement construction).
+    // Reads 32 BE bytes, reduces mod p if needed, converts to 5×52 limbs.
+    // Replaces the common pattern: FE52::from_fe(FieldElement::from_bytes(data))
+    static FieldElement52 from_bytes(const std::array<std::uint8_t, 32>& bytes) noexcept;
+    static FieldElement52 from_bytes(const std::uint8_t* bytes) noexcept;
+
+    // Inverse via safegcd (4×64): FE52 → FE(4×64) → safegcd → FE52
+    // Single call replaces the common pattern: from_fe(to_fe().inverse())
+    FieldElement52 inverse_safegcd() const noexcept;
+
     // ── Normalization ────────────────────────────────────────────────
     // Weak: carry-propagate so each limb ≤ 52 bits, but result may be ≥ p
     void normalize_weak() noexcept;
@@ -110,6 +125,16 @@ struct alignas(8) FieldElement52 {
     // ── Half ─────────────────────────────────────────────────────────
     // Computes a/2 mod p. Branchless.
     FieldElement52 half() const noexcept;
+
+    // ── Inverse (Fermat) ─────────────────────────────────────────────
+    // a^(p-2) mod p. 255 squarings + 14 multiplications in native FE52.
+    // ~1.6μs — faster than binary GCD (~3μs) or SafeGCD (~3-5μs in 4×64).
+    FieldElement52 inverse() const noexcept;
+
+    // ── Square Root ──────────────────────────────────────────────────
+    // a^((p+1)/4) mod p. 253 squarings + 13 multiplications in native FE52.
+    // Returns a candidate y such that y² ≡ a (mod p). Caller must verify.
+    FieldElement52 sqrt() const noexcept;
 };
 
 // ── Free Functions ────────────────────────────────────────────────────────────

@@ -146,6 +146,8 @@ public:
 #if defined(SECP256K1_FAST_52BIT)
     // Zero-conversion factory: constructs Point directly from FE52 Jacobian coords
     static Point from_jacobian52(const FieldElement52& x, const FieldElement52& y, const FieldElement52& z, bool infinity);
+    // Zero-conversion affine construction: (x, y, z=1) directly in FE52
+    static Point from_affine52(const FieldElement52& x, const FieldElement52& y);
 #endif
 
 private:

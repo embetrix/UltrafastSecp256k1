@@ -988,8 +988,8 @@ limbs4 mul_impl(const limbs4& a, const limbs4& b) {
     static bool bmi2_available = has_bmi2_support();
     if (bmi2_available) {
         FieldElement result = field_mul_bmi2(
-            FieldElement::from_limbs(a), 
-            FieldElement::from_limbs(b)
+            FieldElement::from_limbs_raw(a), 
+            FieldElement::from_limbs_raw(b)
         );
         return result.limbs();
     }
@@ -1021,7 +1021,7 @@ limbs4 square_impl(const limbs4& a) {
     static bool bmi2_available = has_bmi2_support();
     if (bmi2_available) {
         FieldElement result = field_square_bmi2(
-            FieldElement::from_limbs(a)
+            FieldElement::from_limbs_raw(a)
         );
         return result.limbs();
     }

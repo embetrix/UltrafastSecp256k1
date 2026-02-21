@@ -1,6 +1,8 @@
 #include "secp256k1/ecdsa.hpp"
 #include "secp256k1/sha256.hpp"
 #include "secp256k1/multiscalar.hpp"
+#include "secp256k1/config.hpp"  // SECP256K1_FAST_52BIT
+#include "secp256k1/field_52.hpp"
 #include <cstring>
 
 namespace secp256k1 {
@@ -253,17 +255,88 @@ bool ecdsa_verify(const std::array<uint8_t, 32>& msg_hash,
     // u2 = r * w mod n
     auto u2 = sig.r * w;
 
-    // R' = u1 * G + u2 * Q  (Shamir's trick — single pass, ~1.5× faster)
-    auto G = Point::generator();
-    auto R_prime = shamir_trick(u1, G, u2, public_key);
+    // R' = u1 * G + u2 * Q  (4-stream GLV Strauss — single interleaved loop)
+    auto R_prime = Point::dual_scalar_mul_gen_point(u1, u2, public_key);
 
     if (R_prime.is_infinity()) return false;
 
-    // v = R'.x mod n
-    auto v_bytes = R_prime.x().to_bytes();
-    auto v = Scalar::from_bytes(v_bytes);
+    // ── Fast Z²-based x-coordinate check (avoids field inverse) ──────
+    // Check: R'.x/R'.z² mod n == sig.r
+    // Equivalent: sig.r * R'.z² == R'.x (mod p)
+    // This saves ~3μs by avoiding the field inversion in Point::x().
+#if defined(SECP256K1_FAST_52BIT)
+    using FE52 = fast::FieldElement52;
 
-    return v == sig.r;
+    // Direct Scalar→FE52: sig.r limbs are 4×64 LE, same layout as FieldElement.
+    // Since sig.r < n < p, the raw limbs are a valid field element — no reduction needed.
+    FE52 r52 = FE52::from_4x64_limbs(sig.r.limbs().data());
+    FE52 z2 = R_prime.Z52().square();    // Z²  [1S] mag=1
+    FE52 lhs = r52 * z2;                 // r·Z² [1M] mag=1
+    lhs.normalize();
+
+    FE52 rx = R_prime.X52();
+    rx.normalize();
+
+    if (lhs == rx) return true;
+
+    // Rare case: x_R mod p ∈ [n, p), so x_R mod n = x_R - n = sig.r
+    // → need to check (sig.r + n) · Z² == X.  Probability ~2^-128.
+    // n = order, p - n ≈ 2^129.  sig.r < n, so sig.r + n < p iff sig.r < p - n.
+    //
+    // p - n as 4×64 LE limbs:
+    // 0x000000000000000145512319_50b75fc4_402da173_2fc9bebf
+    static constexpr std::uint64_t PMN_0 = 0x402da1732fc9bebfULL;
+    static constexpr std::uint64_t PMN_1 = 0x14551231950b75fcULL;  // top nibble = 1
+    // PMN limbs [2] = 0, [3] = 0  → sig.r < p-n iff sig.r fits in ~129 bits
+    // Since sig.r < n ≈ 2^256, upper limbs are always >= PMN upper limbs (0).
+    // Quick check: r[3]==0 && r[2]==0 → r < 2^128, definitely < p-n.
+    // Otherwise compare lexicographically.
+    const auto& rl = sig.r.limbs();
+    bool r_less_than_pmn;
+    if (rl[3] != 0 || rl[2] != 0) {
+        r_less_than_pmn = false;  // r >= 2^128 > p-n
+    } else if (rl[1] != PMN_1) {
+        r_less_than_pmn = (rl[1] < PMN_1);
+    } else {
+        r_less_than_pmn = (rl[0] < PMN_0);
+    }
+
+    if (r_less_than_pmn) {
+        // sig.r < p - n, so (sig.r + n) is a valid field element < p.
+        // 256-bit addition: r + n (no modular reduction needed).
+        static constexpr std::uint64_t N_LIMBS[4] = {
+            0xBFD25E8CD0364141ULL, 0xBAAEDCE6AF48A03BULL,
+            0xFFFFFFFFFFFFFFFEULL, 0xFFFFFFFFFFFFFFFFULL
+        };
+        alignas(32) std::uint64_t rn[4];
+        unsigned __int128 acc = static_cast<unsigned __int128>(rl[0]) + N_LIMBS[0];
+        rn[0] = static_cast<std::uint64_t>(acc);
+        acc = static_cast<unsigned __int128>(rl[1]) + N_LIMBS[1] + static_cast<std::uint64_t>(acc >> 64);
+        rn[1] = static_cast<std::uint64_t>(acc);
+        acc = static_cast<unsigned __int128>(rl[2]) + N_LIMBS[2] + static_cast<std::uint64_t>(acc >> 64);
+        rn[2] = static_cast<std::uint64_t>(acc);
+        rn[3] = rl[3] + N_LIMBS[3] + static_cast<std::uint64_t>(acc >> 64);
+
+        FE52 r2_52 = FE52::from_4x64_limbs(rn);
+        FE52 lhs2 = r2_52 * z2;
+        lhs2.normalize();
+        if (lhs2 == rx) return true;
+    }
+
+    return false;
+#else
+    // Fallback: extract affine x via field inverse
+    auto r_fe = FieldElement::from_bytes(sig.r.to_bytes());
+    auto rx_fe = R_prime.x();
+    if (r_fe == rx_fe) return true;
+
+    // Rare case: check (sig.r + n) mod p
+    static const Scalar N_SCALAR = Scalar::from_hex(
+        "fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141");
+    auto r_plus_n_bytes = (sig.r + N_SCALAR).to_bytes();
+    auto r2_fe = FieldElement::from_bytes(r_plus_n_bytes);
+    return r2_fe == rx_fe;
+#endif
 }
 
 } // namespace secp256k1

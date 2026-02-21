@@ -54,14 +54,19 @@ int main() {
     std::cout << "  Testing individual building blocks (10,000 iterations each)\n";
     std::cout << "================================================================\n\n";
 
-    // Prepare test data
+    // Prepare test data — full 256-bit values for representative results
     Point G = Point::generator();
-    Point P = scalar_mul_generator(Scalar::from_uint64(0x123456789ABCDEF0ULL));
-    Point Q = scalar_mul_generator(Scalar::from_uint64(0xFEDCBA9876543210ULL));
+    Point P = scalar_mul_generator(Scalar::from_hex(
+        "e8f32e723decf4051aefac8e2c93c9c5b214313817cdb01a1494b917c8436b35"));
+    Point Q = scalar_mul_generator(Scalar::from_hex(
+        "7c076ff316692a3d7eb3c3bb0f8b1488cf72e1afcd929e29307032997a838a3d"));
     
-    FieldElement a = FieldElement::from_uint64(0x123456789ABCDEF0ULL);
-    FieldElement b = FieldElement::from_uint64(0xFEDCBA9876543210ULL);
-    FieldElement c = FieldElement::from_uint64(0xABCDEF0123456789ULL);
+    FieldElement a = FieldElement::from_hex(
+        "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798");
+    FieldElement b = FieldElement::from_hex(
+        "483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8");
+    FieldElement c = FieldElement::from_hex(
+        "9c47d08ffb10d4b8483ada7726a3c46555a06295ce870b0779be667ef9dcbbac");
 
     std::cout << "=== POINT OPERATIONS (Jacobian Coordinates) ===\n\n";
     
@@ -176,8 +181,10 @@ int main() {
               << point_triple_time << " ns/op  [= 2*P + P]\n";
     
     // Jacobian -> Affine conversion (requires 1 inverse + 2 multiplications)
+    // NOTE: benchmark the conversion itself, NOT scalar_mul (pre-compute the point)
+    Point P_jac = scalar_mul_generator(Scalar::from_hex(
+        "b5037ebecae0da656179c623f6cb73641db2aa0fabe888ffb78466fa18470379"));
     double to_affine_time = benchmark_ns([&]() {
-        Point P_jac = scalar_mul_generator(Scalar::from_uint64(0x123456ULL));
         volatile auto x = P_jac.x();
         volatile auto y = P_jac.y();
     }, 1000);

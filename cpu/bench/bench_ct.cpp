@@ -41,12 +41,12 @@ int main() {
     printf("  CT Layer Benchmark  (fast:: vs ct::)\n");
     printf("================================================================\n\n");
 
-    // Fixed test data
+    // Fixed test data — all 256-bit, representative of real workloads
     auto G  = Point::generator();
     auto k  = Scalar::from_hex(
         "e8f32e723decf4051aefac8e2c93c9c5b214313817cdb01a1494b917c8436b35");
     auto k2 = Scalar::from_hex(
-        "0000000000000000000000000000000000000000000000000000000000000002");
+        "7c076ff316692a3d7eb3c3bb0f8b1488cf72e1afcd929e29307032997a838a3d");
     auto P  = G.scalar_mul(k);
 
     auto fe_a = FieldElement::from_hex(
@@ -54,10 +54,29 @@ int main() {
     auto fe_b = FieldElement::from_hex(
         "483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8");
 
+    // Pool of random 256-bit scalars to prevent branch-predictor warming
+    // and ensure benchmarks reflect real-world workloads with varying inputs.
+    constexpr int POOL = 32;
+    Scalar scalar_pool[POOL];
+    Point  point_pool[POOL];
+    {
+        auto base = Scalar::from_hex(
+            "b5037ebecae0da656179c623f6cb73641db2aa0fabe888ffb78466fa18470379");
+        auto step = Scalar::from_hex(
+            "9e3779b97f4a7c15f39cc0605cedc8341082276bf3a27251f86c6a11d0c18e95");
+        for (int i = 0; i < POOL; ++i) {
+            scalar_pool[i] = base;
+            point_pool[i]  = G.scalar_mul(base);
+            base += step;
+        }
+    }
+
     constexpr int N_SCALAR_MUL = 50;
     constexpr int N_POINT_OPS  = 5000;
     constexpr int N_FIELD_OPS  = 50000;
     constexpr int N_SCALAR_OPS = 50000;
+
+    printf("  Pool size: %d random 256-bit scalars\n\n", POOL);
 
     // ── Field operations ─────────────────────────────────────────────────────
 
@@ -162,13 +181,17 @@ int main() {
 
     printf("--- Scalar Multiplication (k * P) ---\n");
 
+    int idx_fast_mul = 0;
     double fast_mul = bench_us([&]() {
-        volatile auto r = P.scalar_mul(k);
+        volatile auto r = point_pool[idx_fast_mul % POOL].scalar_mul(scalar_pool[idx_fast_mul % POOL]);
+        ++idx_fast_mul;
     }, N_SCALAR_MUL);
 
+    int idx_ct_mul = 0;
     double ct_mul = bench_us([&]() {
-        auto r = ct::scalar_mul(P, k);
+        auto r = ct::scalar_mul(point_pool[idx_ct_mul % POOL], scalar_pool[idx_ct_mul % POOL]);
         (void)r;
+        ++idx_ct_mul;
     }, N_SCALAR_MUL);
 
     printf("  scalar_mul   fast: %8.1f us   ct: %8.1f us   ratio: %.2fx\n\n",
@@ -178,13 +201,17 @@ int main() {
 
     printf("--- Generator Multiplication (k * G) ---\n");
 
+    int idx_fast_gen = 0;
     double fast_gen = bench_us([&]() {
-        volatile auto r = G.scalar_mul(k);
+        volatile auto r = G.scalar_mul(scalar_pool[idx_fast_gen % POOL]);
+        ++idx_fast_gen;
     }, N_SCALAR_MUL);
 
+    int idx_ct_gen = 0;
     double ct_gen = bench_us([&]() {
-        auto r = ct::generator_mul(k);
+        auto r = ct::generator_mul(scalar_pool[idx_ct_gen % POOL]);
         (void)r;
+        ++idx_ct_gen;
     }, N_SCALAR_MUL);
 
     printf("  generator_mul fast: %7.1f us   ct: %8.1f us   ratio: %.2fx\n\n",

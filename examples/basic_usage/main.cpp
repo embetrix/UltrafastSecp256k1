@@ -72,18 +72,30 @@ int main() {
     printf("  7 * 13 mod n = %s\n", c.to_hex().c_str());
     printf("  Expected 91  = ...5b (last byte)\n\n");
 
-    // 5) Micro-benchmark: scalar_mul(k, G)
-    printf("[5] Benchmark: k * G  (1000 iterations)\n");
+    // 5) Micro-benchmark: scalar_mul(k, G) with random 256-bit scalars
+    printf("[5] Benchmark: k * G  (1000 iterations, random 256-bit scalars)\n");
     constexpr int ITERS = 1000;
-    auto k = Scalar::from_hex(
-        "0000000000000000000000000000000000000000000000000000000000000001");
+
+    // Pre-generate random-looking 256-bit scalars (deterministic PRNG for reproducibility)
+    // Using golden-ratio stepping from a full 256-bit base — avoids trivially small scalars.
+    Scalar scalars[ITERS];
+    {
+        auto base = Scalar::from_hex(
+            "b5037ebecae0da656179c623f6cb73641db2aa0fabe888ffb78466fa18470379");
+        auto step = Scalar::from_hex(
+            "9e3779b97f4a7c15f39cc0605cedc8341082276bf3a27251f86c6a11d0c18e95");
+        for (int i = 0; i < ITERS; ++i) {
+            scalars[i] = base;
+            base += step;
+        }
+    }
+
     volatile uint8_t sink = 0;
 
     double t0 = now_us();
     for (int i = 0; i < ITERS; ++i) {
-        auto P = G.scalar_mul(k);
+        auto P = G.scalar_mul(scalars[i]);
         sink ^= P.to_compressed()[0];
-        k += Scalar::one();
     }
     double elapsed = now_us() - t0;
     printf("  Total : %.1f ms\n", elapsed / 1000.0);
