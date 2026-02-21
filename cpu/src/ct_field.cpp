@@ -97,7 +97,7 @@ FieldElement field_normalize(const FieldElement& a) noexcept {
     std::uint64_t r[4];
     std::memcpy(r, &a.limbs()[0], 32);
     ct_reduce_once(r);
-    return FieldElement::from_limbs({r[0], r[1], r[2], r[3]});
+    return FieldElement::from_limbs_raw({r[0], r[1], r[2], r[3]});
 }
 
 FieldElement field_add(const FieldElement& a, const FieldElement& b) noexcept {
@@ -119,7 +119,7 @@ FieldElement field_add(const FieldElement& a, const FieldElement& b) noexcept {
     std::uint64_t mask = no_borrow | has_carry;
     cmov256(r, tmp, mask);
 
-    return FieldElement::from_limbs({r[0], r[1], r[2], r[3]});
+    return FieldElement::from_limbs_raw({r[0], r[1], r[2], r[3]});
 }
 
 FieldElement field_sub(const FieldElement& a, const FieldElement& b) noexcept {
@@ -134,7 +134,7 @@ FieldElement field_sub(const FieldElement& a, const FieldElement& b) noexcept {
     std::uint64_t mask = is_nonzero_mask(borrow);
     cmov256(r, tmp, mask);
 
-    return FieldElement::from_limbs({r[0], r[1], r[2], r[3]});
+    return FieldElement::from_limbs_raw({r[0], r[1], r[2], r[3]});
 }
 
 FieldElement field_mul(const FieldElement& a, const FieldElement& b) noexcept {
@@ -146,7 +146,7 @@ FieldElement field_mul(const FieldElement& a, const FieldElement& b) noexcept {
     // + ~20ns redundant field_normalize = ~35ns savings per mul.
     std::uint64_t result[4];
     field_mul_full_asm(a.limbs().data(), b.limbs().data(), result);
-    return FieldElement::from_limbs({result[0], result[1], result[2], result[3]});
+    return FieldElement::from_limbs_raw({result[0], result[1], result[2], result[3]});
 #else
     // Fallback: use operator* (platform-specific mul) + CT normalize.
     // operator* always produces a value in [0, p) but the reduce step
@@ -162,7 +162,7 @@ FieldElement field_sqr(const FieldElement& a) noexcept {
     // Output always in [0, p). No extra normalize needed.
     std::uint64_t result[4];
     field_sqr_full_asm(a.limbs().data(), result);
-    return FieldElement::from_limbs({result[0], result[1], result[2], result[3]});
+    return FieldElement::from_limbs_raw({result[0], result[1], result[2], result[3]});
 #else
     FieldElement r = a.square();
     return field_normalize(r);
@@ -180,7 +180,7 @@ FieldElement field_neg(const FieldElement& a) noexcept {
     std::uint64_t z[4] = {0, 0, 0, 0};
     cmov256(r, z, zero_mask);
 
-    return FieldElement::from_limbs({r[0], r[1], r[2], r[3]});
+    return FieldElement::from_limbs_raw({r[0], r[1], r[2], r[3]});
 }
 
 FieldElement field_inv(const FieldElement& a) noexcept {
@@ -306,7 +306,7 @@ FieldElement field_select(const FieldElement& a, const FieldElement& b,
                           std::uint64_t mask) noexcept {
     const auto& al = a.limbs();
     const auto& bl = b.limbs();
-    return FieldElement::from_limbs({
+    return FieldElement::from_limbs_raw({
         ct_select(al[0], bl[0], mask),
         ct_select(al[1], bl[1], mask),
         ct_select(al[2], bl[2], mask),
