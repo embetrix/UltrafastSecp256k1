@@ -70,11 +70,11 @@ public:
     digest_type finalize() noexcept {
         std::uint64_t bits = total_ * 8;
 
-        // ── Direct in-place padding (no per-byte update() calls) ─────────
+        // -- Direct in-place padding (no per-byte update() calls) ---------
         buf_[buf_len_++] = 0x80;
 
         if (buf_len_ > 56) {
-            // No room for 8-byte length — pad, compress, start fresh block
+            // No room for 8-byte length -- pad, compress, start fresh block
             std::memset(buf_ + buf_len_, 0, 64 - buf_len_);
             detail::sha256_compress_dispatch(buf_, state_);
             buf_len_ = 0;

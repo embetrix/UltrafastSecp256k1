@@ -2,7 +2,7 @@
  * UltrafastSecp256k1 - STM32F103ZET6 Integration Test
  *
  * Tests secp256k1 library on bare-metal Cortex-M3 @ 72MHz
- * Output via USART1 (PA9/TX → CH340 → COM4)
+ * Output via USART1 (PA9/TX -> CH340 -> COM4)
  *
  * Memory budget: 512KB Flash, 64KB SRAM
  * - NO gen_fixed_mul (30KB table too large for 64KB SRAM)
@@ -204,9 +204,9 @@ int main() {
         (void)sink;
     }
 
-    // ═══════════════════════════════════════════════════════════════════
-    // 10×26 Field Element Benchmark
-    // ═══════════════════════════════════════════════════════════════════
+    // ===================================================================
+    // 10x26 Field Element Benchmark
+    // ===================================================================
     printf("\n");
     printf("==============================================\n");
     printf("  10x26 Field Element Benchmark\n");
@@ -291,9 +291,9 @@ int main() {
         }
     }
 
-    // ═══════════════════════════════════════════════════════════════════
+    // ===================================================================
     // Optimal Field Element (compile-time dispatch)
-    // ═══════════════════════════════════════════════════════════════════
+    // ===================================================================
     printf("\n");
     printf("==============================================\n");
     printf("  Optimal Field Element (Auto-Dispatch)\n");

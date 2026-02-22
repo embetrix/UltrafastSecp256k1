@@ -35,9 +35,9 @@ std::vector<Scalar> generate_random_scalars(int count) {
 
 int main() {
     std::cout << "\n";
-    std::cout << "╔════════════════════════════════════════════════════════════╗\n";
-    std::cout << "║       Intensive Benchmark - Turbo Boost Activator         ║\n";
-    std::cout << "╚════════════════════════════════════════════════════════════╝\n";
+    std::cout << "+============================================================+\n";
+    std::cout << "|       Intensive Benchmark - Turbo Boost Activator         |\n";
+    std::cout << "+============================================================+\n";
     std::cout << "\n";
     
     std::cout << "Generating test data...\n";
@@ -124,9 +124,9 @@ int main() {
     double add_median = add_times[add_times.size() / 2];
     double dbl_median = dbl_times[dbl_times.size() / 2];
     
-    std::cout << "╔════════════════════════════════════════════════════════════╗\n";
-    std::cout << "║              Results (Turbo Boost Active)                  ║\n";
-    std::cout << "╚════════════════════════════════════════════════════════════╝\n\n";
+    std::cout << "+============================================================+\n";
+    std::cout << "|              Results (Turbo Boost Active)                  |\n";
+    std::cout << "+============================================================+\n\n";
     
     std::cout << std::fixed << std::setprecision(2);
     
@@ -134,21 +134,21 @@ int main() {
     if (kg_median < 1000) {
         std::cout << "\n";
     } else if (kg_median < 1000000) {
-        std::cout << " (" << (kg_median / 1000.0) << " μs)\n";
+        std::cout << " (" << (kg_median / 1000.0) << " us)\n";
     }
     
     std::cout << "K*Q (Arbitrary Point):  " << std::setw(8) << kq_median << " ns";
     if (kq_median < 1000) {
         std::cout << "\n";
     } else if (kq_median < 1000000) {
-        std::cout << " (" << (kq_median / 1000.0) << " μs)\n";
+        std::cout << " (" << (kq_median / 1000.0) << " us)\n";
     }
     
     std::cout << "Point Addition:         " << std::setw(8) << add_median << " ns\n";
     std::cout << "Point Doubling:         " << std::setw(8) << dbl_median << " ns\n\n";
     
-    std::cout << "Expected K*Q on Turbo Boost: ~18-20 μs\n";
-    std::cout << "If result is ~150+ μs, CPU is still throttled.\n\n";
+    std::cout << "Expected K*Q on Turbo Boost: ~18-20 us\n";
+    std::cout << "If result is ~150+ us, CPU is still throttled.\n\n";
     
     return 0;
 }

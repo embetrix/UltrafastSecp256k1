@@ -17,21 +17,21 @@
 /* GLV Optimization Progress:
  * 
  * Performance Evolution (@ 3.5 GHz, w=20 fixed-base):
- *   БЕЗ GLV:         26.6 μs (93,222 cycles)  ✅ baseline
- *   GLV (current):   27.1 μs (94,978 cycles)  ❌ 1.9% slower
+ *   BEZ GLV:         26.6 us (93,222 cycles)  [OK] baseline
+ *   GLV (current):   27.1 us (94,978 cycles)  [FAIL] 1.9% slower
  * 
  * Bottleneck Analysis:
- *   - Decomposition:  14.07 μs (49,255 cycles) — 52% of total time!
- *     - k2 calculation:   15,000 cycles (30%) — Scalar arithmetic
- *     - lambda×k2:        33,000 cycles (67%) — 256×256 mul + Barrett
+ *   - Decomposition:  14.07 us (49,255 cycles) -- 52% of total time!
+ *     - k2 calculation:   15,000 cycles (30%) -- Scalar arithmetic
+ *     - lambdaxk2:        33,000 cycles (67%) -- 256x256 mul + Barrett
  *     - mul_scalar_raw:      ~80 cycles (0.2%)
  *     - barrett_reduce:   ~32,900 cycles (67%)
- *   - 2D Shamir:      ~13 μs (~45k cycles) — Actually faster than 1D!
+ *   - 2D Shamir:      ~13 us (~45k cycles) -- Actually faster than 1D!
  * 
  * Optimizations Applied:
- *   1. ✅ Optimized barrett_reduce_512: limb subtraction instead of Scalar ops
- *   2. ✅ Fast scalar_from_limbs_normalized: skip >= ORDER check  
- *   3. ✅ Detailed RDTSC profiling to find bottlenecks
+ *   1. [OK] Optimized barrett_reduce_512: limb subtraction instead of Scalar ops
+ *   2. [OK] Fast scalar_from_limbs_normalized: skip >= ORDER check  
+ *   3. [OK] Detailed RDTSC profiling to find bottlenecks
  * 
  * Remaining Issues:
  *   - Decomposition overhead too high for w=20 (large window)
@@ -41,8 +41,8 @@
  * Next Steps:
  *   Option 1: Reduce window size (w=16 or w=14) to amortize decomposition
  *   Option 2: Implement full limb-based decomposition (no Scalar class)
- *   Option 3: Assembly-optimized 256×256 multiplication
- *   Option 4: Accept that БЕЗ GLV is optimal for w=20 fixed-base
+ *   Option 3: Assembly-optimized 256x256 multiplication
+ *   Option 4: Accept that BEZ GLV is optimal for w=20 fixed-base
  */
 #include "secp256k1/precompute.hpp"
 
@@ -151,10 +151,10 @@ namespace secp256k1::fast {
 #ifndef SECP256K1_LIMB_GLV
 #define SECP256K1_LIMB_GLV 0
 #endif // Experimental limb-only GLV path (Task 16)
-// Task 16 verdict: limb-only GLV decomposition increased cycles (~44K → ~55K).
+// Task 16 verdict: limb-only GLV decomposition increased cycles (~44K -> ~55K).
 // Disabled by default; kept for future fused multiply+reduce prototype. Enable by
 // defining SECP256K1_LIMB_GLV=1 and re-running benchmarks; acceptance requires
-// ≥15% improvement over Scalar-based path without test regressions.
+// >=15% improvement over Scalar-based path without test regressions.
 
 // Global profiling counters for decomposition (exported for benchmarks)
 uint64_t g_decomp_scalar_to_limbs_cycles = 0;
@@ -273,8 +273,8 @@ FieldElement negate_fe(const FieldElement& v);
 }
 
 // Montgomery's Batch Inversion: Compute multiple inverses with only ONE expensive inverse
-// Instead of N inverse() calls (~8 μs each), we do: 1 inverse + 3N multiplications (~5 ns each)
-// Example (N=16): 16 × 8 μs = 128 μs → 1 × 8 μs + 48 × 5 ns ≈ 8.2 μs (15.6x faster!)
+// Instead of N inverse() calls (~8 us each), we do: 1 inverse + 3N multiplications (~5 ns each)
+// Example (N=16): 16 x 8 us = 128 us -> 1 x 8 us + 48 x 5 ns ~= 8.2 us (15.6x faster!)
 //
 // Algorithm:
 //   prod[0] = z[0]
@@ -295,7 +295,7 @@ SECP256K1_INLINE void batch_inverse(std::vector<FieldElement>& inputs) {
         return;
     }
     
-    // Step 1: Compute products: prod[i] = inputs[0] × inputs[1] × ... × inputs[i]
+    // Step 1: Compute products: prod[i] = inputs[0] x inputs[1] x ... x inputs[i]
     std::vector<FieldElement> products;
     products.reserve(n);
     products.push_back(inputs[0]);
@@ -311,7 +311,7 @@ SECP256K1_INLINE void batch_inverse(std::vector<FieldElement>& inputs) {
     // CRITICAL: Must use ORIGINAL value before overwriting!
     for (size_t i = n - 1; i > 0; --i) {
         FieldElement original = inputs[i];           // Save original BEFORE overwriting
-        inputs[i] = inv * products[i - 1];           // inputs[i]⁻¹ = inv × prod[i-1]
+        inputs[i] = inv * products[i - 1];           // inputs[i]^-^1 = inv x prod[i-1]
         inv = inv * original;                        // Update inv using ORIGINAL value
     }
     inputs[0] = inv;  // First element
@@ -1427,7 +1427,7 @@ static std::array<std::uint64_t, 8> mul_scalar_raw(const Scalar& a, const Scalar
     unsigned long long start_mul = RDTSC();
 #endif
 
-    // 256-bit × 256-bit = 512-bit multiplication
+    // 256-bit x 256-bit = 512-bit multiplication
     std::array<std::uint64_t, 8> result{};
     
     for (std::size_t i = 0; i < 4; ++i) {
@@ -1465,14 +1465,14 @@ static std::array<std::uint64_t, 8> mul_scalar_raw(const Scalar& a, const Scalar
     if (mul_calls == 3000) {
         std::printf("  [MUL_SCALAR_RAW] After %d calls:\n", mul_calls);
         std::printf("    Prepare (scalar_to_limbs): %llu cycles\n", total_prep / mul_calls);
-        std::printf("    4×4 multiplication loop:   %llu cycles\n", total_mul / mul_calls);
+        std::printf("    4x4 multiplication loop:   %llu cycles\n", total_mul / mul_calls);
     }
 #endif
     
     return result;
 }
 
-// Optimized 128×256-bit multiplication for GLV decomposition
+// Optimized 128x256-bit multiplication for GLV decomposition
 // When 'a' is known to be ~128-bit (only low 2 limbs significant)
 static std::array<std::uint64_t, 8> mul_128x256_raw(const Limbs4& a_limbs, const Limbs4& b_limbs) {
     std::array<std::uint64_t, 8> result{};
@@ -1480,7 +1480,7 @@ static std::array<std::uint64_t, 8> mul_128x256_raw(const Limbs4& a_limbs, const
     // Only multiply first 2 limbs of 'a' (128-bit) with all 4 limbs of 'b' (256-bit)
     // This gives us 8 multiplications instead of 16!
     
-    // i = 0: a[0] × b[0..3]
+    // i = 0: a[0] x b[0..3]
     {
         std::uint64_t carry = 0;
         for (std::size_t j = 0; j < 4; ++j) {
@@ -1500,7 +1500,7 @@ static std::array<std::uint64_t, 8> mul_128x256_raw(const Limbs4& a_limbs, const
         }
     }
     
-    // i = 1: a[1] × b[0..3]
+    // i = 1: a[1] x b[0..3]
     {
         std::uint64_t carry = 0;
         for (std::size_t j = 0; j < 4; ++j) {
@@ -1644,8 +1644,8 @@ static Scalar reduce_512_mod_n(const std::array<std::uint64_t, 8>& wide) {
     return rem;
 }
 
-// Barrett reduction constant: μ = ⌊2^512 / n⌋ where n is secp256k1 group order
-// This allows fast modular reduction: x mod n ≈ x - ⌊x*μ / 2^512⌋ * n
+// Barrett reduction constant: u = floor(2^512 / n) where n is secp256k1 group order
+// This allows fast modular reduction: x mod n ~= x - floor(x*u / 2^512) * n
 constexpr std::array<std::uint64_t, 8> kBarrettMu = {
     0x402DA1732FC9BEC0ULL,
     0x4551231950B75FC4ULL,
@@ -1658,7 +1658,7 @@ constexpr std::array<std::uint64_t, 8> kBarrettMu = {
 };
 
 // Fast Barrett reduction for 512-bit value modulo n
-// About 10-15× faster than Horner method for small inputs
+// About 10-15x faster than Horner method for small inputs
 static Scalar barrett_reduce_512(const std::array<std::uint64_t, 8>& wide) {
 #if SECP256K1_PROFILE_DECOMP
     unsigned long long start = RDTSC();
@@ -1868,7 +1868,7 @@ static JSF_Result compute_jsf(const Scalar& k1, const Scalar& k2) {
     return out;
 }
 
-// Fast 128×128 multiplication returning low 256 bits (for small scalar muls)
+// Fast 128x128 multiplication returning low 256 bits (for small scalar muls)
 // Input: two 128-bit values (stored in first 2 limbs)
 // Output: 256-bit product
 static inline Limbs4 mul_small_128x128(const Limbs4& a, const Limbs4& b) {
@@ -3056,17 +3056,17 @@ ScalarDecomposition split_scalar_glv(const Scalar& scalar) {
     return split_scalar_internal(scalar);
 }
 
-// Shamir's trick: Simultaneous 2D scalar multiplication k1·P + k2·Q
+// Shamir's trick: Simultaneous 2D scalar multiplication k1*P + k2*Q
 // Uses interleaved windowed method for optimal performance with precomputed tables
 namespace {
 
-// Compute k1·P + k2·Q simultaneously using Shamir's trick
+// Compute k1*P + k2*Q simultaneously using Shamir's trick
 // Processes both digit streams in one pass, eliminating the final point addition
 JacobianPoint shamir_windowed_glv(
     const std::vector<int32_t>& digits1,  // k1 window digits  
     const std::vector<int32_t>& digits2,  // k2 window digits
     const std::vector<std::vector<AffinePointPacked>>& P_tables,  // G tables
-    const std::vector<std::vector<AffinePointPacked>>& Q_tables,  // ψ(G) tables
+    const std::vector<std::vector<AffinePointPacked>>& Q_tables,  // psi(G) tables
     std::size_t window_count
 ) {
 #if SECP256K1_PROFILE_DECOMP
@@ -3151,7 +3151,7 @@ JacobianPoint shamir_windowed_glv(
         }
 #endif
         
-        // Add contribution from Q (endomorphism point ψ(G))
+        // Add contribution from Q (endomorphism point psi(G))
         if (d2_nonzero) {
             bool negative = d2 < 0;
             std::size_t index = static_cast<std::size_t>(negative ? -d2 : d2);
@@ -3205,7 +3205,7 @@ JacobianPoint shamir_windowed_glv(
     return result;
 }
 
-// JSF-based Shamir's trick: k1·G + k2·ψ(G)
+// JSF-based Shamir's trick: k1*G + k2*psi(G)
 // Uses Joint Sparse Form for reduced non-zero digits
 JacobianPoint shamir_jsf_glv(
     const Scalar& k1,
@@ -3218,8 +3218,8 @@ JacobianPoint shamir_jsf_glv(
     // Compute JSF encoding
     JSF_Result jsf = compute_jsf(k1, k2);
     
-    // Precompute lookup table for {±G, ±ψ(G), ±(G+ψ(G)), ±(G-ψ(G))}
-    // Index: [u2+1][u1+1] where u1, u2 ∈ {-1, 0, +1}
+    // Precompute lookup table for {+/-G, +/-psi(G), +/-(G+psi(G)), +/-(G-psi(G))}
+    // Index: [u2+1][u1+1] where u1, u2 in {-1, 0, +1}
     JacobianPoint lookup[3][3];
     
     // Convert affine to Jacobian for base points
@@ -3233,14 +3233,14 @@ JacobianPoint shamir_jsf_glv(
     lookup[1][0] = negate_jacobian(jac_G);         // -G
     lookup[1][2] = jac_G;                          // +G
     
-    // [u2=-1] row: -ψ(G) combinations
+    // [u2=-1] row: -psi(G) combinations
     JacobianPoint neg_psi_G = negate_jacobian(jac_psi_G);
-    lookup[0][0] = jacobian_add(neg_psi_G, lookup[1][0]); // -ψ(G) - G
-    lookup[0][2] = jacobian_add(neg_psi_G, jac_G);         // -ψ(G) + G
+    lookup[0][0] = jacobian_add(neg_psi_G, lookup[1][0]); // -psi(G) - G
+    lookup[0][2] = jacobian_add(neg_psi_G, jac_G);         // -psi(G) + G
     
-    // [u2=+1] row: +ψ(G) combinations  
-    lookup[2][0] = jacobian_add(jac_psi_G, lookup[1][0]); // +ψ(G) - G
-    lookup[2][2] = jacobian_add(jac_psi_G, jac_G);        // +ψ(G) + G
+    // [u2=+1] row: +psi(G) combinations  
+    lookup[2][0] = jacobian_add(jac_psi_G, lookup[1][0]); // +psi(G) - G
+    lookup[2][2] = jacobian_add(jac_psi_G, jac_G);        // +psi(G) + G
     
     // Process JSF from high bit to low bit
     JacobianPoint result{FieldElement::zero(), FieldElement::one(), FieldElement::zero(), true};
@@ -3390,7 +3390,7 @@ Point scalar_mul_generator(const Scalar& scalar) {
         // *** SHAMIR'S TRICK: Simultaneous 2D multiplication ***
         // Choose between windowed interleaving (uses precomputed tables) or JSF-based variant
         if (ctx.config.use_jsf) {
-            // JSF path: small fixed lookup using G and ψ(G)
+            // JSF path: small fixed lookup using G and psi(G)
             AffinePointPacked aG = to_affine(Point::generator());
             AffinePointPacked aPsiG = to_affine(apply_endomorphism(Point::generator()));
             result = shamir_jsf_glv(decomposition.k1, decomposition.k2, aG, aPsiG, decomposition.neg1, decomposition.neg2);
@@ -3534,7 +3534,7 @@ PrecomputedScalar precompute_scalar_for_arbitrary(const Scalar& K, unsigned wind
     PrecomputedScalar result;
     result.window_bits = window_bits;
 
-    // GLV decomposition: K → (k₁, k₂) where K = k₁ + λ·k₂ (mod n)
+    // GLV decomposition: K -> (k_1, k_2) where K = k_1 + lambda*k_2 (mod n)
     ScalarDecomposition decomp = split_scalar_glv(K);
     result.k1 = decomp.k1;
     result.k2 = decomp.k2;
@@ -3576,7 +3576,7 @@ PrecomputedScalarOptimized precompute_scalar_optimized(const Scalar& K, unsigned
         for (auto& d : wnaf2) { if (d != 0) d = -d; }
     }
 
-    // RLE compress: scan MSB → LSB (reverse of LSB-first wNAF array)
+    // RLE compress: scan MSB -> LSB (reverse of LSB-first wNAF array)
     // Each Step = {num_doubles, idx1/neg1, idx2/neg2}
     result.steps.reserve(max_len / 2);
     uint16_t pending_doubles = 0;
@@ -3609,7 +3609,7 @@ PrecomputedScalarOptimized precompute_scalar_optimized(const Scalar& K, unsigned
 
     // Trailing doubles (zero tail from LSB side)
     if (pending_doubles > 0) {
-        PrecomputedScalarOptimized::Step step; // idx1=0xFF, idx2=0xFF → doubles only
+        PrecomputedScalarOptimized::Step step; // idx1=0xFF, idx2=0xFF -> doubles only
         step.num_doubles = pending_doubles;
         result.steps.push_back(step);
     }
@@ -3621,7 +3621,7 @@ Point scalar_mul_arbitrary_precomputed(const Point& Q, const PrecomputedScalar& 
     const unsigned w = precomp.window_bits;
     const std::size_t table_size = std::size_t{1} << (w - 1); // e.g. 8 for w=4
 
-    // Build odd-multiples tables for Q and ψ(Q)
+    // Build odd-multiples tables for Q and psi(Q)
     std::vector<AffinePointPacked> q_table(table_size);
     std::vector<AffinePointPacked> psi_table(table_size);
 
@@ -3635,7 +3635,7 @@ Point scalar_mul_arbitrary_precomputed(const Point& Q, const PrecomputedScalar& 
     const auto& wnaf2 = precomp.wnaf2;
     std::size_t max_len = std::max(wnaf1.size(), wnaf2.size());
 
-    // Process MSB → LSB (reverse through the LSB-first arrays)
+    // Process MSB -> LSB (reverse through the LSB-first arrays)
     JacobianPoint result{FieldElement::zero(), FieldElement::one(), FieldElement::zero(), true};
 
     for (int i = static_cast<int>(max_len) - 1; i >= 0; --i) {
@@ -3646,7 +3646,7 @@ Point scalar_mul_arbitrary_precomputed(const Point& Q, const PrecomputedScalar& 
 
         auto idx = static_cast<std::size_t>(i);
 
-        // k₁ contribution
+        // k_1 contribution
         int32_t d1 = (idx < wnaf1.size()) ? wnaf1[idx] : 0;
         if (precomp.neg1 && d1 != 0) d1 = -d1;
         if (d1 != 0) {
@@ -3658,7 +3658,7 @@ Point scalar_mul_arbitrary_precomputed(const Point& Q, const PrecomputedScalar& 
             result = jacobian_add_mixed_local(result, pt);
         }
 
-        // k₂ contribution
+        // k_2 contribution
         int32_t d2 = (idx < wnaf2.size()) ? wnaf2[idx] : 0;
         if (precomp.neg2 && d2 != 0) d2 = -d2;
         if (d2 != 0) {
@@ -3679,7 +3679,7 @@ Point scalar_mul_arbitrary_precomputed_optimized(const Point& Q,
     const unsigned w = precomp.window_bits;
     const std::size_t table_size = std::size_t{1} << (w - 1);
 
-    // Build odd-multiples tables for Q and ψ(Q)
+    // Build odd-multiples tables for Q and psi(Q)
     std::vector<AffinePointPacked> q_table(table_size);
     std::vector<AffinePointPacked> psi_table(table_size);
 
@@ -3699,14 +3699,14 @@ Point scalar_mul_arbitrary_precomputed_optimized(const Point& Q,
             }
         }
 
-        // Add from Q-table (k₁ component)
+        // Add from Q-table (k_1 component)
         if (step.idx1 != 0xFF) {
             AffinePointPacked pt = q_table[step.idx1];
             if (step.neg1) pt.y = negate_fe(pt.y);
             result = jacobian_add_mixed_local(result, pt);
         }
 
-        // Add from ψ(Q)-table (k₂ component)
+        // Add from psi(Q)-table (k_2 component)
         if (step.idx2 != 0xFF) {
             AffinePointPacked pt = psi_table[step.idx2];
             if (step.neg2) pt.y = negate_fe(pt.y);
@@ -3719,7 +3719,7 @@ Point scalar_mul_arbitrary_precomputed_optimized(const Point& Q,
 
 Point scalar_mul_arbitrary_precomputed_notable(const Point& Q,
                                                 const PrecomputedScalarOptimized& precomp) {
-    // No-table mode: use only ±Q and ±ψ(Q) directly
+    // No-table mode: use only +/-Q and +/-psi(Q) directly
     // Avoids building odd-multiples tables at the cost of more additions
     // Still uses precomputed RLE steps for the scalar structure
 
@@ -3727,7 +3727,7 @@ Point scalar_mul_arbitrary_precomputed_notable(const Point& Q,
     AffinePointPacked aPsiQ = to_affine(apply_endomorphism(Q));
 
     // We need the full odd-multiples tables since wNAF digits can reference
-    // indices > 0 (e.g. ±3, ±5, ±7 for w=4). Build the tables.
+    // indices > 0 (e.g. +/-3, +/-5, +/-7 for w=4). Build the tables.
     const unsigned w = precomp.window_bits;
     const std::size_t table_size = std::size_t{1} << (w - 1);
 

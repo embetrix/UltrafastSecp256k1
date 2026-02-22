@@ -8,7 +8,7 @@
 namespace secp256k1::fast {
 
 // ============================================================================
-// AFFINE BATCH ADDITION — Fastest CPU pipeline for sequential ECC search
+// AFFINE BATCH ADDITION -- Fastest CPU pipeline for sequential ECC search
 // ============================================================================
 //
 // ## THE IDEA
@@ -18,22 +18,22 @@ namespace secp256k1::fast {
 //
 // ## WHY THIS IS FAST
 // Standard Jacobian mixed-add: P += G costs 7M + 4S = ~354 ns/point
-// with subsequent batch Z-inverse adding ~62 ns → total ~463 ns/point.
+// with subsequent batch Z-inverse adding ~62 ns -> total ~463 ns/point.
 //
 // Affine batch add uses Montgomery batch inversion on dx values:
-//   dx[i] = x_T[i] - x_base               → 1 sub
-//   batch_inverse(dx, N)                    → 3(N-1) mul + 1 inv ≈ 69 ns/pt
-//   λ[i]  = (y_T[i] - y_base) * dx_inv[i]  → 1 mul
-//   x3[i] = λ[i]² - x_base - x_T[i]        → 1 sqr + 2 sub
-//   y3[i] = λ[i] * (x_base - x3[i]) - y_base → 2 mul + 1 sub
+//   dx[i] = x_T[i] - x_base               -> 1 sub
+//   batch_inverse(dx, N)                    -> 3(N-1) mul + 1 inv ~= 69 ns/pt
+//   lambda[i]  = (y_T[i] - y_base) * dx_inv[i]  -> 1 mul
+//   x3[i] = lambda[i]^2 - x_base - x_T[i]        -> 1 sqr + 2 sub
+//   y3[i] = lambda[i] * (x_base - x3[i]) - y_base -> 2 mul + 1 sub
 //
-// Cost: ~6M + 1S per point ≈ 150 ns/point → 3× faster than Jacobian!
+// Cost: ~6M + 1S per point ~= 150 ns/point -> 3x faster than Jacobian!
 //
 // ## USE CASE
 // Satoshi puzzle / vanity search: walk through key range sequentially.
 // Pre-compute T[i] = i*G in affine, then for each batch:
 //   1. P_base = start_scalar * G (compute once per batch)
-//   2. result[i] = P_base + T[i]  (affine batch add — this function!)
+//   2. result[i] = P_base + T[i]  (affine batch add -- this function!)
 //   3. Check result X-coordinates against target(s)
 //   4. P_base += B*G (advance by batch size)
 //
@@ -50,12 +50,12 @@ struct alignas(64) AffinePointCompact {
 // Core batch addition API
 // ============================================================================
 
-/// Compute P + T[i] for all i ∈ [0, count), returning affine X-coordinates.
+/// Compute P + T[i] for all i in [0, count), returning affine X-coordinates.
 ///
 /// @param base_x     Base point X coordinate (affine)
 /// @param base_y     Base point Y coordinate (affine)
 /// @param offsets    Array of precomputed affine offset points T[0..count-1]
-/// @param out_x      Output: X-coordinates of P + T[i] (caller-allocated, size ≥ count)
+/// @param out_x      Output: X-coordinates of P + T[i] (caller-allocated, size >= count)
 /// @param count      Number of offset points
 /// @param scratch    Reusable scratch buffer (avoids allocation; resized internally if needed)
 ///
@@ -63,7 +63,7 @@ struct alignas(64) AffinePointCompact {
 ///       output X is set to FieldElement::zero() which is never a valid curve X.
 ///       Caller should skip zero results if exactness matters (astronomically rare in search).
 ///
-/// Hot-path contract: No heap allocation when scratch is pre-sized ≥ count.
+/// Hot-path contract: No heap allocation when scratch is pre-sized >= count.
 void batch_add_affine_x(
     const FieldElement& base_x,
     const FieldElement& base_y,
@@ -74,7 +74,7 @@ void batch_add_affine_x(
 
 /// Same as above but also outputs Y-coordinates.
 ///
-/// @param out_y  Output: Y-coordinates of P + T[i] (caller-allocated, size ≥ count)
+/// @param out_y  Output: Y-coordinates of P + T[i] (caller-allocated, size >= count)
 void batch_add_affine_xy(
     const FieldElement& base_x,
     const FieldElement& base_y,
@@ -104,7 +104,7 @@ void batch_add_affine_x(
 /// @return Vector of affine G-multiples
 ///
 /// @note This is a one-time cost at startup. For batch_size=1024:
-///       ~370 μs (1024 point additions + 1 batch inverse).
+///       ~370 us (1024 point additions + 1 batch inverse).
 ///       Table size: 1024 * 64 = 64 KB (fits in L1 cache!).
 std::vector<AffinePointCompact> precompute_g_multiples(std::size_t count);
 
@@ -148,7 +148,7 @@ std::vector<AffinePointCompact> negate_affine_table(
 /// parity[i] = lowest bit of Y-coordinate (0x02 or 0x03 prefix).
 /// Use when you need compressed pubkey prefix without computing full Y.
 ///
-/// @param out_parity  Output: 0 for even Y, 1 for odd Y (caller-allocated, size ≥ count)
+/// @param out_parity  Output: 0 for even Y, 1 for odd Y (caller-allocated, size >= count)
 void batch_add_affine_x_with_parity(
     const FieldElement& base_x,
     const FieldElement& base_y,

@@ -1,6 +1,6 @@
 // GLV endomorphism implementation for secp256k1
 // Correct decomposition following libsecp256k1 algorithm:
-//   k = k1 + k2·λ (mod n), where |k1|,|k2| ≈ √n
+//   k = k1 + k2*lambda (mod n), where |k1|,|k2| ~= sqrtn
 
 #include "secp256k1/glv.hpp"
 #include "secp256k1/field.hpp"
@@ -12,7 +12,7 @@ namespace secp256k1::fast {
 //  Internal helpers for GLV decomposition (32-bit safe, no __int128)
 // ============================================================================
 
-// Comba product-scanning: 8×8 → 16 words (256×256 → 512 bit)
+// Comba product-scanning: 8x8 -> 16 words (256x256 -> 512 bit)
 // Same algorithm as esp32_mul_comba in field.cpp, duplicated here to avoid
 // cross-TU dependency (glv.cpp must be self-contained).
 static void glv_mul_comba(const std::uint32_t a[8], const std::uint32_t b[8],
@@ -97,7 +97,7 @@ static unsigned scalar_bitlen(const Scalar& s) {
 //  GLV decomposition constants (matching libsecp256k1/precompute.cpp)
 // ============================================================================
 
-// g1/g2: precomputed multipliers for c1 = round(k·g1 / 2^384), c2 = round(k·g2 / 2^384)
+// g1/g2: precomputed multipliers for c1 = round(k*g1 / 2^384), c2 = round(k*g2 / 2^384)
 // (little-endian 64-bit limbs)
 static constexpr std::array<std::uint64_t, 4> kG1{{
     0xE893209A45DBB031ULL, 0x3DAA8A1471E8CA7FULL,
@@ -122,7 +122,7 @@ static constexpr std::array<std::uint8_t, 32> kMinusB2Bytes{{
     0xD7,0x65,0xCD,0xA8,0x3D,0xB1,0x56,0x2C
 }};
 
-// λ (lambda) scalar as big-endian bytes
+// lambda (lambda) scalar as big-endian bytes
 static constexpr std::array<std::uint8_t, 32> kGlvLambdaBytes{{
     0x53,0x63,0xAD,0x4C,0xC0,0x5C,0x30,0xE0,
     0xA5,0x26,0x1C,0x02,0x88,0x12,0x64,0x5A,
@@ -137,7 +137,7 @@ static constexpr std::array<std::uint8_t, 32> kGlvLambdaBytes{{
 GLVDecomposition glv_decompose(const Scalar& k) {
     GLVDecomposition result;
 
-    // Step 1: c1 = round(k · g1 / 2^384),  c2 = round(k · g2 / 2^384)
+    // Step 1: c1 = round(k * g1 / 2^384),  c2 = round(k * g2 / 2^384)
     auto k_limbs = k.limbs();
     auto c1_limbs = mul_shift_384({k_limbs[0], k_limbs[1], k_limbs[2], k_limbs[3]}, kG1);
     auto c2_limbs = mul_shift_384({k_limbs[0], k_limbs[1], k_limbs[2], k_limbs[3]}, kG2);
@@ -145,7 +145,7 @@ GLVDecomposition glv_decompose(const Scalar& k) {
     Scalar c1 = Scalar::from_limbs(c1_limbs);
     Scalar c2 = Scalar::from_limbs(c2_limbs);
 
-    // Step 2: k2 = c1·(-b1) + c2·(-b2)  (mod n)
+    // Step 2: k2 = c1*(-b1) + c2*(-b2)  (mod n)
     // Lazy-init constants (thread-safe in C++11+)
     static const Scalar minus_b1 = Scalar::from_bytes(kMinusB1Bytes);
     static const Scalar minus_b2 = Scalar::from_bytes(kMinusB2Bytes);
@@ -159,7 +159,7 @@ GLVDecomposition glv_decompose(const Scalar& k) {
     Scalar k2_abs    = k2_is_neg ? k2_neg : k2_mod;
     Scalar k2_signed = k2_is_neg ? (Scalar::zero() - k2_abs) : k2_abs;
 
-    // Step 4: k1 = k − λ·k2  (mod n)
+    // Step 4: k1 = k - lambda*k2  (mod n)
     Scalar k1_mod = k - lambda * k2_signed;
 
     // Step 5: pick shorter representation for k1
@@ -180,8 +180,8 @@ Point apply_endomorphism(const Point& P) {
         return P;
     }
     
-    // φ(x, y) = (β·x, y) — β is a cube root of unity mod p
-    // β cached as static to avoid per-call from_bytes overhead
+    // phi(x, y) = (beta*x, y) -- beta is a cube root of unity mod p
+    // beta cached as static to avoid per-call from_bytes overhead
     static const FieldElement beta = FieldElement::from_bytes(glv_constants::BETA);
 
     return Point::from_jacobian_coords(P.x_raw() * beta, P.y_raw(), P.z_raw(), false);
@@ -192,14 +192,14 @@ bool verify_endomorphism(const Point& P) {
         return true;
     }
     
-    // φ(φ(P)) + P should equal O (point at infinity)
-    // Because φ³ = identity, so φ² + φ + 1 = 0
-    // Therefore: φ²(P) = -P - φ(P)
+    // phi(phi(P)) + P should equal O (point at infinity)
+    // Because phi^3 = identity, so phi^2 + phi + 1 = 0
+    // Therefore: phi^2(P) = -P - phi(P)
     
     Point phi_P = apply_endomorphism(P);
     Point phi_phi_P = apply_endomorphism(phi_P);
     
-    // φ²(P) + P should equal -φ(P)
+    // phi^2(P) + P should equal -phi(P)
     Point sum = phi_phi_P.add(P);
     Point neg_phi_P = phi_P.negate();
     

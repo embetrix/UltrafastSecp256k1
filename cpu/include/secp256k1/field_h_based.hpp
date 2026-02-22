@@ -11,7 +11,7 @@ namespace secp256k1::fast {
 // ============================================================================
 // 
 // This is a revolutionary batch inversion method for fixed-step ECC walks.
-// GPU version showed **7.75× speedup** over standard Montgomery batch inversion!
+// GPU version showed **7.75x speedup** over standard Montgomery batch inversion!
 //
 // ## THE PROBLEM:
 // Standard batch inversion (Montgomery's trick):
@@ -32,7 +32,7 @@ namespace secp256k1::fast {
 //    Z_current = Z_0
 //    for each H_i:
 //        Z_current = Z_current * H_i  // Serial accumulation
-//    Result: Z_final = Z_0 * ∏H_i
+//    Result: Z_final = Z_0 * prodH_i
 //
 // 2. **Single inversion** (1 expensive operation):
 //    Z_final_inv = Z_final^{-1}
@@ -41,7 +41,7 @@ namespace secp256k1::fast {
 //    Z_inv_current = Z_final_inv
 //    for each H_i (reverse order):
 //        Z_inv_current = Z_inv_current * H_i  // Unwind the product chain
-//        Store Z_inv_current² for affine conversion
+//        Store Z_inv_current^2 for affine conversion
 //    Result: All Z_i^{-2} values computed
 //
 // ## PERFORMANCE:
@@ -53,18 +53,18 @@ namespace secp256k1::fast {
 // Compared to Montgomery batch:
 //   - Less memory traffic (no prefix product array)
 //   - Better cache/register locality
-//   - GPU: 7.75× faster (measured on RTX 4090)
-//   - CPU: Expected 2-3× faster for large batches (N > 100)
+//   - GPU: 7.75x faster (measured on RTX 4090)
+//   - CPU: Expected 2-3x faster for large batches (N > 100)
 //
 // ## WHY IT WORKS:
 // Field multiplication (~18ns) is MUCH cheaper than inversion (~350ns).
-// Even with 2×N multiplications, as long as N < 35, we win:
+// Even with 2xN multiplications, as long as N < 35, we win:
 //   Standard: N muls + 1 inv = N*18 + 350 ns
 //   H-based:  2N muls + 1 inv = 2N*18 + 350 ns
-//   Break-even: N ≈ ∞ (multiplication cost is negligible vs inversion)
+//   Break-even: N ~= inf (multiplication cost is negligible vs inversion)
 //
 // The real win: Memory access patterns. H-based has sequential access;
-// Montgomery has random access to prefix array → cache misses kill performance.
+// Montgomery has random access to prefix array -> cache misses kill performance.
 //
 // ============================================================================
 
@@ -84,19 +84,19 @@ namespace secp256k1::fast {
 /// std::vector<FieldElement> h_values = compute_jacobian_walk_h_values(Q, 256);
 /// FieldElement z0 = Q.z;
 /// 
-/// // Convert H values → Z^{-2} values (in-place)
+/// // Convert H values -> Z^{-2} values (in-place)
 /// fe_h_based_inversion(h_values.data(), z0, h_values.size());
 /// 
 /// // Now h_values contains Z^{-2} for each point
 /// for (size_t i = 0; i < h_values.size(); i++) {
-///     FieldElement x_affine = jacobian_x[i] * h_values[i];  // X / Z²
+///     FieldElement x_affine = jacobian_x[i] * h_values[i];  // X / Z^2
 /// }
 /// ```
 inline void fe_h_based_inversion(FieldElement* h_values, const FieldElement& z0_value, 
                                   std::size_t count) {
     if (count == 0) return;
     
-    // Forward pass: build Z_final = Z_0 * ∏H_i
+    // Forward pass: build Z_final = Z_0 * prodH_i
     FieldElement z_current = z0_value;
     for (std::size_t i = 0; i < count; ++i) {
         z_current *= h_values[i];  // Z_{i+1} = Z_i * H_i
@@ -117,7 +117,7 @@ inline void fe_h_based_inversion(FieldElement* h_values, const FieldElement& z0_
     }
 }
 
-/// H-based serial inversion with explicit Z₀ per point
+/// H-based serial inversion with explicit Z_0 per point
 /// 
 /// @param h_values [IN/OUT] H values per batch (size: batch_size * n_threads)
 /// @param z0_values [IN] Initial Z coordinate per thread (size: n_threads)
@@ -149,7 +149,7 @@ inline void fe_h_based_inversion_batched(FieldElement* h_values,
     // Process each thread's sequence independently
     // (Parallel on multi-core CPU via OpenMP, TBB, or std::execution)
     for (std::size_t tid = 0; tid < n_threads; ++tid) {
-        // Forward pass: Z_final = Z_0 * ∏H_i
+        // Forward pass: Z_final = Z_0 * prodH_i
         FieldElement z_current = z0_values[tid];
         
         for (std::size_t slot = 0; slot < batch_size; ++slot) {

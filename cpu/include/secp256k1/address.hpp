@@ -6,14 +6,14 @@
 // Bitcoin Address Generation + Encoding for secp256k1
 // ============================================================================
 // Address types:
-//   P2PKH  — Pay-to-Public-Key-Hash (1..., legacy, Base58Check)
-//   P2WPKH — Pay-to-Witness-Public-Key-Hash (bc1q..., SegWit v0, Bech32)
-//   P2TR   — Pay-to-Taproot (bc1p..., SegWit v1, Bech32m)
+//   P2PKH  -- Pay-to-Public-Key-Hash (1..., legacy, Base58Check)
+//   P2WPKH -- Pay-to-Witness-Public-Key-Hash (bc1q..., SegWit v0, Bech32)
+//   P2TR   -- Pay-to-Taproot (bc1p..., SegWit v1, Bech32m)
 //
 // Encoding:
-//   Base58Check — P2PKH addresses + WIF private keys
-//   Bech32      — SegWit v0 (BIP-173)
-//   Bech32m     — SegWit v1+ (BIP-350)
+//   Base58Check -- P2PKH addresses + WIF private keys
+//   Bech32      -- SegWit v0 (BIP-173)
+//   Bech32m     -- SegWit v1+ (BIP-350)
 //
 // BIP-352 Silent Payments:
 //   Privacy-preserving addresses. Sender computes unique output from
@@ -31,14 +31,14 @@
 
 namespace secp256k1 {
 
-// ── Network ──────────────────────────────────────────────────────────────────
+// -- Network ------------------------------------------------------------------
 
 enum class Network : std::uint8_t {
     Mainnet = 0,
     Testnet = 1
 };
 
-// ── Base58Check Encoding ─────────────────────────────────────────────────────
+// -- Base58Check Encoding -----------------------------------------------------
 
 // Encode data with 4-byte SHA256d checksum in Base58
 std::string base58check_encode(const std::uint8_t* data, std::size_t len);
@@ -47,7 +47,7 @@ std::string base58check_encode(const std::uint8_t* data, std::size_t len);
 std::pair<std::vector<std::uint8_t>, bool>
 base58check_decode(const std::string& encoded);
 
-// ── Bech32 / Bech32m Encoding (BIP-173 / BIP-350) ───────────────────────────
+// -- Bech32 / Bech32m Encoding (BIP-173 / BIP-350) ---------------------------
 
 enum class Bech32Encoding {
     BECH32,    // SegWit v0 (BIP-173)
@@ -73,12 +73,12 @@ struct Bech32DecodeResult {
 };
 Bech32DecodeResult bech32_decode(const std::string& addr);
 
-// ── HASH160 ──────────────────────────────────────────────────────────────────
+// -- HASH160 ------------------------------------------------------------------
 
 // HASH160(data) = RIPEMD160(SHA256(data))
 std::array<std::uint8_t, 20> hash160(const std::uint8_t* data, std::size_t len);
 
-// ── Address Derivation ───────────────────────────────────────────────────────
+// -- Address Derivation -------------------------------------------------------
 
 // P2PKH address from public key (compressed 33 bytes or uncompressed 65 bytes)
 // Returns: "1..." (mainnet) or "m/n..." (testnet)
@@ -100,7 +100,7 @@ std::string address_p2tr(const fast::Point& internal_key,
 std::string address_p2tr_raw(const std::array<std::uint8_t, 32>& output_key_x,
                              Network net = Network::Mainnet);
 
-// ── WIF (Wallet Import Format) ───────────────────────────────────────────────
+// -- WIF (Wallet Import Format) -----------------------------------------------
 
 // Encode private key as WIF string
 std::string wif_encode(const fast::Scalar& private_key,
@@ -117,7 +117,7 @@ struct WIFDecodeResult {
 };
 WIFDecodeResult wif_decode(const std::string& wif);
 
-// ── BIP-352 Silent Payments ──────────────────────────────────────────────────
+// -- BIP-352 Silent Payments --------------------------------------------------
 
 // Silent payment address: (scan_pubkey, spend_pubkey) pair
 struct SilentPaymentAddress {

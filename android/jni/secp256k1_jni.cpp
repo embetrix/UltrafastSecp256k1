@@ -1,5 +1,5 @@
 // ============================================================================
-// UltrafastSecp256k1 — JNI Bridge for Android
+// UltrafastSecp256k1 -- JNI Bridge for Android
 // ============================================================================
 // Exposes core ECC operations to Java/Kotlin via JNI.
 //
@@ -84,7 +84,7 @@ static PT point_from_uncompressed(JNIEnv* env, jbyteArray arr) {
         return PT::infinity();
     }
 
-    // Big-endian x,y → FieldElement
+    // Big-endian x,y -> FieldElement
     std::array<uint8_t, 32> xb{}, yb{};
     std::memcpy(xb.data(), buf + 1,  32);
     std::memcpy(yb.data(), buf + 33, 32);
@@ -95,7 +95,7 @@ static PT point_from_uncompressed(JNIEnv* env, jbyteArray arr) {
 }
 
 // ============================================================================
-// JNI exports — package: com.secp256k1.native
+// JNI exports -- package: com.secp256k1.native
 // ============================================================================
 extern "C" {
 
@@ -153,7 +153,7 @@ Java_com_secp256k1_native_Secp256k1_scalarSub(
 }
 
 // ----------------------------------------------------------------------------
-// Point operations (fast — no side-channel protection)
+// Point operations (fast -- no side-channel protection)
 // ----------------------------------------------------------------------------
 
 JNIEXPORT jbyteArray JNICALL
@@ -229,7 +229,7 @@ Java_com_secp256k1_native_Secp256k1_pointIsInfinity(
 }
 
 // ----------------------------------------------------------------------------
-// CT (Constant-Time) operations — side-channel resistant
+// CT (Constant-Time) operations -- side-channel resistant
 // ----------------------------------------------------------------------------
 
 JNIEXPORT jbyteArray JNICALL
@@ -264,7 +264,7 @@ Java_com_secp256k1_native_Secp256k1_ctEcdh(
     
     PT result = ct::scalar_mul(q, k);
     
-    // Extract x-coordinate (the shared secret) — already affine from to_point()
+    // Extract x-coordinate (the shared secret) -- already affine from to_point()
     auto x_bytes = result.x().to_bytes();
     return make_jbytes(env, x_bytes.data(), 32);
 }

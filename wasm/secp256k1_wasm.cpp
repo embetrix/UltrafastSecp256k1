@@ -1,5 +1,5 @@
 // ============================================================================
-// UltrafastSecp256k1 — WebAssembly C API Implementation
+// UltrafastSecp256k1 -- WebAssembly C API Implementation
 // ============================================================================
 
 #include "secp256k1_wasm.h"
@@ -15,7 +15,7 @@
 #include <array>
 #include <cstring>
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// -- Helpers ------------------------------------------------------------------
 
 namespace {
 
@@ -37,7 +37,7 @@ inline void write_point(const secp256k1::fast::Point& pt,
 
 } // namespace
 
-// ── Implementation ───────────────────────────────────────────────────────────
+// -- Implementation -----------------------------------------------------------
 
 extern "C" {
 

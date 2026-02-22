@@ -76,17 +76,17 @@ BenchResult benchmark_kg(const std::vector<Scalar>& scalars, int iterations) {
 }
 
 void print_box_top() {
-    std::cout << "╔════════════════════════════════════════════════════════════╗\n";
+    std::cout << "+============================================================+\n";
 }
 
 void print_box_bottom() {
-    std::cout << "╚════════════════════════════════════════════════════════════╝\n";
+    std::cout << "+============================================================+\n";
 }
 
 void print_centered(const std::string& text) {
     int padding = (60 - text.length()) / 2;
-    std::cout << "║" << std::string(padding, ' ') << text 
-              << std::string(60 - padding - text.length(), ' ') << "║\n";
+    std::cout << "|" << std::string(padding, ' ') << text 
+              << std::string(60 - padding - text.length(), ' ') << "|\n";
 }
 
 int main() {
@@ -134,9 +134,9 @@ int main() {
         std::string cache_path = "F:\\EccTables\\cache_w" + std::to_string(w) + "_glv.bin";
         
         if (!load_precompute_cache(cache_path)) {
-            std::cout << "  ⚠ Failed to load cache, using runtime generation\n";
+            std::cout << "  [!] Failed to load cache, using runtime generation\n";
         } else {
-            std::cout << "  ✓ Cache loaded successfully\n";
+            std::cout << "  [ok] Cache loaded successfully\n";
         }
         
         std::cout << "  Ensuring precompute ready...\n";
@@ -160,11 +160,11 @@ int main() {
         auto result = benchmark_kg(scalars, ITERATIONS);
         results.push_back({w, result});
         
-        std::cout << "  ✓ w" << w << " results:\n";
+        std::cout << "  [ok] w" << w << " results:\n";
         std::cout << "      Median:  " << std::fixed << std::setprecision(2) 
-                  << result.median_ns << " ns (" << (result.median_ns / 1000.0) << " μs)\n";
+                  << result.median_ns << " ns (" << (result.median_ns / 1000.0) << " us)\n";
         std::cout << "      Average: " << result.average_ns << " ns (" 
-                  << (result.average_ns / 1000.0) << " μs)\n";
+                  << (result.average_ns / 1000.0) << " us)\n";
         std::cout << "      Min:     " << result.min_ns << " ns\n";
         std::cout << "      Max:     " << result.max_ns << " ns\n";
         std::cout << "\n";
@@ -177,7 +177,7 @@ int main() {
     std::cout << "\n";
     
     std::cout << std::fixed << std::setprecision(2);
-    std::cout << "Window | Median (μs) | Average (μs) | Min (μs) | Max (μs) | Speedup\n";
+    std::cout << "Window | Median (us) | Average (us) | Min (us) | Max (us) | Speedup\n";
     std::cout << "-------|-------------|--------------|----------|----------|--------\n";
     
     double baseline_median = results[0].second.median_ns;
@@ -193,20 +193,20 @@ int main() {
                   << std::setw(5) << speedup << "x";
         
         if (speedup > 1.3) {
-            std::cout << " ⚡";
+            std::cout << " [*]";
         }
         if (speedup > 1.4) {
-            std::cout << "⚡";
+            std::cout << "[*]";
         }
         std::cout << "\n";
     }
     
     std::cout << "\n";
     std::cout << "Analysis:\n";
-    std::cout << "  • Larger windows = fewer point additions\n";
-    std::cout << "  • Trade-off: memory usage vs speed\n";
-    std::cout << "  • Optimal: w18-w20 (balance of speed and memory)\n";
-    std::cout << "  • Maximum: w22+ (diminishing returns due to cache misses)\n\n";
+    std::cout << "  * Larger windows = fewer point additions\n";
+    std::cout << "  * Trade-off: memory usage vs speed\n";
+    std::cout << "  * Optimal: w18-w20 (balance of speed and memory)\n";
+    std::cout << "  * Maximum: w22+ (diminishing returns due to cache misses)\n\n";
     
     // Find best
     auto best = std::min_element(results.begin(), results.end(),
@@ -214,7 +214,7 @@ int main() {
     
     std::cout << "\nBest configuration: w" << best->first 
               << " (Median: " << (best->second.median_ns / 1000.0) 
-              << " μs, Average: " << (best->second.average_ns / 1000.0) << " μs)\n";
+              << " us, Average: " << (best->second.average_ns / 1000.0) << " us)\n";
     std::cout << "Speedup: " << (baseline_median / best->second.median_ns) 
               << "x over w" << results[0].first << "\n\n";
     

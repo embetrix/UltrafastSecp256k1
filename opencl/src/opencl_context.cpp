@@ -731,7 +731,7 @@ inline void point_double_impl(JacobianPoint* r, const JacobianPoint* p) {
     r->infinity = 0;
 }
 
-// Mixed addition: Jacobian + Affine → Jacobian (CUDA-matched, write directly to r)
+// Mixed addition: Jacobian + Affine -> Jacobian (CUDA-matched, write directly to r)
 inline void point_add_mixed_impl(JacobianPoint* r, const JacobianPoint* p, const AffinePoint* q) {
     if (point_is_infinity(p)) { r->x = q->x; r->y = q->y; r->z.limbs[0]=1; r->z.limbs[1]=0; r->z.limbs[2]=0; r->z.limbs[3]=0; r->infinity=0; return; }
     FieldElement z1z1, u2, s2, h, hh, i, j, rr, v, t1;
@@ -851,7 +851,7 @@ inline int scalar_to_wnaf_cl(const Scalar* k, int* wnaf) {
     return len;
 }
 
-// wNAF scalar multiplication core: precompute table [P,3P,...,15P], scan MSB→LSB
+// wNAF scalar multiplication core: precompute table [P,3P,...,15P], scan MSB->LSB
 inline void scalar_mul_wnaf(JacobianPoint* r, const Scalar* k, const JacobianPoint* base_jac) {
     // wNAF encode
     int wnaf[260];
@@ -1167,11 +1167,11 @@ bool Context::Impl::create_kernels() {
 
     kernel_batch_jacobian_to_affine = clCreateKernel(program, "batch_jacobian_to_affine", &err);
     if (err != CL_SUCCESS) {
-        // Non-fatal — kernel may not exist in older builds
+        // Non-fatal -- kernel may not exist in older builds
         kernel_batch_jacobian_to_affine = nullptr;
     }
 
-    // Affine point addition kernels (optional — benchmark/utility)
+    // Affine point addition kernels (optional -- benchmark/utility)
     err = CL_SUCCESS;
     kernel_affine_add = clCreateKernel(program, "affine_add", &err);
     if (err != CL_SUCCESS) {

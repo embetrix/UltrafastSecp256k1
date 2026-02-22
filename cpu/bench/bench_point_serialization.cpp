@@ -73,21 +73,21 @@ BenchResult benchmark_getx(const std::vector<Point>& points, int iterations) {
 }
 
 void print_box_top() {
-    std::cout << "╔════════════════════════════════════════════════════════════╗\n";
+    std::cout << "+============================================================+\n";
 }
 
 void print_box_mid() {
-    std::cout << "╠════════════════════════════════════════════════════════════╣\n";
+    std::cout << "+============================================================+\n";
 }
 
 void print_box_bottom() {
-    std::cout << "╚════════════════════════════════════════════════════════════╝\n";
+    std::cout << "+============================================================+\n";
 }
 
 void print_centered(const std::string& text) {
     int padding = (60 - text.length()) / 2;
-    std::cout << "║" << std::string(padding, ' ') << text 
-              << std::string(60 - padding - text.length(), ' ') << "║\n";
+    std::cout << "|" << std::string(padding, ' ') << text 
+              << std::string(60 - padding - text.length(), ' ') << "|\n";
 }
 
 int main() {
@@ -155,19 +155,19 @@ int main() {
     std::cout << "Operations breakdown:\n\n";
     
     std::cout << "  to_compressed():\n";
-    std::cout << "    • Convert Jacobian → Affine (1 inverse + 2 multiplies)\n";
-    std::cout << "    • Field inverse:     ~7210 ns\n";
-    std::cout << "    • Field multiply:    ~59 ns × 2 = 118 ns\n";
-    std::cout << "    • Serialize to 33 bytes\n";
-    std::cout << "    • Expected total:    ~7400-7500 ns\n";
-    std::cout << "    • Actual:            " << compressed_result.median_ns << " ns\n\n";
+    std::cout << "    * Convert Jacobian -> Affine (1 inverse + 2 multiplies)\n";
+    std::cout << "    * Field inverse:     ~7210 ns\n";
+    std::cout << "    * Field multiply:    ~59 ns x 2 = 118 ns\n";
+    std::cout << "    * Serialize to 33 bytes\n";
+    std::cout << "    * Expected total:    ~7400-7500 ns\n";
+    std::cout << "    * Actual:            " << compressed_result.median_ns << " ns\n\n";
     
     std::cout << "  x():\n";
-    std::cout << "    • Convert Jacobian → Affine (1 inverse + 1 multiply)\n";
-    std::cout << "    • Field inverse:     ~7210 ns\n";
-    std::cout << "    • Field multiply:    ~59 ns\n";
-    std::cout << "    • Expected total:    ~7270-7350 ns\n";
-    std::cout << "    • Actual:            " << getx_result.median_ns << " ns\n\n";
+    std::cout << "    * Convert Jacobian -> Affine (1 inverse + 1 multiply)\n";
+    std::cout << "    * Field inverse:     ~7210 ns\n";
+    std::cout << "    * Field multiply:    ~59 ns\n";
+    std::cout << "    * Expected total:    ~7270-7350 ns\n";
+    std::cout << "    * Actual:            " << getx_result.median_ns << " ns\n\n";
     
     double overhead_compressed = compressed_result.median_ns - 7400;
     double overhead_getx = getx_result.median_ns - 7270;

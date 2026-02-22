@@ -10,7 +10,7 @@ using fast::Scalar;
 using fast::Point;
 using fast::FieldElement;
 
-// ── TapTweak Hash ────────────────────────────────────────────────────────────
+// -- TapTweak Hash ------------------------------------------------------------
 
 std::array<uint8_t, 32> taproot_tweak_hash(
     const std::array<uint8_t, 32>& internal_key_x,
@@ -28,7 +28,7 @@ std::array<uint8_t, 32> taproot_tweak_hash(
     return tagged_hash("TapTweak", buf, total);
 }
 
-// ── TapLeaf Hash ─────────────────────────────────────────────────────────────
+// -- TapLeaf Hash -------------------------------------------------------------
 
 std::array<uint8_t, 32> taproot_leaf_hash(
     const uint8_t* script, std::size_t script_len,
@@ -74,7 +74,7 @@ std::array<uint8_t, 32> taproot_leaf_hash(
     return ctx.finalize();
 }
 
-// ── TapBranch Hash ───────────────────────────────────────────────────────────
+// -- TapBranch Hash -----------------------------------------------------------
 
 std::array<uint8_t, 32> taproot_branch_hash(
     const std::array<uint8_t, 32>& a,
@@ -95,13 +95,13 @@ std::array<uint8_t, 32> taproot_branch_hash(
     return tagged_hash("TapBranch", buf, 64);
 }
 
-// ── Output Key Derivation ────────────────────────────────────────────────────
+// -- Output Key Derivation ----------------------------------------------------
 
 // Helper: lift x-only key to point with even y
 static std::pair<Point, bool> lift_x_even(const std::array<uint8_t, 32>& x_bytes) {
     auto px_fe = FieldElement::from_bytes(x_bytes);
 
-    // y² = x³ + 7
+    // y^2 = x^3 + 7
     auto x3 = px_fe.square() * px_fe;
     auto y2 = x3 + FieldElement::from_uint64(7);
 
@@ -125,7 +125,7 @@ std::pair<std::array<uint8_t, 32>, int> taproot_output_key(
     const uint8_t* merkle_root,
     std::size_t merkle_root_len) {
 
-    // P = lift_x(internal_key_x) — with even y
+    // P = lift_x(internal_key_x) -- with even y
     auto [P, valid] = lift_x_even(internal_key_x);
     if (!valid) return {{}, 0};
 
@@ -149,7 +149,7 @@ std::pair<std::array<uint8_t, 32>, int> taproot_output_key(
     return {q_x, parity};
 }
 
-// ── Private Key Tweaking ─────────────────────────────────────────────────────
+// -- Private Key Tweaking -----------------------------------------------------
 
 Scalar taproot_tweak_privkey(
     const Scalar& private_key,
@@ -178,7 +178,7 @@ Scalar taproot_tweak_privkey(
     return tweaked;
 }
 
-// ── Taproot Commitment Verification ──────────────────────────────────────────
+// -- Taproot Commitment Verification ------------------------------------------
 
 bool taproot_verify_commitment(
     const std::array<uint8_t, 32>& output_key_x,
@@ -196,7 +196,7 @@ bool taproot_verify_commitment(
            (expected_parity == output_key_parity);
 }
 
-// ── Merkle Root from Proof ───────────────────────────────────────────────────
+// -- Merkle Root from Proof ---------------------------------------------------
 
 std::array<uint8_t, 32> taproot_merkle_root_from_proof(
     const std::array<uint8_t, 32>& leaf_hash,
@@ -209,7 +209,7 @@ std::array<uint8_t, 32> taproot_merkle_root_from_proof(
     return current;
 }
 
-// ── Merkle Root from Leaf List ───────────────────────────────────────────────
+// -- Merkle Root from Leaf List -----------------------------------------------
 
 std::array<uint8_t, 32> taproot_merkle_root(
     const std::vector<std::array<uint8_t, 32>>& leaf_hashes) {
@@ -226,7 +226,7 @@ std::array<uint8_t, 32> taproot_merkle_root(
             if (i + 1 < level.size()) {
                 next_level.push_back(taproot_branch_hash(level[i], level[i + 1]));
             } else {
-                // Odd leaf — promote to next level
+                // Odd leaf -- promote to next level
                 next_level.push_back(level[i]);
             }
         }

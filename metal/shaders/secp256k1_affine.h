@@ -4,14 +4,14 @@
 // Pure affine-coordinate arithmetic: no Z coordinate, no projective overhead.
 //
 // When both points are in affine form (Z=1), the addition formula is:
-//   λ  = (Q.y - P.y) / (Q.x - P.x)     [= rr * H^{-1}]
-//   X3 = λ² - P.x - Q.x                 [1S + 2 subs]
-//   Y3 = λ·(P.x - X3) - P.y             [1M + 1 sub]
+//   lambda  = (Q.y - P.y) / (Q.x - P.x)     [= rr * H^{-1}]
+//   X3 = lambda^2 - P.x - Q.x                 [1S + 2 subs]
+//   Y3 = lambda*(P.x - X3) - P.y             [1M + 1 sub]
 //
-// Cost per addition: 1M (λ=rr*h_inv) + 1S (λ²) + 1M (λ*(Px-X3)) = 2M + 1S
+// Cost per addition: 1M (lambda=rr*h_inv) + 1S (lambda^2) + 1M (lambda*(Px-X3)) = 2M + 1S
 // With batch inversion: 1M + 1S per slot (the inversion is amortized).
 //
-// Comparison vs Jacobian mixed add (8M + 3S): ~3.5× fewer operations per add.
+// Comparison vs Jacobian mixed add (8M + 3S): ~3.5x fewer operations per add.
 // =============================================================================
 
 #pragma once
@@ -19,8 +19,8 @@
 #include "secp256k1_point.h"
 
 // =============================================================================
-// affine_add: P + Q → R, all affine (2M + 1S total)
-// Caller must ensure P.x ≠ Q.x (no doubling, no identity).
+// affine_add: P + Q -> R, all affine (2M + 1S total)
+// Caller must ensure P.x != Q.x (no doubling, no identity).
 // For batch pipelines where all points are distinct by construction.
 // =============================================================================
 inline AffinePoint affine_add(thread const FieldElement &px, thread const FieldElement &py,
@@ -28,54 +28,54 @@ inline AffinePoint affine_add(thread const FieldElement &px, thread const FieldE
     FieldElement h   = field_sub(qx, px);       // H = Q.x - P.x
     FieldElement rr  = field_sub(qy, py);       // rr = Q.y - P.y
     FieldElement t   = field_inv(h);             // t = H^{-1} (expensive)
-    FieldElement lam = field_mul(rr, t);         // λ = rr / H            [1M]
+    FieldElement lam = field_mul(rr, t);         // lambda = rr / H            [1M]
 
     AffinePoint r;
-    r.x = field_sqr(lam);                       // X3 = λ²               [1S]
+    r.x = field_sqr(lam);                       // X3 = lambda^2               [1S]
     r.x = field_sub(r.x, px);                   // X3 -= P.x
     r.x = field_sub(r.x, qx);                   // X3 -= Q.x
 
     r.y = field_sub(px, r.x);                   // t = P.x - X3
-    r.y = field_mul(lam, r.y);                   // Y3 = λ·(P.x - X3)    [1M]
+    r.y = field_mul(lam, r.y);                   // Y3 = lambda*(P.x - X3)    [1M]
     r.y = field_sub(r.y, py);                    // Y3 -= P.y
 
     return r;
 }
 
 // =============================================================================
-// affine_add_x_only: P + Q → X3 only (1M + 1S with pre-inverted H)
-// Returns only the X coordinate — for search pipelines where Y is not needed.
+// affine_add_x_only: P + Q -> X3 only (1M + 1S with pre-inverted H)
+// Returns only the X coordinate -- for search pipelines where Y is not needed.
 //   h_inv: precomputed (Q.x - P.x)^{-1} from batch inversion
 // =============================================================================
 inline FieldElement affine_add_x_only(thread const FieldElement &px, thread const FieldElement &py,
                                        thread const FieldElement &qx, thread const FieldElement &qy,
                                        thread const FieldElement &h_inv) {
     FieldElement rr  = field_sub(qy, py);        // rr = Q.y - P.y
-    FieldElement lam = field_mul(rr, h_inv);     // λ = rr * H^{-1}      [1M]
+    FieldElement lam = field_mul(rr, h_inv);     // lambda = rr * H^{-1}      [1M]
 
-    FieldElement rx = field_sqr(lam);            // X3 = λ²              [1S]
+    FieldElement rx = field_sqr(lam);            // X3 = lambda^2              [1S]
     rx = field_sub(rx, px);                      // X3 -= P.x
     rx = field_sub(rx, qx);                      // X3 -= Q.x
     return rx;
 }
 
 // =============================================================================
-// affine_add_lambda: P + Q → (X3, Y3) with pre-inverted H (2M + 1S)
+// affine_add_lambda: P + Q -> (X3, Y3) with pre-inverted H (2M + 1S)
 // Full addition with precomputed H^{-1} from batch inversion.
 // =============================================================================
 inline AffinePoint affine_add_lambda(thread const FieldElement &px, thread const FieldElement &py,
                                       thread const FieldElement &qx, thread const FieldElement &qy,
                                       thread const FieldElement &h_inv) {
     FieldElement rr  = field_sub(qy, py);        // rr = Q.y - P.y
-    FieldElement lam = field_mul(rr, h_inv);     // λ = rr * H^{-1}      [1M]
+    FieldElement lam = field_mul(rr, h_inv);     // lambda = rr * H^{-1}      [1M]
 
     AffinePoint r;
-    r.x = field_sqr(lam);                       // X3 = λ²               [1S]
+    r.x = field_sqr(lam);                       // X3 = lambda^2               [1S]
     r.x = field_sub(r.x, px);                   // X3 -= P.x
     r.x = field_sub(r.x, qx);                   // X3 -= Q.x
 
     r.y = field_sub(px, r.x);                   // t = P.x - X3
-    r.y = field_mul(lam, r.y);                   // Y3 = λ·(P.x - X3)    [1M]
+    r.y = field_mul(lam, r.y);                   // Y3 = lambda*(P.x - X3)    [1M]
     r.y = field_sub(r.y, py);                    // Y3 -= P.y
 
     return r;
@@ -90,13 +90,13 @@ inline FieldElement affine_compute_h(thread const FieldElement &px,
 }
 
 // =============================================================================
-// Batch Inversion (Montgomery's trick) — in-place on thread-local arrays
+// Batch Inversion (Montgomery's trick) -- in-place on thread-local arrays
 // =============================================================================
 // Input:  h[0..n-1] = H values
 // Output: h[0..n-1] = H^{-1} values
 // Temp:   prefix[0..n-1] = scratch buffer (same size as h)
 //
-// Cost: 3(n-1) multiplications + 1 field_inv ≈ 3n + 300 M-eq
+// Cost: 3(n-1) multiplications + 1 field_inv ~= 3n + 300 M-eq
 // =============================================================================
 inline void affine_batch_inv_serial(thread FieldElement* h,
                                      thread FieldElement* prefix,
@@ -120,7 +120,7 @@ inline void affine_batch_inv_serial(thread FieldElement* h,
 }
 
 // =============================================================================
-// Jacobian → Affine conversion (single point)
+// Jacobian -> Affine conversion (single point)
 // =============================================================================
 inline AffinePoint jacobian_to_affine_convert(thread const JacobianPoint &p) {
     FieldElement z_inv  = field_inv(p.z);
@@ -134,11 +134,11 @@ inline AffinePoint jacobian_to_affine_convert(thread const JacobianPoint &p) {
 }
 
 // =============================================================================
-// Batch Jacobian → Affine (Montgomery's trick on Z values)
+// Batch Jacobian -> Affine (Montgomery's trick on Z values)
 // =============================================================================
-inline void batch_jacobian_to_affine_serial(thread FieldElement* x,       // [n] J.X → affine x
-                                             thread FieldElement* y,       // [n] J.Y → affine y
-                                             thread FieldElement* z,       // [n] J.Z → scratch
+inline void batch_jacobian_to_affine_serial(thread FieldElement* x,       // [n] J.X -> affine x
+                                             thread FieldElement* y,       // [n] J.Y -> affine y
+                                             thread FieldElement* z,       // [n] J.Z -> scratch
                                              thread FieldElement* prefix,  // [n] scratch
                                              int n) {
     // Batch invert Z values

@@ -3,7 +3,7 @@
 #pragma once
 
 // ============================================================================
-// Coin Address — Unified address generation for all secp256k1 coins
+// Coin Address -- Unified address generation for all secp256k1 coins
 // ============================================================================
 // Thin wrappers over existing address.hpp functions, parameterized by
 // CoinParams. Automatically selects the correct encoding, version bytes,
@@ -31,7 +31,7 @@
 
 namespace secp256k1::coins {
 
-// ── Default Address (best format for each coin) ──────────────────────────────
+// -- Default Address (best format for each coin) ------------------------------
 
 // Generate the default/preferred address format for a coin.
 // - Bitcoin/Litecoin/DigiByte: Bech32 (P2WPKH)
@@ -41,7 +41,7 @@ std::string coin_address(const fast::Point& pubkey,
                          const CoinParams& coin,
                          bool testnet = false);
 
-// ── Explicit Address Types ───────────────────────────────────────────────────
+// -- Explicit Address Types ---------------------------------------------------
 
 // P2PKH address with coin-specific version byte
 std::string coin_address_p2pkh(const fast::Point& pubkey,
@@ -60,7 +60,7 @@ std::string coin_address_p2tr(const fast::Point& internal_key,
                               const CoinParams& coin,
                               bool testnet = false);
 
-// ── WIF (Wallet Import Format) ───────────────────────────────────────────────
+// -- WIF (Wallet Import Format) -----------------------------------------------
 
 // Encode private key as WIF with coin-specific prefix
 std::string coin_wif_encode(const fast::Scalar& private_key,
@@ -68,7 +68,7 @@ std::string coin_wif_encode(const fast::Scalar& private_key,
                             bool compressed = true,
                             bool testnet = false);
 
-// ── Full Key Generation ──────────────────────────────────────────────────────
+// -- Full Key Generation ------------------------------------------------------
 
 // Result of full key generation
 struct CoinKeyPair {

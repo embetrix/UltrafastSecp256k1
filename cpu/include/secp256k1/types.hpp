@@ -8,10 +8,10 @@
 // The canonical types.hpp lives in the root include/ directory, which is
 // shared across all backends. When building with CMake, both include paths
 // are set via target_include_directories. When building with SPM/CocoaPods,
-// the headerSearchPath("../include") cxxSetting resolves this — but
+// the headerSearchPath("../include") cxxSetting resolves this -- but
 // downstream consumers also need the header accessible from publicHeadersPath.
 //
-// DO NOT EDIT — edit the canonical version at include/secp256k1/types.hpp
+// DO NOT EDIT -- edit the canonical version at include/secp256k1/types.hpp
 // ============================================================================
 
 #pragma once

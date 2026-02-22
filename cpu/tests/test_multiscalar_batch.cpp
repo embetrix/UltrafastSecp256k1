@@ -25,7 +25,7 @@ static int tests_passed = 0;
     else { printf("  [FAIL] %s\n", msg); } \
 } while(0)
 
-// ── Shamir's Trick ───────────────────────────────────────────────────────────
+// -- Shamir's Trick -----------------------------------------------------------
 
 static void test_shamir_trick() {
     printf("\n--- Shamir's Trick ---\n");
@@ -56,7 +56,7 @@ static void test_shamir_trick() {
           "shamir_trick(a, P, 0, Q) == a*P");
 }
 
-// ── Multi-Scalar Multiplication ──────────────────────────────────────────────
+// -- Multi-Scalar Multiplication ----------------------------------------------
 
 static void test_multi_scalar_mul() {
     printf("\n--- Multi-Scalar Multiplication ---\n");
@@ -110,7 +110,7 @@ static void test_multi_scalar_mul() {
     }
 }
 
-// ── Schnorr Batch Verification ───────────────────────────────────────────────
+// -- Schnorr Batch Verification -----------------------------------------------
 
 static void test_schnorr_batch_verify() {
     printf("\n--- Schnorr Batch Verification ---\n");
@@ -151,7 +151,7 @@ static void test_schnorr_batch_verify() {
     }
     CHECK(individual_ok, "Schnorr batch: individual verification agrees");
 
-    // Corrupt one signature — batch should fail
+    // Corrupt one signature -- batch should fail
     auto corrupted = entries;
     corrupted[2].signature.s = corrupted[2].signature.s + Scalar::one();
     bool should_fail = schnorr_batch_verify(corrupted);
@@ -170,7 +170,7 @@ static void test_schnorr_batch_verify() {
     CHECK(schnorr_batch_verify(single), "Schnorr batch: single entry pass");
 }
 
-// ── ECDSA Batch Verification ─────────────────────────────────────────────────
+// -- ECDSA Batch Verification -------------------------------------------------
 
 static void test_ecdsa_batch_verify() {
     printf("\n--- ECDSA Batch Verification ---\n");
@@ -209,7 +209,7 @@ static void test_ecdsa_batch_verify() {
           "ECDSA batch identify: correctly finds sig #1");
 }
 
-// ── Main ─────────────────────────────────────────────────────────────────────
+// -- Main ---------------------------------------------------------------------
 
 int test_multiscalar_batch_run() {
     printf("=== Multi-Scalar Multiplication & Batch Verification Tests ===\n");

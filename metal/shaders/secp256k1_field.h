@@ -1,23 +1,23 @@
 // =============================================================================
-// UltrafastSecp256k1 Metal — Field Arithmetic (secp256k1_field.h)
+// UltrafastSecp256k1 Metal -- Field Arithmetic (secp256k1_field.h)
 // =============================================================================
 // secp256k1 field: F_p where p = 2^256 - 2^32 - 977
-// 256-bit integers using 8×32-bit limbs (little-endian)
+// 256-bit integers using 8x32-bit limbs (little-endian)
 //
 // Metal Shading Language (MSL) does NOT support 64-bit integer types in
 // shader functions, so all arithmetic uses 32-bit operations with explicit
 // carry propagation. Apple Silicon GPUs have outstanding 32-bit ALU
-// throughput — this is the natural representation.
+// throughput -- this is the natural representation.
 //
 // ACCELERATION STRATEGY (PTX equivalent for Metal):
 //   - Comba product scanning: column-by-column accumulation like PTX MAD_ACC
-//   - Fused multiply-add: ulong(a)*ulong(b)+carry → compiler maps to MAC
+//   - Fused multiply-add: ulong(a)*ulong(b)+carry -> compiler maps to MAC
 //   - Full loop unrolling: no dynamic indexing overhead
 //   - Branchless reduction: constant-time modular arithmetic
 //   - mad24() where applicable: Apple Silicon 1-cycle 24-bit multiply-add
 //
-// Matching CUDA: FieldElement{uint64_t limbs[4]} ↔ Metal FieldElement{uint limbs[8]}
-// Memory layout is identical — just different view granularity.
+// Matching CUDA: FieldElement{uint64_t limbs[4]} <-> Metal FieldElement{uint limbs[8]}
+// Memory layout is identical -- just different view granularity.
 // =============================================================================
 
 #pragma once
@@ -30,19 +30,19 @@ using namespace metal;
 // =============================================================================
 
 // Field prime p = 2^256 - 0x1000003D1
-// 8×32-bit limbs (little-endian)
+// 8x32-bit limbs (little-endian)
 constant uint SECP256K1_P[8] = {
     0xFFFFFC2Fu, 0xFFFFFFFEu, 0xFFFFFFFFu, 0xFFFFFFFFu,
     0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu
 };
 
-// K = 2^32 + 977 = 0x1000003D1 — reduction constant
+// K = 2^32 + 977 = 0x1000003D1 -- reduction constant
 // K split into two 32-bit limbs
 constant uint K_LO = 0x3D1u;   // low 32 bits of K (= 977)
 constant uint K_HI = 0x1u;     // high 32 bits of K
 
 // =============================================================================
-// Field Element Type — 256-bit as 8×32-bit limbs
+// Field Element Type -- 256-bit as 8x32-bit limbs
 // =============================================================================
 
 struct FieldElement {
@@ -50,14 +50,14 @@ struct FieldElement {
 };
 
 // =============================================================================
-// Multiply-Accumulate Macro — Metal equivalent of PTX MAD_ACC
+// Multiply-Accumulate Macro -- Metal equivalent of PTX MAD_ACC
 // =============================================================================
 // Accumulates:  (c0, c1, c2) += a * b
 // where (c0, c1, c2) is a 96-bit running accumulator.
 //
 // CUDA PTX does this with:  mad.lo.cc.u64 / madc.hi.cc.u64 / addc.u64
 // On Metal, the compiler maps ulong arithmetic to the ALU's native MAC units.
-// Apple Silicon's 32-bit FMA pipeline handles ulong→uint2 splits efficiently.
+// Apple Silicon's 32-bit FMA pipeline handles ulong->uint2 splits efficiently.
 
 #define METAL_MAD_ACC(c0, c1, c2, a, b)            \
     do {                                            \
@@ -99,7 +99,7 @@ inline bool field_eq(thread const FieldElement &a, thread const FieldElement &b)
 }
 
 // =============================================================================
-// Field Addition: r = (a + b) mod p — Branchless
+// Field Addition: r = (a + b) mod p -- Branchless
 // =============================================================================
 
 inline FieldElement field_add(thread const FieldElement &a, thread const FieldElement &b) {
@@ -120,7 +120,7 @@ inline FieldElement field_add(thread const FieldElement &a, thread const FieldEl
         borrow = (d >> 63); // bit 63 = sign
     }
 
-    // Select: if (carry || !borrow) → use diff, else keep r
+    // Select: if (carry || !borrow) -> use diff, else keep r
     uint use_diff = uint(carry) | uint(borrow == 0);
     uint mask = -use_diff; // 0xFFFFFFFF or 0x00000000
     uint nmask = ~mask;
@@ -131,7 +131,7 @@ inline FieldElement field_add(thread const FieldElement &a, thread const FieldEl
 }
 
 // =============================================================================
-// Field Subtraction: r = (a - b) mod p — Branchless
+// Field Subtraction: r = (a - b) mod p -- Branchless
 // =============================================================================
 
 inline FieldElement field_sub(thread const FieldElement &a, thread const FieldElement &b) {
@@ -142,7 +142,7 @@ inline FieldElement field_sub(thread const FieldElement &a, thread const FieldEl
         r.limbs[i] = uint(d);
         borrow = (d >> 63);
     }
-    // If borrow, add p — branchless
+    // If borrow, add p -- branchless
     uint mask = -(uint(borrow));
     ulong carry = 0;
     for (int i = 0; i < 8; i++) {
@@ -169,7 +169,7 @@ inline FieldElement field_negate(thread const FieldElement &a) {
 }
 
 // =============================================================================
-// 512→256 Reduction: prod[16] mod p
+// 512->256 Reduction: prod[16] mod p
 // p = 2^256 - K, K = 2^32 + 977
 // Two-pass fold with branchless final subtraction
 // =============================================================================
@@ -180,14 +180,14 @@ inline FieldElement field_reduce_512(thread const uint prod[16]) {
     for (int i = 0; i < 8; i++) acc[i] = prod[i];
     acc[8] = 0;
 
-    // Pass 1: Fold high[0..7] × K_LO (= 977)
+    // Pass 1: Fold high[0..7] x K_LO (= 977)
     for (int i = 0; i < 8; i++) {
         ulong p = ulong(prod[8 + i]) * ulong(K_LO);
         acc[i]     += uint(p);
         acc[i + 1] += uint(p >> 32);
     }
 
-    // Pass 2: Fold high[0..7] × K_HI (= 1) → shift-add by 32 bits
+    // Pass 2: Fold high[0..7] x K_HI (= 1) -> shift-add by 32 bits
     for (int i = 0; i < 8; i++) {
         acc[i + 1] += prod[8 + i];
     }
@@ -222,7 +222,7 @@ inline FieldElement field_reduce_512(thread const uint prod[16]) {
     }
 
     FieldElement r;
-    uint mask = -(uint(borrow == 0)); // if no borrow → use diff
+    uint mask = -(uint(borrow == 0)); // if no borrow -> use diff
     uint nmask = ~mask;
     for (int i = 0; i < 8; i++) {
         r.limbs[i] = (diff[i] & mask) | (uint(acc[i]) & nmask);
@@ -232,11 +232,11 @@ inline FieldElement field_reduce_512(thread const uint prod[16]) {
 
 // =============================================================================
 // Field Multiplication: r = (a * b) mod p
-// Comba Product Scanning — Metal equivalent of CUDA's PTX mul_256_512
+// Comba Product Scanning -- Metal equivalent of CUDA's PTX mul_256_512
 //
 // Uses METAL_MAD_ACC macro: column-by-column accumulation with
 // carry chain, matching the PTX mad.lo.cc / madc.hi.cc pattern.
-// Fully unrolled — no dynamic loop indexing.
+// Fully unrolled -- no dynamic loop indexing.
 // =============================================================================
 
 inline FieldElement field_mul(thread const FieldElement &a, thread const FieldElement &b) {
@@ -363,12 +363,12 @@ inline FieldElement field_mul(thread const FieldElement &a, thread const FieldEl
 }
 
 // =============================================================================
-// Field Squaring: r = a² mod p
-// Comba Product Scanning — exploits symmetry (off-diagonal doubled)
+// Field Squaring: r = a^2 mod p
+// Comba Product Scanning -- exploits symmetry (off-diagonal doubled)
 //
 // For squaring, a[i]*a[j] == a[j]*a[i], so off-diagonal products appear
 // twice. We compute them once and double, then add diagonal terms.
-// Total: 36 multiplications instead of 64 (8×8 schoolbook).
+// Total: 36 multiplications instead of 64 (8x8 schoolbook).
 // =============================================================================
 
 inline FieldElement field_sqr(thread const FieldElement &a) {
@@ -492,7 +492,7 @@ inline FieldElement field_sqr(thread const FieldElement &a) {
 }
 
 // =============================================================================
-// Repeated Squaring: r = a^(2^n) — in place
+// Repeated Squaring: r = a^(2^n) -- in place
 // =============================================================================
 
 inline FieldElement field_sqr_n(thread const FieldElement &a, int n) {
@@ -504,7 +504,7 @@ inline FieldElement field_sqr_n(thread const FieldElement &a, int n) {
 }
 
 // =============================================================================
-// Field Multiplication by Small Constant — branchless reduction
+// Field Multiplication by Small Constant -- branchless reduction
 // =============================================================================
 
 inline FieldElement field_mul_small(thread const FieldElement &a, uint small_val) {
@@ -517,7 +517,7 @@ inline FieldElement field_mul_small(thread const FieldElement &a, uint small_val
     }
     tmp[8] = uint(carry);
 
-    // Reduce: fold tmp[8] * K into low limbs (branchless — if extra==0, adds 0)
+    // Reduce: fold tmp[8] * K into low limbs (branchless -- if extra==0, adds 0)
     uint extra = tmp[8];
     ulong ek = ulong(extra) * ulong(K_LO);
     ulong s = ulong(tmp[0]) + uint(ek);
@@ -550,7 +550,7 @@ inline FieldElement field_mul_small(thread const FieldElement &a, uint small_val
 }
 
 // =============================================================================
-// Field Inverse: a^(p-2) mod p — Fermat's Little Theorem
+// Field Inverse: a^(p-2) mod p -- Fermat's Little Theorem
 // Exact addition chain from CUDA backend (field_inv_fermat_chain_impl)
 // =============================================================================
 
@@ -559,52 +559,52 @@ inline FieldElement field_inv(thread const FieldElement &a) {
 
     FieldElement x_0, x_1, x_2, x_3, x_4, x_5, t;
 
-    // x2 = a^3 (2 ones) → x_0
+    // x2 = a^3 (2 ones) -> x_0
     x_0 = field_sqr(a);
     x_0 = field_mul(x_0, a);
 
-    // x3 = a^7 (3 ones) → x_1
+    // x3 = a^7 (3 ones) -> x_1
     x_1 = field_sqr(x_0);
     x_1 = field_mul(x_1, a);
 
-    // x6 = a^63 (6 ones) → x_2
+    // x6 = a^63 (6 ones) -> x_2
     x_2 = field_sqr(x_1);
     x_2 = field_sqr(x_2);
     x_2 = field_sqr(x_2);
     x_2 = field_mul(x_2, x_1);
 
-    // x9 (9 ones) → x_3
+    // x9 (9 ones) -> x_3
     x_3 = field_sqr(x_2);
     x_3 = field_sqr(x_3);
     x_3 = field_sqr(x_3);
     x_3 = field_mul(x_3, x_1);
 
-    // x11 (11 ones) → x_4
+    // x11 (11 ones) -> x_4
     x_4 = field_sqr(x_3);
     x_4 = field_sqr(x_4);
     x_4 = field_mul(x_4, x_0);
 
-    // x22 (22 ones) → x_3 (reuse)
+    // x22 (22 ones) -> x_3 (reuse)
     t = field_sqr_n(x_4, 11);
     x_3 = field_mul(t, x_4);
 
-    // x44 (44 ones) → x_4 (reuse)
+    // x44 (44 ones) -> x_4 (reuse)
     t = field_sqr_n(x_3, 22);
     x_4 = field_mul(t, x_3);
 
-    // x88 (88 ones) → x_5
+    // x88 (88 ones) -> x_5
     t = field_sqr_n(x_4, 44);
     x_5 = field_mul(t, x_4);
 
-    // x176 (176 ones) → x_5 (reuse)
+    // x176 (176 ones) -> x_5 (reuse)
     t = field_sqr_n(x_5, 88);
     x_5 = field_mul(t, x_5);
 
-    // x220 (220 ones) → x_5
+    // x220 (220 ones) -> x_5
     x_5 = field_sqr_n(x_5, 44);
     x_5 = field_mul(x_5, x_4);
 
-    // x223 (223 ones) → x_5
+    // x223 (223 ones) -> x_5
     x_5 = field_sqr(x_5);
     x_5 = field_sqr(x_5);
     x_5 = field_sqr(x_5);

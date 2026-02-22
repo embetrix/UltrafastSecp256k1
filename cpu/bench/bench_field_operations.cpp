@@ -140,9 +140,9 @@ double bench_inverse(const std::vector<FieldElement>& elements, size_t iteration
 }
 
 void print_header() {
-    std::cout << "╔════════════════════════════════════════════════════════╗\n";
-    std::cout << "║     FieldElement Operations Benchmark                 ║\n";
-    std::cout << "╚════════════════════════════════════════════════════════╝\n\n";
+    std::cout << "+========================================================+\n";
+    std::cout << "|     FieldElement Operations Benchmark                 |\n";
+    std::cout << "+========================================================+\n\n";
 }
 
 void print_result(const std::string& operation, double ns_per_op) {
@@ -169,7 +169,7 @@ int main() {
     std::cout << "\nRunning benchmarks (" << ITERATIONS << " iterations each)...\n\n";
     
     // Benchmark each operation
-    std::cout << "═══════════════════════════════════════════════════════\n";
+    std::cout << "=======================================================\n";
     
     double mul_time = bench_multiply(elements, ITERATIONS);
     print_result("Multiply", mul_time);
@@ -186,21 +186,21 @@ int main() {
     double inv_time = bench_inverse(elements, 1000);  // Inverse is slow, use fewer iterations
     print_result("Inverse", inv_time);
     
-    std::cout << "═══════════════════════════════════════════════════════\n\n";
+    std::cout << "=======================================================\n\n";
     
     // Analysis
     std::cout << "Analysis:\n";
-    std::cout << "  • Square vs Multiply: ";
+    std::cout << "  * Square vs Multiply: ";
     double sqr_ratio = (mul_time - sqr_time) / mul_time * 100.0;
     std::cout << std::fixed << std::setprecision(1) << sqr_ratio << "% faster\n";
     
-    std::cout << "  • Add cost: ";
+    std::cout << "  * Add cost: ";
     double add_ratio = add_time / mul_time * 100.0;
     std::cout << std::fixed << std::setprecision(1) << add_ratio << "% of multiply\n";
     
-    std::cout << "  • Inverse cost: ";
+    std::cout << "  * Inverse cost: ";
     double inv_ratio = inv_time / mul_time;
-    std::cout << std::fixed << std::setprecision(1) << inv_ratio << "× multiply\n";
+    std::cout << std::fixed << std::setprecision(1) << inv_ratio << "x multiply\n";
     
     std::cout << "\nNote: This benchmark runs with BMI2 assembly if CPU supports it.\n";
     std::cout << "      Check field.cpp mul_impl/square_impl for runtime detection.\n";

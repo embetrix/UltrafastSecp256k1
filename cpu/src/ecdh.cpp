@@ -7,7 +7,7 @@ namespace secp256k1 {
 using fast::Scalar;
 using fast::Point;
 
-// ── ECDH: SHA-256(compressed point) ──────────────────────────────────────────
+// -- ECDH: SHA-256(compressed point) ------------------------------------------
 
 std::array<std::uint8_t, 32> ecdh_compute(
     const Scalar& private_key,
@@ -25,7 +25,7 @@ std::array<std::uint8_t, 32> ecdh_compute(
     return SHA256::hash(compressed.data(), compressed.size());
 }
 
-// ── ECDH: SHA-256(x-coordinate) ──────────────────────────────────────────────
+// -- ECDH: SHA-256(x-coordinate) ----------------------------------------------
 
 std::array<std::uint8_t, 32> ecdh_compute_xonly(
     const Scalar& private_key,
@@ -42,7 +42,7 @@ std::array<std::uint8_t, 32> ecdh_compute_xonly(
     return SHA256::hash(x_bytes.data(), x_bytes.size());
 }
 
-// ── ECDH: Raw x-coordinate ──────────────────────────────────────────────────
+// -- ECDH: Raw x-coordinate --------------------------------------------------
 
 std::array<std::uint8_t, 32> ecdh_compute_raw(
     const Scalar& private_key,

@@ -1,5 +1,5 @@
 // ============================================================================
-// shim_extrakeys.cpp — x-only pubkeys and keypairs
+// shim_extrakeys.cpp -- x-only pubkeys and keypairs
 // ============================================================================
 #include "secp256k1_extrakeys.h"
 #include "secp256k1.h"
@@ -15,7 +15,7 @@ using namespace secp256k1::fast;
 
 extern "C" {
 
-// ── X-only public key ────────────────────────────────────────────────────
+// -- X-only public key ----------------------------------------------------
 // Opaque layout: data[0..31] = X big-endian, data[32..63] = zeros (padding)
 
 int secp256k1_xonly_pubkey_parse(
@@ -78,7 +78,7 @@ int secp256k1_xonly_pubkey_from_pubkey(
     return 1;
 }
 
-// ── Keypair ──────────────────────────────────────────────────────────────
+// -- Keypair --------------------------------------------------------------
 // Layout: data[0..31] = secret key, data[32..95] = pubkey opaque (X || Y)
 
 int secp256k1_keypair_create(

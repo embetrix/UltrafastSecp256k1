@@ -1,5 +1,5 @@
 // =============================================================================
-// UltrafastSecp256k1 Metal — Host-side Metal Runtime (metal_runtime.h)
+// UltrafastSecp256k1 Metal -- Host-side Metal Runtime (metal_runtime.h)
 // =============================================================================
 // C++ wrapper for Apple Metal compute pipeline.
 // Manages device, command queues, pipeline states, and buffer I/O.
@@ -24,7 +24,7 @@
 #include <functional>
 #include <stdexcept>
 
-// Forward declarations — actual Metal types are Objective-C objects
+// Forward declarations -- actual Metal types are Objective-C objects
 // We use opaque pointers in the C++ header to avoid requiring .mm everywhere
 #ifdef __OBJC__
 #import <Metal/Metal.h>
@@ -59,7 +59,7 @@ struct DeviceInfo {
 };
 
 // =============================================================================
-// Buffer Wrapper — RAII wrapper for MTLBuffer
+// Buffer Wrapper -- RAII wrapper for MTLBuffer
 // =============================================================================
 
 class MetalBuffer {
@@ -73,7 +73,7 @@ public:
     MetalBuffer(const MetalBuffer&) = delete;
     MetalBuffer& operator=(const MetalBuffer&) = delete;
 
-    // Data access (unified memory — no explicit copy needed!)
+    // Data access (unified memory -- no explicit copy needed!)
     void* contents();
     const void* contents() const;
     size_t length() const;
@@ -108,7 +108,7 @@ private:
 };
 
 // =============================================================================
-// ComputePipeline — Wrapper for MTLComputePipelineState
+// ComputePipeline -- Wrapper for MTLComputePipelineState
 // =============================================================================
 
 class ComputePipeline {
@@ -138,7 +138,7 @@ private:
 };
 
 // =============================================================================
-// MetalRuntime — Main interface for GPU compute
+// MetalRuntime -- Main interface for GPU compute
 // =============================================================================
 
 class MetalRuntime {
@@ -146,7 +146,7 @@ public:
     MetalRuntime();
     ~MetalRuntime();
 
-    // Initialize — select device (default = system default GPU)
+    // Initialize -- select device (default = system default GPU)
     bool init(int device_id = 0);
 
     // Device info
@@ -161,7 +161,7 @@ public:
     // Create compute pipeline for a kernel function
     ComputePipeline make_pipeline(const std::string& function_name);
 
-    // Buffer management (Apple Silicon unified memory — zero-copy!)
+    // Buffer management (Apple Silicon unified memory -- zero-copy!)
     MetalBuffer alloc_buffer(size_t bytes);
     MetalBuffer alloc_buffer_shared(size_t bytes);  // Explicit shared mode
     MetalBuffer alloc_buffer_private(size_t bytes);  // GPU-only (faster for intermediates)
@@ -178,7 +178,7 @@ public:
                      uint32_t threadgroup_size,
                      const std::vector<MetalBuffer*>& buffers);
 
-    // Synchronous dispatch — blocks until GPU completes
+    // Synchronous dispatch -- blocks until GPU completes
     void dispatch_sync(const ComputePipeline& pipeline,
                        uint32_t grid_size,
                        uint32_t threadgroup_size,

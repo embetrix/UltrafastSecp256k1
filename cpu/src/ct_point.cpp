@@ -1,17 +1,17 @@
 // ============================================================================
-// Constant-Time Point Arithmetic — Implementation (5×52 Optimized)
+// Constant-Time Point Arithmetic -- Implementation (5x52 Optimized)
 // ============================================================================
 // Complete addition formula + CT scalar multiplication for secp256k1.
 //
-// INTERNAL REPRESENTATION: FieldElement52 (5×52-bit limbs with lazy reduction)
+// INTERNAL REPRESENTATION: FieldElement52 (5x52-bit limbs with lazy reduction)
 // This eliminates the function-call overhead of ct::field_* wrappers and
-// leverages the ~3.6× faster force-inlined 5×52 multiply/square kernels.
+// leverages the ~3.6x faster force-inlined 5x52 multiply/square kernels.
 //
-// Conversion to/from 4×64 FieldElement occurs only at API boundaries
-// (from_point / to_point). All internal arithmetic stays in 5×52.
+// Conversion to/from 4x64 FieldElement occurs only at API boundaries
+// (from_point / to_point). All internal arithmetic stays in 5x52.
 //
 // Magnitude tracking: mul/sqr produce magnitude 1 output.
-// Lazy adds accumulate magnitude. Max magnitude in point ops ≈ 30,
+// Lazy adds accumulate magnitude. Max magnitude in point ops ~= 30,
 // well within the 4096 headroom (12 bits per limb).
 //
 // Complete addition:
@@ -20,13 +20,13 @@
 //   (Renes, Costello, Bathalter 2016), adapted for a=0 (secp256k1).
 //
 // CT scalar multiplication (GLV-OPTIMIZED):
-//   Uses GLV endomorphism φ(x,y)=(β·x,y) to split 256-bit scalar
-//   into two 128-bit halves: k = k1 + k2·λ (mod n).
-//   Strauss interleaving: 32 windows × (4 dbl + 2 mixed_add).
+//   Uses GLV endomorphism phi(x,y)=(beta*x,y) to split 256-bit scalar
+//   into two 128-bit halves: k = k1 + k2*lambda (mod n).
+//   Strauss interleaving: 32 windows x (4 dbl + 2 mixed_add).
 //   Total: 128 doublings + 64 mixed_complete additions.
 //
 // CT generator multiplication (OPTIMIZED):
-//   Uses precomputed table of 64×16 affine G-multiples.
+//   Uses precomputed table of 64x16 affine G-multiples.
 //   Runtime: 64 mixed Jacobian+Affine additions + 64 CT lookups(16).
 //   NO doublings needed.
 // ============================================================================
@@ -49,20 +49,20 @@
 
 namespace secp256k1::ct {
 
-// ─── secp256k1 curve constant b = 7 (4×64 for API-boundary functions) ────────
+// --- secp256k1 curve constant b = 7 (4x64 for API-boundary functions) --------
 static const FieldElement B7 = FieldElement::from_uint64(7);
 
 // ============================================================================
-// 5×52 Optimized Path (requires __int128 / SECP256K1_FAST_52BIT)
+// 5x52 Optimized Path (requires __int128 / SECP256K1_FAST_52BIT)
 // ============================================================================
 #if defined(SECP256K1_FAST_52BIT)
 
-// ─── Type aliases ────────────────────────────────────────────────────────────
+// --- Type aliases ------------------------------------------------------------
 using FE52 = secp256k1::fast::FieldElement52;
 
-// ─── 5×52 CT Helper Functions ────────────────────────────────────────────────
+// --- 5x52 CT Helper Functions ------------------------------------------------
 // All operations on FieldElement52 are inherently constant-time:
-//   - mul/sqr: fixed __int128 multiply chain → MULX (data-independent)
+//   - mul/sqr: fixed __int128 multiply chain -> MULX (data-independent)
 //   - add: 5 plain uint64_t additions (no branches)
 //   - negate: (m+1)*p - a (no branches)
 //   - normalize: branchless mask-based conditional subtract
@@ -70,7 +70,7 @@ using FE52 = secp256k1::fast::FieldElement52;
 
 namespace /* FE52 CT helpers */ {
 
-// CT conditional move for 5×52 field element
+// CT conditional move for 5x52 field element
 inline void fe52_cmov(FE52* dst, const FE52& src, std::uint64_t mask) noexcept {
     dst->n[0] ^= (dst->n[0] ^ src.n[0]) & mask;
     dst->n[1] ^= (dst->n[1] ^ src.n[1]) & mask;
@@ -120,20 +120,20 @@ inline std::uint64_t fe52_normalizes_to_zero(const FE52& a) noexcept {
 
     // After two passes, zero is represented as either [0,0,0,0,0] or p.
     // Check both representations constant-time.
-    // p in 5×52: {0xFFFFEFFFFFC2F, 0xFFFFFFFFFFFFF, 0xFFFFFFFFFFFFF, 0xFFFFFFFFFFFFF, 0xFFFFFFFFFFFF}
+    // p in 5x52: {0xFFFFEFFFFFC2F, 0xFFFFFFFFFFFFF, 0xFFFFFFFFFFFFF, 0xFFFFFFFFFFFFF, 0xFFFFFFFFFFFF}
     std::uint64_t z0 = t0 | t1 | t2 | t3 | t4;
     std::uint64_t z1 = (t0 ^ 0x000FFFFEFFFFFC2FULL) | (t1 ^ M52) |
                        (t2 ^ M52) | (t3 ^ M52) | (t4 ^ M48);
     return is_zero_mask(z0) | is_zero_mask(z1);
 }
 
-// ─── Variable-time Jacobian + Affine Addition (for table build) ──────────────
+// --- Variable-time Jacobian + Affine Addition (for table build) --------------
 // NOT constant-time: used only for table precomputation where the POINT (not
 // scalar) is public. Standard formula: 3S + 8M per addition vs 5S + 12M for
-// Jac+Jac. Caller ensures no degenerate cases (P ≠ ±Q, P ≠ ∞, Q ≠ ∞).
+// Jac+Jac. Caller ensures no degenerate cases (P != +/-Q, P != inf, Q != inf).
 //
 // Stores the Jacobian result in (rx, ry, rz). FE52-native throughout.
-// Output magnitudes: x M=7, y M=3, z M=1 (self-stabilizing — safe to chain
+// Output magnitudes: x M=7, y M=3, z M=1 (self-stabilizing -- safe to chain
 // without normalize_weak). bx, by must be M=1 (from mul/sqr).
 // Also outputs the Z-ratio (h) for global-Z normalization.
 // The Z-ratio satisfies: result.z = a.z * zr_out.
@@ -166,11 +166,11 @@ inline JacFE52 jac_add_ge_var_zr(const JacFE52& a,
     return {x3, y3, z3};
 }
 
-// ─── FE52 Native Field Inversion (Fermat's little theorem) ──────────────────
+// --- FE52 Native Field Inversion (Fermat's little theorem) ------------------
 // Computes a^(-1) = a^(p-2) mod p using optimal addition chain.
 // p = 2^256 - 2^32 - 977. Binary structure of p-2 has blocks of 1s with
 // lengths {1, 2, 22, 223}. Uses 253 squarings + 14 multiplications.
-// All operations in native FE52 — no 4×64 conversion overhead.
+// All operations in native FE52 -- no 4x64 conversion overhead.
 //
 // Adapted from bitcoin-core/secp256k1 field_impl.h (MIT license).
 
@@ -178,12 +178,12 @@ inline FE52 fe52_inverse(const FE52& a) noexcept {
     FE52 x2, x3, x6, x9, x11, x22, x44, x88, x176, x220, x223, t1;
 
     // x2 = a^(2^2-1) = a^3
-    x2 = a.square();              // a²
-    x2 = x2 * a;                  // a³
+    x2 = a.square();              // a^2
+    x2 = x2 * a;                  // a^3
 
     // x3 = a^(2^3-1) = a^7
-    x3 = x2.square();             // a⁶
-    x3 = x3 * a;                  // a⁷
+    x3 = x2.square();             // a^6
+    x3 = x3 * a;                  // a^7
 
     // x6 = a^(2^6-1)
     x6 = x3;
@@ -247,7 +247,7 @@ inline FE52 fe52_inverse(const FE52& a) noexcept {
     return t1;
 }
 
-// ─── FE52 Batch Inversion (Montgomery's trick) ──────────────────────────────
+// --- FE52 Batch Inversion (Montgomery's trick) ------------------------------
 // Computes z_inv[i] = z[i]^{-1} mod p for all i in [0, n).
 // Cost: 1 inversion + 3(n-1) multiplications (vs n inversions).
 // All z[i] MUST be non-zero (caller ensures by excluding infinity entries).
@@ -265,7 +265,7 @@ inline void fe52_batch_inverse(FE52* z_inv, const FE52* z, std::size_t n) noexce
         z_inv[i] = z_inv[i - 1] * z[i];   // M=1 after mul
     }
 
-    // Single inversion of the accumulated product — native FE52 (no 4×64 detour)
+    // Single inversion of the accumulated product -- native FE52 (no 4x64 detour)
     FE52 acc = fe52_inverse(z_inv[n - 1]);
 
     // Backward propagation: extract individual inverses
@@ -279,14 +279,14 @@ inline void fe52_batch_inverse(FE52* z_inv, const FE52* z, std::size_t n) noexce
 } // anonymous namespace (FE52 CT helpers)
 
 
-// ─── CTJacobianPoint helpers ─────────────────────────────────────────────────
+// --- CTJacobianPoint helpers -------------------------------------------------
 
 CTJacobianPoint CTJacobianPoint::from_point(const Point& p) noexcept {
     CTJacobianPoint r;
     if (p.is_infinity()) {
         r = make_infinity();
     } else {
-        // Direct FE52 access: avoids FE52→FE(4×64)→FE52 double conversion
+        // Direct FE52 access: avoids FE52->FE(4x64)->FE52 double conversion
         r.x = p.X52();
         r.y = p.Y52();
         r.z = p.Z52();
@@ -303,7 +303,7 @@ Point CTJacobianPoint::to_point() const noexcept {
     if (z.is_zero()) {
         return Point::infinity();
     }
-    // Direct FE52 construction: avoids 3× to_fe + Point ctor 3× from_fe round-trip
+    // Direct FE52 construction: avoids 3x to_fe + Point ctor 3x from_fe round-trip
     return Point::from_jacobian52(x, y, z, false);
 }
 
@@ -316,7 +316,7 @@ CTJacobianPoint CTJacobianPoint::make_infinity() noexcept {
     return r;
 }
 
-// ─── CT Conditional Operations on Points ─────────────────────────────────────
+// --- CT Conditional Operations on Points -------------------------------------
 
 void point_cmov(CTJacobianPoint* r, const CTJacobianPoint& a,
                 std::uint64_t mask) noexcept {
@@ -359,7 +359,7 @@ CTJacobianPoint point_table_lookup(const CTJacobianPoint* table,
     return result;
 }
 
-// ─── CT Conditional Operations on Affine Points ──────────────────────────────
+// --- CT Conditional Operations on Affine Points ------------------------------
 
 void affine_cmov(CTAffinePoint* r, const CTAffinePoint& a,
                  std::uint64_t mask) noexcept {
@@ -380,8 +380,8 @@ CTAffinePoint affine_table_lookup(const CTAffinePoint* table,
     return result;
 }
 
-// ─── Signed-Digit Affine Table Lookup (Hamburg encoding) ─────────────────────
-// Table stores odd multiples: [1·P, 3·P, 5·P, ..., (2^group_size - 1)·P]
+// --- Signed-Digit Affine Table Lookup (Hamburg encoding) ---------------------
+// Table stores odd multiples: [1*P, 3*P, 5*P, ..., (2^group_size - 1)*P]
 // (table_size = 2^(group_size-1) entries)
 //
 // n is a group_size-bit value. Its bits are interpreted as signs of powers:
@@ -389,7 +389,7 @@ CTAffinePoint affine_table_lookup(const CTAffinePoint* table,
 // This always yields an ODD number in [-(2^group_size-1), (2^group_size-1)].
 //
 // The top bit selects sign (0 = negative), remaining bits encode the index.
-// Result is NEVER infinity — the signed-digit transform guarantees this.
+// Result is NEVER infinity -- the signed-digit transform guarantees this.
 
 CTAffinePoint affine_table_lookup_signed(const CTAffinePoint* table,
                                           std::size_t table_size,
@@ -400,15 +400,15 @@ CTAffinePoint affine_table_lookup_signed(const CTAffinePoint* table,
     return result;
 }
 
-// ─── In-Place Signed-Digit Affine Table Lookup ───────────────────────────────
-// Writes directly into *out — zero return copies.
+// --- In-Place Signed-Digit Affine Table Lookup -------------------------------
+// Writes directly into *out -- zero return copies.
 // AVX2 path: vectorized 256-bit cmov using VPAND/VPXOR over full CTAffinePoint
-// (x.n[5] + y.n[5] = 80 bytes = 2.5 × ymm256 registers).
+// (x.n[5] + y.n[5] = 80 bytes = 2.5 x ymm256 registers).
 // Scalar fallback: original 5-limb XOR/AND per field element.
 
 #if SECP256K1_CT_AVX2
 
-// ─── Always-inline AVX2 table lookup core ────────────────────────────────────
+// --- Always-inline AVX2 table lookup core ------------------------------------
 // NORMALIZE_Y: if false, skip normalize_weak before Y-negate (safe when table
 // entries are known magnitude-1, i.e. produced by multiplication).  Saves ~5ns.
 template<bool NORMALIZE_Y>
@@ -448,7 +448,7 @@ void table_lookup_core(CTAffinePoint* out,
         __m128i s2lo = _mm_loadu_si128(reinterpret_cast<const __m128i*>(src + 2));
         __m256i s2 = _mm256_castsi128_si256(s2lo);
 
-        // r = (r ^ s) & mask ^ r  ≡  mask ? s : r
+        // r = (r ^ s) & mask ^ r  ==  mask ? s : r
         r0 = _mm256_xor_si256(r0, _mm256_and_si256(_mm256_xor_si256(r0, s0), vmask));
         r1 = _mm256_xor_si256(r1, _mm256_and_si256(_mm256_xor_si256(r1, s1), vmask));
         // For the last partial register, use 128-bit ops
@@ -464,7 +464,7 @@ void table_lookup_core(CTAffinePoint* out,
     _mm256_storeu_si256(dst + 1, r1);
     _mm_storeu_si128(reinterpret_cast<__m128i*>(dst + 2), _mm256_castsi256_si128(r2));
 
-    // Conditional Y-negate (sign handling) — scalar, runs once
+    // Conditional Y-negate (sign handling) -- scalar, runs once
     FE52 neg_y = out->y;
     if constexpr (NORMALIZE_Y) {
         neg_y.normalize_weak();
@@ -486,7 +486,7 @@ void affine_table_lookup_signed_into(CTAffinePoint* out,
 
 #else // Scalar fallback
 
-// ─── Always-inline scalar table lookup core (non-AVX2 path) ──────────────────
+// --- Always-inline scalar table lookup core (non-AVX2 path) ------------------
 template<bool NORMALIZE_Y>
 __attribute__((always_inline)) inline
 void table_lookup_core(CTAffinePoint* out,
@@ -533,13 +533,13 @@ void affine_table_lookup_signed_into(CTAffinePoint* out,
 
 #endif // SECP256K1_CT_AVX2
 
-// ─── Complete Addition (Jacobian, a=0, 5×52) ────────────────────────────────
+// --- Complete Addition (Jacobian, a=0, 5x52) --------------------------------
 // Brier-Joye unified addition/doubling formula for general J+J.
 // Handles all cases in a single branchless codepath:
 //   P+Q (general), P+P (doubling), P+O, O+Q, P+(-P)=O
 // Cost: 11M + 6S (vs previous 13M+9S dual-path approach).
-// Reference: Eric Brier, Marc Joye — "Weierstrass Elliptic Curves and
-//   Side-Channel Attacks" (PKC 2002), adapted for Z1,Z2 ≠ 1.
+// Reference: Eric Brier, Marc Joye -- "Weierstrass Elliptic Curves and
+//   Side-Channel Attacks" (PKC 2002), adapted for Z1,Z2 != 1.
 
 CTJacobianPoint point_add_complete(const CTJacobianPoint& p,
                                    const CTJacobianPoint& q) noexcept {
@@ -551,66 +551,66 @@ CTJacobianPoint point_add_complete(const CTJacobianPoint& p,
     FE52 Y2 = q.y; Y2.normalize_weak();
     FE52 Z2 = q.z; Z2.normalize_weak();
 
-    // ── Projective coordinates ──
-    FE52 z1z1 = Z1.square();                           // Z1²          [sqr #1]
-    FE52 z2z2 = Z2.square();                           // Z2²          [sqr #2]
-    FE52 u1   = X1 * z2z2;                             // U1 = X1·Z2²  [mul #1]
-    FE52 u2   = X2 * z1z1;                             // U2 = X2·Z1²  [mul #2]
-    FE52 s1   = (Y1 * z2z2) * Z2;                      // S1 = Y1·Z2³  [mul #3,#4]
-    FE52 s2   = (Y2 * z1z1) * Z1;                      // S2 = Y2·Z1³  [mul #5,#6]
-    FE52 z    = Z1 * Z2;                               // Z  = Z1·Z2   [mul #7]
+    // -- Projective coordinates --
+    FE52 z1z1 = Z1.square();                           // Z1^2          [sqr #1]
+    FE52 z2z2 = Z2.square();                           // Z2^2          [sqr #2]
+    FE52 u1   = X1 * z2z2;                             // U1 = X1*Z2^2  [mul #1]
+    FE52 u2   = X2 * z1z1;                             // U2 = X2*Z1^2  [mul #2]
+    FE52 s1   = (Y1 * z2z2) * Z2;                      // S1 = Y1*Z2^3  [mul #3,#4]
+    FE52 s2   = (Y2 * z1z1) * Z1;                      // S2 = Y2*Z1^3  [mul #5,#6]
+    FE52 z    = Z1 * Z2;                               // Z  = Z1*Z2   [mul #7]
 
-    // ── Unified formula: T = U1+U2, M = S1+S2 ──
+    // -- Unified formula: T = U1+U2, M = S1+S2 --
     FE52 t_val  = u1 + u2;                             // T = U1+U2            (M=2)
     FE52 m_val  = s1 + s2;                             // M = S1+S2            (M=2)
 
-    // R = T² - U1·U2
-    FE52 rr     = t_val.square();                       // T²                   [sqr #3]
+    // R = T^2 - U1*U2
+    FE52 rr     = t_val.square();                       // T^2                   [sqr #3]
     FE52 neg_u2 = u2.negate(1);                         // -U2                  (M=2)
-    FE52 tt     = u1 * neg_u2;                          // -U1·U2               [mul #8]
-    rr = rr + tt;                                       // R = T²-U1·U2         (M=2)
+    FE52 tt     = u1 * neg_u2;                          // -U1*U2               [mul #8]
+    rr = rr + tt;                                       // R = T^2-U1*U2         (M=2)
 
-    // ── Degenerate case: M normalizes to zero ⟹ y1 = -y2 ──
+    // -- Degenerate case: M normalizes to zero ==> y1 = -y2 --
     std::uint64_t degen     = fe52_normalizes_to_zero(m_val);
     std::uint64_t not_degen = ~degen;
 
     // Alternate lambda = (S1-S2)/(U1-U2) for the degenerate case
-    FE52 rr_alt = s1 + s1;                             // 2·S1                 (M=2)
+    FE52 rr_alt = s1 + s1;                             // 2*S1                 (M=2)
     FE52 m_alt  = u1 + neg_u2;                         // U1-U2                (M=3)
 
     fe52_cmov(&rr_alt, rr,    not_degen);              // rr_alt = R if !degen
     fe52_cmov(&m_alt,  m_val, not_degen);              // m_alt  = M if !degen
 
-    // ── Compute result coordinates ──
-    FE52 nn    = m_alt.square();                        // Malt²                [sqr #4]
+    // -- Compute result coordinates --
+    FE52 nn    = m_alt.square();                        // Malt^2                [sqr #4]
     FE52 q_val = t_val.negate(2);                       // -T                   (M=3)
-    q_val = q_val * nn;                                 // Q = -T·Malt²         [mul #9]
+    q_val = q_val * nn;                                 // Q = -T*Malt^2         [mul #9]
 
-    // M³·Malt: equals Malt⁴ when M≡Malt (non-degen), or ~0 when M≡0 (degen)
-    nn = nn.square();                                   // Malt⁴                [sqr #5]
-    fe52_cmov(&nn, m_val, degen);                       // M³·Malt
+    // M^3*Malt: equals Malt^4 when M==Malt (non-degen), or ~0 when M==0 (degen)
+    nn = nn.square();                                   // Malt^4                [sqr #5]
+    fe52_cmov(&nn, m_val, degen);                       // M^3*Malt
 
-    FE52 x3 = rr_alt.square() + q_val;                 // X3 = Ralt²+Q         [sqr #6]
-    FE52 z3 = z * m_alt;                                // Z3 = Z·Malt          [mul #10]
+    FE52 x3 = rr_alt.square() + q_val;                 // X3 = Ralt^2+Q         [sqr #6]
+    FE52 z3 = z * m_alt;                                // Z3 = Z*Malt          [mul #10]
 
-    FE52 tq  = (x3 + x3) + q_val;                      // 2·X3+Q               (M=5)
-    FE52 y3p = (rr_alt * tq) + nn;                      // Ralt·(2X3+Q)+M³Malt  [mul #11]
+    FE52 tq  = (x3 + x3) + q_val;                      // 2*X3+Q               (M=5)
+    FE52 y3p = (rr_alt * tq) + nn;                      // Ralt*(2X3+Q)+M^3Malt  [mul #11]
     FE52 y3  = y3p.negate(5).half();                    // Y3 = -(...)/2
 
-    // ── Infinity handling ──
+    // -- Infinity handling --
     std::uint64_t z3_zero = fe52_normalizes_to_zero(z3);
 
-    // If P is ∞ → result = Q
+    // If P is inf -> result = Q
     fe52_cmov(&x3, X2, p.infinity);
     fe52_cmov(&y3, Y2, p.infinity);
     fe52_cmov(&z3, Z2, p.infinity);
 
-    // If Q is ∞ → result = P
+    // If Q is inf -> result = P
     fe52_cmov(&x3, X1, q.infinity);
     fe52_cmov(&y3, Y1, q.infinity);
     fe52_cmov(&z3, Z1, q.infinity);
 
-    // Infinity flag: z3==0 (P==-Q) when neither input ∞; or both ∞.
+    // Infinity flag: z3==0 (P==-Q) when neither input inf; or both inf.
     std::uint64_t result_inf = z3_zero & ~p.infinity & ~q.infinity;
     result_inf |= p.infinity & q.infinity;
 
@@ -622,9 +622,9 @@ CTJacobianPoint point_add_complete(const CTJacobianPoint& p,
     return result;
 }
 
-// ─── Mixed Jacobian+Affine Complete Addition (a=0, 5×52) ─────────────────────
+// --- Mixed Jacobian+Affine Complete Addition (a=0, 5x52) ---------------------
 // Brier-Joye unified addition/doubling (J + Affine) with full infinity handling.
-// Cost: 7M + 5S. Handles all cases: P+Q, P+P, P+∞, ∞+Q, P+(-P)=∞, ∞+∞.
+// Cost: 7M + 5S. Handles all cases: P+Q, P+P, P+inf, inf+Q, P+(-P)=inf, inf+inf.
 
 CTJacobianPoint point_add_mixed_complete(const CTJacobianPoint& p,
                                           const CTAffinePoint& q) noexcept {
@@ -632,55 +632,55 @@ CTJacobianPoint point_add_mixed_complete(const CTJacobianPoint& p,
     FE52 Y1 = p.y;
     FE52 Z1 = p.z;
 
-    // ── Brier-Joye unified (Z2=1): 7M + 5S ──
-    FE52 zz      = Z1.square();                        // Z1²          [sqr #1]
+    // -- Brier-Joye unified (Z2=1): 7M + 5S --
+    FE52 zz      = Z1.square();                        // Z1^2          [sqr #1]
     FE52 u1      = X1;                                 // U1 = X1
-    FE52 u2      = q.x * zz;                           // U2 = x2·Z1²  [mul #1]
+    FE52 u2      = q.x * zz;                           // U2 = x2*Z1^2  [mul #1]
     FE52 s1      = Y1;                                 // S1 = Y1
-    FE52 s2      = (q.y * zz) * Z1;                    // S2 = y2·Z1³  [mul #2,#3]
+    FE52 s2      = (q.y * zz) * Z1;                    // S2 = y2*Z1^3  [mul #2,#3]
 
     FE52 t_val   = u1 + u2;                            // T = U1+U2
     FE52 m_val   = s1 + s2;                            // M = S1+S2
 
-    FE52 rr      = t_val.square();                     // T²           [sqr #2]
+    FE52 rr      = t_val.square();                     // T^2           [sqr #2]
     FE52 neg_u2  = u2.negate(1);
-    FE52 tt      = u1 * neg_u2;                        // -U1·U2       [mul #4]
-    rr = rr + tt;                                      // R = T²-U1·U2
+    FE52 tt      = u1 * neg_u2;                        // -U1*U2       [mul #4]
+    rr = rr + tt;                                      // R = T^2-U1*U2
 
     std::uint64_t degen     = fe52_normalizes_to_zero(m_val);
     std::uint64_t not_degen = ~degen;
 
-    FE52 rr_alt  = s1 + s1;                            // 2·S1
+    FE52 rr_alt  = s1 + s1;                            // 2*S1
     FE52 m_alt   = u1 + neg_u2;                        // U1-U2
 
     fe52_cmov(&rr_alt, rr,    not_degen);
     fe52_cmov(&m_alt,  m_val, not_degen);
 
-    FE52 nn      = m_alt.square();                     // Malt²        [sqr #3]
+    FE52 nn      = m_alt.square();                     // Malt^2        [sqr #3]
     FE52 q_val   = t_val.negate(4);
-    q_val = q_val * nn;                                // Q=-T·Malt²   [mul #5]
+    q_val = q_val * nn;                                // Q=-T*Malt^2   [mul #5]
 
-    nn = nn.square();                                  // Malt⁴        [sqr #4]
+    nn = nn.square();                                  // Malt^4        [sqr #4]
     fe52_cmov(&nn, m_val, degen);
 
-    FE52 x3      = rr_alt.square() + q_val;            // X3=Ralt²+Q   [sqr #5]
-    FE52 z3      = m_alt * Z1;                          // Z3=Malt·Z1   [mul #6]
+    FE52 x3      = rr_alt.square() + q_val;            // X3=Ralt^2+Q   [sqr #5]
+    FE52 z3      = m_alt * Z1;                          // Z3=Malt*Z1   [mul #6]
 
-    FE52 tq      = (x3 + x3) + q_val;                  // 2·X3+Q
+    FE52 tq      = (x3 + x3) + q_val;                  // 2*X3+Q
     FE52 y3p     = (rr_alt * tq) + nn;                 //               [mul #7]
     FE52 y3      = y3p.negate(5).half();                // Y3 = -(...)/2
 
-    // ── Infinity handling ──
+    // -- Infinity handling --
     std::uint64_t z3_zero = fe52_normalizes_to_zero(z3);
 
     FE52 one52 = FE52::one();
 
-    // If P is ∞ → result = Q (affine, Z=1)
+    // If P is inf -> result = Q (affine, Z=1)
     fe52_cmov(&x3, q.x, p.infinity);
     fe52_cmov(&y3, q.y, p.infinity);
     fe52_cmov(&z3, one52, p.infinity);
 
-    // If Q is ∞ → result = P
+    // If Q is inf -> result = P
     fe52_cmov(&x3, X1, q.infinity);
     fe52_cmov(&y3, Y1, q.infinity);
     fe52_cmov(&z3, Z1, q.infinity);
@@ -697,33 +697,33 @@ CTJacobianPoint point_add_mixed_complete(const CTJacobianPoint& p,
     return result;
 }
 
-// ─── CT Point Doubling (5×52) ────────────────────────────────────────────────
-// Libsecp-style 3M+4S+1half doubling (low magnitudes, X M≤3, Y M≤3, Z M=1).
+// --- CT Point Doubling (5x52) ------------------------------------------------
+// Libsecp-style 3M+4S+1half doubling (low magnitudes, X M<=3, Y M<=3, Z M=1).
 // Formula:
-//   L = (3/2) · X²
-//   S = Y²
-//   T = -X·S
-//   X3 = L² + 2·T
-//   Y3 = -(L·(X3 + T) + S²)
-//   Z3 = Y·Z
+//   L = (3/2) * X^2
+//   S = Y^2
+//   T = -X*S
+//   X3 = L^2 + 2*T
+//   Y3 = -(L*(X3 + T) + S^2)
+//   Z3 = Y*Z
 
 CTJacobianPoint point_dbl(const CTJacobianPoint& p) noexcept {
     FE52 X = p.x;
     FE52 Y = p.y;
     FE52 Z = p.z;
 
-    FE52 s = Y.square();                   // S = Y²        [1S]  M=1
-    FE52 l = X.square();                   // L = X²        [1S]  M=1
-    l = (l + l) + l;                       // L = 3·X²            M=3
-    l = l.half();                          // L = (3/2)·X²        M=2
-    FE52 t = s.negate(1) * X;             // T = -X·S      [1M]  M=1
-    FE52 z3 = Z * Y;                       // Z3 = Y·Z      [1M]  M=1
-    FE52 x3 = l.square();                  // X3 = L²       [1S]  M=1
+    FE52 s = Y.square();                   // S = Y^2        [1S]  M=1
+    FE52 l = X.square();                   // L = X^2        [1S]  M=1
+    l = (l + l) + l;                       // L = 3*X^2            M=3
+    l = l.half();                          // L = (3/2)*X^2        M=2
+    FE52 t = s.negate(1) * X;             // T = -X*S      [1M]  M=1
+    FE52 z3 = Z * Y;                       // Z3 = Y*Z      [1M]  M=1
+    FE52 x3 = l.square();                  // X3 = L^2       [1S]  M=1
     x3 = x3 + t;                           //                     M=2
-    x3 = x3 + t;                           // X3 = L²+2T         M=3
-    s = s.square();                        // S' = S²        [1S]  M=1
+    x3 = x3 + t;                           // X3 = L^2+2T         M=3
+    s = s.square();                        // S' = S^2        [1S]  M=1
     t = t + x3;                             // T' = X3+T          M=4
-    FE52 y3 = (t * l) + s;                 // Y3 = L·T'+S'  [1M]  M=2
+    FE52 y3 = (t * l) + s;                 // Y3 = L*T'+S'  [1M]  M=2
     y3 = y3.negate(2);                     // Y3 = -(...)         M=3
 
     // If P is infinity, result is infinity
@@ -738,7 +738,7 @@ CTJacobianPoint point_dbl(const CTJacobianPoint& p) noexcept {
     return result;
 }
 
-// ─── Batch N Doublings (5×52, no infinity) ───────────────────────────────────
+// --- Batch N Doublings (5x52, no infinity) -----------------------------------
 // Performs n consecutive doublings in-place, normalizing only at the start.
 // The doubling formula (dbl-2007-a for a=0) has self-stabilizing magnitudes:
 // all negate() parameters depend on intermediate values (always M=1 from
@@ -746,45 +746,73 @@ CTJacobianPoint point_dbl(const CTJacobianPoint& p) noexcept {
 // per-step normalize_weak.
 //
 // Precondition: p is NOT infinity (caller ensures).
-// Output: 2^n · p
+// Output: 2^n * p
 
 // Always-inline core: called from scalar_mul hot loop AND public wrapper.
 // Magnitude contract (NO normalize_weak calls):
-//   Input from unified add: X M≤2, Y M=1, Z M=1
-//   Input from prev dbl:    X M≤18, Y M≤10, Z M≤2
+//   Input from unified add: X M<=2, Y M=1, Z M=1
+//   Input from prev dbl:    X M<=18, Y M<=10, Z M<=2
 //   All negate() params already handle these bounds.
 //   After each dbl: X M=18, Y M=10, Z M=2 (fixed point, independent of input).
 //
 // Precondition: r is NOT infinity.
 __attribute__((always_inline)) inline
 void point_dbl_n_core(CTJacobianPoint* r, unsigned n) noexcept {
-    FE52 X = r->x;   // no normalize_weak — magnitudes tracked
+    FE52 X = r->x;   // no normalize_weak -- magnitudes tracked
     FE52 Y = r->y;
     FE52 Z = r->z;
 
     for (unsigned i = 0; i < n; ++i) {
-        FE52 A = X.square();
-        FE52 B = Y.square();
-        FE52 C = B.square();
+        FE52 A = X.square();                   // A = X^2         M=1
+        FE52 B = Y.square();                   // B = Y^2         M=1
+        FE52 C = B.square();                   // C = Y^4         M=1
 
-        FE52 xb = X + B;
-        FE52 AC = A + C;
-        FE52 D = xb.square() + AC.negate(2);
-        D = D + D;
+        // D = 2*((X+B)^2 - A - C) -- reuse X as scratch (X dead after A)
+        X.add_assign(B);                       // X+B            M<=19
+        X.square_inplace();                    // (X+B)^2         M=1
+        FE52 AC = A;
+        AC.add_assign(C);                      // A+C            M=2
+        AC.negate_assign(2);                   // -(A+C)         M=3
+        X.add_assign(AC);                      // D_half         M=4
+        X.add_assign(X);                       // D              M=8
+        // X is now D
 
-        FE52 E = (A + A) + A;
-        FE52 F = E.square();
+        // E = 3A (A still alive, last use)
+        FE52 E = A;
+        E.add_assign(E);                       // 2A             M=2
+        E.add_assign(A);                       // 3A             M=3
 
-        FE52 DD = D + D;
-        FE52 x_new = F + DD.negate(16);
+        FE52 F = E.square();                   // F = E^2         M=1
 
-        FE52 C8 = C + C; C8 = C8 + C8; C8 = C8 + C8;
+        // x_new = F - 2D; need D preserved for Dx
+        FE52 D_save = X;                       // save D         M=8
+        X.add_assign(X);                       // 2D             M=16
+        X.negate_assign(16);                   // -2D            M=17
+        F.add_assign(X);                       // x_new = F-2D   M=18
+        // F is now x_new
 
-        FE52 Dx = D + x_new.negate(18);
-        FE52 yz = Y * Z;             // Z_new uses OLD Y — compute before overwrite
-        Y = (E * Dx) + C8.negate(8);
-        Z = yz + yz;
-        X = x_new;
+        // 8C chain (in-place on C)
+        C.add_assign(C);                       // 2C             M=2
+        C.add_assign(C);                       // 4C             M=4
+        C.add_assign(C);                       // 8C             M=8
+        C.negate_assign(8);                    // -8C            M=9
+
+        // Dx = D - x_new
+        FE52 neg_xnew = F;
+        neg_xnew.negate_assign(18);            // -x_new         M=19
+        D_save.add_assign(neg_xnew);           // Dx             M=27
+
+        // Z_new = 2*Y*Z (reads old Y -- compute before overwrite)
+        FE52 yz = Y * Z;                       // Y*Z            M=1
+
+        // Y_new = E*Dx - 8C
+        E.mul_assign(D_save);                  // E*Dx           M=1
+        E.add_assign(C);                       // E*Dx - 8C      M=10
+
+        X = F;                                 // x_new          M=18
+        Y = E;                                 // y_new          M=10
+        Z = yz;
+        Z.add_assign(Z);                       // 2*Y*Z          M=2
     }
 
     r->x = X;
@@ -805,15 +833,15 @@ CTJacobianPoint point_dbl_n(const CTJacobianPoint& p, unsigned n) noexcept {
     return result;
 }
 
-// ─── Brier-Joye Unified Mixed Addition (Jacobian + Affine, a=0) ─────────────
-// Cost: 7M + 5S (vs 9M+8S for complete formula) — ~40% cheaper
+// --- Brier-Joye Unified Mixed Addition (Jacobian + Affine, a=0) -------------
+// Cost: 7M + 5S (vs 9M+8S for complete formula) -- ~40% cheaper
 //
-// Unified: handles both addition (a ≠ ±b) and doubling (a == b) in one path.
+// Unified: handles both addition (a != +/-b) and doubling (a == b) in one path.
 // Degenerates only when y1 == -y2 (M = 0), handled via alternate lambda cmov.
 // Detects a = -b (result = infinity) via Z3 == 0.
 //
 // Precondition: b MUST NOT be infinity.
-//   a may be infinity (handled via cmov at end → result = b).
+//   a may be infinity (handled via cmov at end -> result = b).
 //
 // Based on: E. Brier, M. Joye "Weierstrass Elliptic Curves and Side-Channel
 // Attacks" (PKC 2002). Formula from bitcoin-core/secp256k1 group_impl.h.
@@ -825,7 +853,7 @@ CTJacobianPoint point_add_mixed_unified(const CTJacobianPoint& a,
     return result;
 }
 
-// ─── Always-Inline Brier-Joye Unified Mixed Addition (template core) ────────
+// --- Always-Inline Brier-Joye Unified Mixed Addition (template core) --------
 // Template parameter CHECK_INFINITY controls whether infinity handling is done.
 // In scalar_mul's main loop, both a and b are known non-infinity, so
 // CHECK_INFINITY=false saves 3 fe52_cmov + 1 fe52_is_zero per call.
@@ -838,56 +866,63 @@ void unified_add_core(CTJacobianPoint* out,
                        const CTJacobianPoint& a,
                        const CTAffinePoint& b) noexcept {
     // Read a's coords into locals (handles out==&a aliasing, register-friendly).
-    // NO normalize_weak — magnitude bounds tracked explicitly:
-    //   After dbl_n:      X M≤18, Y M≤10, Z M≤2
-    //   After unified add: X M≤2,  Y M=1,   Z M=1
+    // NO normalize_weak -- magnitude bounds tracked explicitly:
+    //   After dbl_n:      X M<=18, Y M<=10, Z M<=2
+    //   After unified add: X M<=2,  Y M=1,   Z M=1
     // Worst case: M_x=18, M_y=10, M_z=2. All negate() params adjusted.
     FE52 X1 = a.x;
     FE52 Y1 = a.y;
     FE52 Z1 = a.z;
     [[maybe_unused]] std::uint64_t a_inf = a.infinity;
 
-    // ── Shared intermediates ──
-    FE52 zz = Z1.square();                          // Z1²       [1S]  M=1
-    FE52 u1 = X1;                                   // U1 = X1   M≤18
-    FE52 u2 = b.x * zz;                             // U2 = x2·Z1²  M=1  [1M]
-    FE52 s1 = Y1;                                   // S1 = Y1   M≤10
-    FE52 s2 = (b.y * zz) * Z1;                      // S2 = y2·Z1³  M=1  [2M]
+    // -- Shared intermediates --
+    FE52 zz = Z1.square();                          // Z1^2       [1S]  M=1
+    FE52 u1 = X1;                                   // U1 = X1   M<=18
+    FE52 u2 = b.x * zz;                             // U2 = x2*Z1^2  M=1  [1M]
+    FE52 s1 = Y1;                                   // S1 = Y1   M<=10
+    FE52 s2 = (b.y * zz) * Z1;                      // S2 = y2*Z1^3  M=1  [2M]
 
-    FE52 t_val = u1 + u2;                           // T = U1+U2 M≤19
-    FE52 m_val = s1 + s2;                            // M = S1+S2 M≤11
+    FE52 t_val = u1;
+    t_val.add_assign(u2);                            // T = U1+U2 M<=19
+    FE52 m_val = s1;
+    m_val.add_assign(s2);                            // M = S1+S2 M<=11
 
-    // R = T² - U1·U2
-    FE52 rr = t_val.square();                        // T²  M=1      [1S]
-    FE52 neg_u2 = u2.negate(1);                      // -U2 M=2
-    FE52 tt = u1 * neg_u2;                           // -U1·U2 M=1  [1M]
-    rr = rr + tt;                                    // R   M=2
+    // R = T^2 - U1*U2
+    FE52 rr = t_val.square();                        // T^2  M=1      [1S]
+    u2.negate_assign(1);                             // -U2 M=2 (u2 reused as neg_u2)
+    FE52 tt = u1 * u2;                              // -U1*U2 M=1  [1M]
+    rr.add_assign(tt);                               // R   M=2
 
-    // ── Degenerate case: M≈0 (y1=-y2) ──
-    // Use the cheaper dual-representation zero check (avoids full normalize).
+    // -- Degenerate case: M~=0 (y1=-y2) --
     std::uint64_t degen = fe52_normalizes_to_zero(m_val);
 
-    FE52 rr_alt = s1 + s1;                          // 2·S1   M≤20
-    FE52 m_alt  = u1 + neg_u2;                      // U1-U2  M≤20
+    FE52 rr_alt = s1;
+    rr_alt.add_assign(s1);                           // 2*S1   M<=20
+    FE52 m_alt = u1;
+    m_alt.add_assign(u2);                            // U1-U2 (u2 is negated)  M<=20
 
     fe52_cmov(&rr_alt, rr, ~degen);
     fe52_cmov(&m_alt, m_val, ~degen);
 
-    // ── Compute result into locals (no pointer reads after partial writes) ──
-    FE52 n = m_alt.square();                         // Malt² M=1   [1S]
-    FE52 neg_t = t_val.negate(19);                   // -T    M=20  [was negate(2)]
-    FE52 q = neg_t * n;                              // Q     M=1   [1M]
+    // -- Compute result into locals (no pointer reads after partial writes) --
+    FE52 n = m_alt.square();                         // Malt^2 M=1   [1S]
+    t_val.negate_assign(19);                         // -T    M=20  (t_val reused)
+    FE52 q = t_val * n;                              // Q     M=1   [1M]
 
-    n = n.square();                                  // Malt⁴ M=1   [1S]
-    fe52_cmov(&n, m_val, degen);                     // if degen: n=M≈0  M≤11
+    n = n.square();                                  // Malt^4 M=1   [1S]
+    fe52_cmov(&n, m_val, degen);                     // if degen: n=M~=0  M<=11
 
-    FE52 x3 = rr_alt.square() + q;                  // X3    M=2   [1S]
+    FE52 x3 = rr_alt.square();
+    x3.add_assign(q);                                // X3    M=2   [1S]
     FE52 z3 = m_alt * Z1;                            // Z3    M=1   [1M]
 
-    FE52 x3_2 = x3 + x3;                            // 2·X3  M=4
-    FE52 tq = x3_2 + q;                             // 2X3+Q M=5
-    FE52 y3_pre = (rr_alt * tq) + n;                // M=1+11=12   [1M=7th]
-    FE52 y3 = y3_pre.negate(12).half();              // Y3    M=1 (half normalizes)
+    FE52 tq = x3;
+    tq.add_assign(x3);                               // 2*X3  M=4
+    tq.add_assign(q);                                // 2X3+Q M=5
+    rr_alt.mul_assign(tq);                           // Ralt*(2X3+Q) M=1  [1M=7th]
+    rr_alt.add_assign(n);                            // +M^3Malt      M<=12
+    rr_alt.negate_assign(12);                        // -(...)        M=13
+    FE52 y3 = rr_alt.half();                         // Y3    M=1 (half normalizes)
 
     if constexpr (CHECK_INFINITY) {
         // Handle a=infinity: replace result with (b.x, b.y, 1)
@@ -916,13 +951,13 @@ void point_add_mixed_unified_into(CTJacobianPoint* out,
     unified_add_core<true>(out, a, b);
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// CT GLV Endomorphism — Helpers & Decomposition
-// ═══════════════════════════════════════════════════════════════════════════════
+// ===============================================================================
+// CT GLV Endomorphism -- Helpers & Decomposition
+// ===============================================================================
 
 namespace /* GLV CT helpers */ {
 
-// ─── Local sub256 (needed for ct_scalar_is_high) ─────────────────────────────
+// --- Local sub256 (needed for ct_scalar_is_high) -----------------------------
 static inline std::uint64_t local_sub256(std::uint64_t r[4],
                                           const std::uint64_t a[4],
                                           const std::uint64_t b[4]) noexcept {
@@ -938,7 +973,7 @@ static inline std::uint64_t local_sub256(std::uint64_t r[4],
     return borrow;
 }
 
-// ─── CT scalar > n/2 check ──────────────────────────────────────────────────
+// --- CT scalar > n/2 check --------------------------------------------------
 static std::uint64_t ct_scalar_is_high(const Scalar& s) noexcept {
     static constexpr std::uint64_t HALF_N[4] = {
         0xDFE92F46681B20A0ULL,
@@ -951,7 +986,7 @@ static std::uint64_t ct_scalar_is_high(const Scalar& s) noexcept {
     return is_nonzero_mask(borrow);
 }
 
-// ─── CT 256×256→512 multiply, shift >>384 with rounding ─────────────────────
+// --- CT 256x256->512 multiply, shift >>384 with rounding ---------------------
 static std::array<std::uint64_t, 4> ct_mul_shift_384(
     const std::array<std::uint64_t, 4>& a,
     const std::array<std::uint64_t, 4>& b) noexcept
@@ -981,9 +1016,9 @@ static std::array<std::uint64_t, 4> ct_mul_shift_384(
     return result;
 }
 
-// ─── Secp256k1 order-specific 512→256 scalar reduction ──────────────────────
+// --- Secp256k1 order-specific 512->256 scalar reduction ----------------------
 // Reduces a 512-bit product modulo n = 2^256 - {NC0, NC1, 1, 0}.
-// Three phases: 512→385→258→256 bits. Constant-time.
+// Three phases: 512->385->258->256 bits. Constant-time.
 // Adapted from bitcoin-core/secp256k1 scalar_4x64_impl.h (MIT license).
 static constexpr std::uint64_t ORDER[4] = {
     0xBFD25E8CD0364141ULL, 0xBAAEDCE6AF48A03BULL,
@@ -993,8 +1028,8 @@ static constexpr std::uint64_t NC0 = 0x402DA1732FC9BEBFULL; // ~ORDER[0]+1
 static constexpr std::uint64_t NC1 = 0x4551231950B75FC4ULL; // ~ORDER[1]
 // NC2 = 1, NC3 = 0
 
-// ─── Specialized 128×128 multiply mod n (for GLV lattice) ───────────────────
-// Both operands at most 128-bit (2 limbs). Product ≤ 256 bits → conditional
+// --- Specialized 128x128 multiply mod n (for GLV lattice) -------------------
+// Both operands at most 128-bit (2 limbs). Product <= 256 bits -> conditional
 // subtract of n only (no multi-phase reduction).
 static Scalar ct_mul_lo128_mod(const std::uint64_t a[2],
                                 const std::uint64_t b[2]) noexcept {
@@ -1016,15 +1051,15 @@ static Scalar ct_mul_lo128_mod(const std::uint64_t a[2],
     return Scalar::from_limbs({r_arr[0], r_arr[1], r_arr[2], r_arr[3]});
 }
 
-// ─── Specialized 256×128 multiply mod n (for lambda × k2_abs) ───────────────
-// a is full 256-bit, b at most 128-bit. Product ≤ 384 bits → single-phase
+// --- Specialized 256x128 multiply mod n (for lambda x k2_abs) ---------------
+// a is full 256-bit, b at most 128-bit. Product <= 384 bits -> single-phase
 // secp256k1-specific reduction (skip phase 1 since upper 128 bits of product
 // are zero).
 static Scalar ct_mul_256x_lo128_mod(const Scalar& a,
                                      const std::uint64_t b[2]) noexcept {
     const auto& al = a.limbs();
 
-    // 4×2 schoolbook → 6 limbs (column-accumulation, unrolled)
+    // 4x2 schoolbook -> 6 limbs (column-accumulation, unrolled)
     unsigned __int128 c = (unsigned __int128)al[0] * b[0];
     std::uint64_t d0 = (std::uint64_t)c; c >>= 64;
 
@@ -1064,14 +1099,14 @@ static Scalar ct_mul_256x_lo128_mod(const Scalar& a,
     return Scalar::from_limbs({r_arr[0], r_arr[1], r_arr[2], r_arr[3]});
 }
 
-// ─── β (beta) as FE52 — cube root of unity mod p ────────────────────────────
+// --- beta (beta) as FE52 -- cube root of unity mod p ----------------------------
 static const FE52& get_beta_fe52() noexcept {
     static const FE52 beta = FE52::from_fe(
         FieldElement::from_bytes(secp256k1::fast::glv_constants::BETA));
     return beta;
 }
 
-// ─── GLV lattice constants ───────────────────────────────────────────────────
+// --- GLV lattice constants ---------------------------------------------------
 static constexpr std::array<std::uint64_t, 4> kG1{{
     0xE893209A45DBB031ULL, 0x3DAA8A1471E8CA7FULL,
     0xE86C90E49284EB15ULL, 0x3086D221A7D46BCDULL
@@ -1089,7 +1124,7 @@ static constexpr std::array<std::uint8_t, 32> kLambdaBytes{{
 
 } // anonymous namespace (GLV CT helpers)
 
-// ─── CT GLV Endomorphism (5×52) ──────────────────────────────────────────────
+// --- CT GLV Endomorphism (5x52) ----------------------------------------------
 
 CTJacobianPoint point_endomorphism(const CTJacobianPoint& p) noexcept {
     CTJacobianPoint r;
@@ -1117,13 +1152,13 @@ CTAffinePoint affine_neg(const CTAffinePoint& p) noexcept {
     return r;
 }
 
-// ─── CT GLV Decomposition (optimized: 128×128 + 256×128 paths) ──────────────
+// --- CT GLV Decomposition (optimized: 128x128 + 256x128 paths) --------------
 
 CTGLVDecomposition ct_glv_decompose(const Scalar& k) noexcept {
     static const Scalar lambda = Scalar::from_bytes(kLambdaBytes);
 
     // GLV lattice basis magnitudes (128-bit, positive).
-    // minus_b1 = -b1 mod n ≈ b1 (small, < 2^128)
+    // minus_b1 = -b1 mod n ~= b1 (small, < 2^128)
     // b2_pos   = b2 (small, < 2^128), used as -(c2*b2) instead of c2*(-b2 mod n)
     static constexpr std::uint64_t minus_b1_lo[2] = {
         0x6F547FA90ABFE4C3ULL, 0xE4437ED6010E8828ULL
@@ -1145,7 +1180,7 @@ CTGLVDecomposition ct_glv_decompose(const Scalar& k) noexcept {
     std::uint64_t k2_high = ct_scalar_is_high(k2_mod);
     Scalar k2_abs = scalar_cneg(k2_mod, k2_high);
 
-    // lambda × |k2| (256×128), then conditionally negate.
+    // lambda x |k2| (256x128), then conditionally negate.
     // |k2| < 2^128 (GLV lattice guarantee), so upper 2 limbs are zero.
     Scalar lambda_k2 = scalar_cneg(
         ct_mul_256x_lo128_mod(lambda, k2_abs.limbs().data()), k2_high);
@@ -1162,19 +1197,19 @@ CTGLVDecomposition ct_glv_decompose(const Scalar& k) noexcept {
     return result;
 }
 
-// ─── CT GLV Scalar Multiplication — Hamburg Signed-Digit (GROUP_SIZE=5) ──────
-// Combines Hamburg's signed-digit comb (ePrint 2012/309 §3.3) with GLV.
+// --- CT GLV Scalar Multiplication -- Hamburg Signed-Digit (GROUP_SIZE=5) ------
+// Combines Hamburg's signed-digit comb (ePrint 2012/309 S.3.3) with GLV.
 //
 // Algorithm:
 //   1. s = (k + K) / 2 mod n, where K = (2^BITS-2^129-1)*(1+lambda) mod n
 //   2. Split s into (s1, s2) via GLV
 //   3. v1 = s1 + 2^128,  v2 = s2 + 2^128  (non-negative, fits in 129 bits)
 //   4. Process GROUPS groups of GROUP_SIZE bits from v1, v2 (high to low)
-//   5. Each group's bits encode a signed odd digit → table lookup
+//   5. Each group's bits encode a signed odd digit -> table lookup
 //
 // GROUP_SIZE=5: TABLE_SIZE=16 odd multiples, GROUPS=26, BITS=130.
 // Cost: 125 doublings + 52 additions (ALL real, no digit=0 waste).
-// Table lookup: 26 groups × 2 tables × 15 cmov = 780 cmov iterations.
+// Table lookup: 26 groups x 2 tables x 15 cmov = 780 cmov iterations.
 
 Point scalar_mul(const Point& p, const Scalar& k) noexcept {
     constexpr unsigned GROUP_SIZE = 5;
@@ -1193,7 +1228,7 @@ Point scalar_mul(const Point& p, const Scalar& k) noexcept {
     // Offset to make s1, s2 non-negative: 2^128
     static const Scalar S_OFFSET = Scalar::from_limbs({0, 0, 1, 0});
 
-    // ── 1. Compute v1, v2 via Hamburg transform + GLV split ──────────────
+    // -- 1. Compute v1, v2 via Hamburg transform + GLV split --------------
     Scalar s = scalar_add(k, K_CONST);
     s = scalar_half(s);
 
@@ -1208,55 +1243,55 @@ Point scalar_mul(const Point& p, const Scalar& k) noexcept {
     Scalar v1 = scalar_add(s1, S_OFFSET);
     Scalar v2 = scalar_add(s2, S_OFFSET);
 
-    // ── 2. Build odd-multiples table via isomorphic curve + batch inversion ──
+    // -- 2. Build odd-multiples table via isomorphic curve + batch inversion --
     // Adapted from bitcoin-core/secp256k1 effective-affine technique:
     //
-    // Let d = 2·P (Jacobian), C = d.Z. On the isomorphic curve
-    //   Y'^2 = X'^3 + C^6·7
-    // the mapping φ(X, Y, Z) = (X·C², Y·C³, Z) makes d affine: (d.X, d.Y).
+    // Let d = 2*P (Jacobian), C = d.Z. On the isomorphic curve
+    //   Y'^2 = X'^3 + C^6*7
+    // the mapping phi(X, Y, Z) = (X*C^2, Y*C^3, Z) makes d affine: (d.X, d.Y).
     // This lets us use Jac+Affine mixed adds (3S+8M) instead of Jac+Jac (5S+12M).
-    // At the end, the "true" Z for each entry on secp256k1 is Z_iso · C.
+    // At the end, the "true" Z for each entry on secp256k1 is Z_iso * C.
     CTAffinePoint pre_a[TABLE_SIZE];
     CTAffinePoint pre_a_lam[TABLE_SIZE];
 
-    // 2.1 — Compute d = 2P and set up isomorphic curve
+    // 2.1 -- Compute d = 2P and set up isomorphic curve
     Point p2 = p;
-    p2.dbl_inplace();               // d = 2·P (Jacobian, variable-time OK: P is public)
+    p2.dbl_inplace();               // d = 2*P (Jacobian, variable-time OK: P is public)
     FE52 C  = p2.Z52();             // C = d.Z
-    FE52 C2 = C.square();           // C²
-    FE52 C3 = C2 * C;               // C³
+    FE52 C2 = C.square();           // C^2
+    FE52 C3 = C2 * C;               // C^3
 
-    // d as affine on iso curve: φ(d) = (d.X, d.Y) (Z=C cancels in the isomorphism)
+    // d as affine on iso curve: phi(d) = (d.X, d.Y) (Z=C cancels in the isomorphism)
     FE52 d_x = p2.X52();
     FE52 d_y = p2.Y52();
 
-    // 2.2 — Transform P to iso: φ(P) = (P.X·C², P.Y·C³, P.Z) in Jacobian on iso
+    // 2.2 -- Transform P to iso: phi(P) = (P.X*C^2, P.Y*C^3, P.Z) in Jacobian on iso
     JacFE52 iso[TABLE_SIZE];
     iso[0] = { p.X52() * C2, p.Y52() * C3, p.Z52() };
 
-    // 2.3 — Build rest of table using mixed adds on iso curve (3S+8M each)
+    // 2.3 -- Build rest of table using mixed adds on iso curve (3S+8M each)
     //        Also track Z-ratios for backward normalization (no field inverse!).
     FE52 zr[TABLE_SIZE]; // Z-ratio: iso[i].z = iso[i-1].z * zr[i]
     for (std::size_t i = 1; i < TABLE_SIZE; ++i) {
         iso[i] = jac_add_ge_var_zr(iso[i - 1], d_x, d_y, &zr[i]);
     }
 
-    // 2.4 — Compute global Z for secp256k1 (iso→secp conversion)
-    //        global_z = Z_last · C, where Z_last = iso[TABLE_SIZE-1].z
+    // 2.4 -- Compute global Z for secp256k1 (iso->secp conversion)
+    //        global_z = Z_last * C, where Z_last = iso[TABLE_SIZE-1].z
     //        All table entries share this implicit Z denominator.
     FE52 global_z = iso[TABLE_SIZE - 1].z * C;
 
-    // 2.5 — Backward normalization via Z-ratios (replaces batch inverse!)
+    // 2.5 -- Backward normalization via Z-ratios (replaces batch inverse!)
     //
     // Principle: entry i's Z on iso curve = iso[0].z * zr[1] * ... * zr[i].
     // To normalize all entries to the same Z = Z_last, multiply entry i
-    // by (zr[i+1] * ... * zr[n-1])² for x and ³ for y.  Then ALL entries
+    // by (zr[i+1] * ... * zr[n-1])^2 for x and ^3 for y.  Then ALL entries
     // effectively have Z = Z_last on the iso curve (or global_z on secp256k1).
-    // The main loop treats them as affine — correct up to the global Z factor.
+    // The main loop treats them as affine -- correct up to the global Z factor.
     // Final correction: R.z *= global_z after the main loop.
     //
-    // Cost: (TABLE_SIZE-2) muls (accumulate) + (TABLE_SIZE-1) × (1S + 2M)
-    //   ≈ 14M + 15S + 30M = 44M + 15S  (vs batch inverse: 30M + ~250S inverse)
+    // Cost: (TABLE_SIZE-2) muls (accumulate) + (TABLE_SIZE-1) x (1S + 2M)
+    //   ~= 14M + 15S + 30M = 44M + 15S  (vs batch inverse: 30M + ~250S inverse)
     const FE52& beta = get_beta_fe52();
 
     // Last entry: already at Z_last, just store directly.
@@ -1292,7 +1327,7 @@ Point scalar_mul(const Point& p, const Scalar& k) noexcept {
     SECP256K1_DECLASSIFY(pre_a, sizeof(pre_a));
     SECP256K1_DECLASSIFY(pre_a_lam, sizeof(pre_a_lam));
 
-    // ── 3. Main loop — FULLY IN-PLACE, ALWAYS-INLINE hot ops ────────────
+    // -- 3. Main loop -- FULLY IN-PLACE, ALWAYS-INLINE hot ops ------------
     // Uses core functions (always_inline) to eliminate function-call overhead.
     // Uses CHECK_INFINITY=false since R and table entries are never infinity.
     // Uses NORMALIZE_Y=false since table entries have magnitude 1 (from mul).
@@ -1323,14 +1358,14 @@ Point scalar_mul(const Point& p, const Scalar& k) noexcept {
         std::uint64_t bits1 = scalar_window(v1, static_cast<std::size_t>(group) * GROUP_SIZE, GROUP_SIZE);
         std::uint64_t bits2 = scalar_window(v2, static_cast<std::size_t>(group) * GROUP_SIZE, GROUP_SIZE);
 
-        // In-place batch doubling — always-inline core
+        // In-place batch doubling -- always-inline core
         point_dbl_n_core(&R, GROUP_SIZE);
 
-        // In-place lookup + in-place add for pre_a — core (no infinity check)
+        // In-place lookup + in-place add for pre_a -- core (no infinity check)
         table_lookup_core<false>(&t, pre_a, TABLE_SIZE, bits1, GROUP_SIZE);
         unified_add_core<false>(&R, R, t);
 
-        // In-place lookup + in-place add for pre_a_lam — core (no infinity check)
+        // In-place lookup + in-place add for pre_a_lam -- core (no infinity check)
         table_lookup_core<false>(&t, pre_a_lam, TABLE_SIZE, bits2, GROUP_SIZE);
         unified_add_core<false>(&R, R, t);
     }
@@ -1345,24 +1380,24 @@ Point scalar_mul(const Point& p, const Scalar& k) noexcept {
     return result;
 }
 
-// ─── CT Generator Multiplication (5×52) — Comb Method ───────────────────────
+// --- CT Generator Multiplication (5x52) -- Comb Method -----------------------
 // Uses comb method with signed digits (adapted from bitcoin-core/secp256k1).
 //
 // Parameters: COMB_TEETH=6, COMB_BLOCKS=43.
-//   teeth × blocks = 258 ≥ 256 (2 extra bits corrected at end).
+//   teeth x blocks = 258 >= 256 (2 extra bits corrected at end).
 //
 // Hamburg encoding: v = (k + K_gen) / 2 mod n, bits of v become {+1,-1} signs.
 // Comb digit for block b: gather bit at positions {b, 43+b, 86+b, 129+b, 172+b, 215+b}
-// from v → 6-bit unsigned value → signed table lookup (32 entries).
+// from v -> 6-bit unsigned value -> signed table lookup (32 entries).
 //
-// Since 6×43=258 > 256, bits 256-257 of v are 0 (treated as sign=-1).
+// Since 6x43=258 > 256, bits 256-257 of v are 0 (treated as sign=-1).
 // Correction: add precomputed (2^256 + 2^257)*G after the main loop.
 //
 // Runtime: 42 additions + 43 lookups (31 cmovs each) + 1 correction add.
 // vs Hamburg w=4: 63 additions + 64 lookups (7 cmovs each).
-// Net: 33% fewer additions, larger lookups → ~25% faster on ARM64.
+// Net: 33% fewer additions, larger lookups -> ~25% faster on ARM64.
 //
-// Table: 43 blocks × 32 entries = 1376 affine points ≈ 108 KB.
+// Table: 43 blocks x 32 entries = 1376 affine points ~= 108 KB.
 
 namespace {
 
@@ -1387,7 +1422,7 @@ struct alignas(64) CombGenTable {
 static CombGenTable g_comb_table;
 static std::once_flag g_comb_table_once;
 
-// ── Extract 6-bit comb digit from scattered bit positions ────────────────────
+// -- Extract 6-bit comb digit from scattered bit positions --------------------
 // For block b: gather bit at position (tooth * COMB_BLOCKS + b) for each tooth.
 // Bits beyond 255 are treated as 0 (v is 256 bits).
 inline std::uint64_t extract_comb_digit(const Scalar& v, unsigned block) noexcept {
@@ -1400,15 +1435,15 @@ inline std::uint64_t extract_comb_digit(const Scalar& v, unsigned block) noexcep
     return digit;
 }
 
-// ── CT lookup from 32-entry signed comb table ────────────────────────────────
+// -- CT lookup from 32-entry signed comb table --------------------------------
 // Table stores entries for unsigned values 32..63 (bit5=1).
 // For values 0..31 (bit5=0): look up complement index and negate Y.
 //
 // Identity: table_u[d] = -table_u[63-d]  (complementary signs)
 // table_s[idx] = table_u[idx | 32] = table_u[idx + 32]
 //
-// For d∈[32,63] (bit5=1): idx = d & 31, point = table_s[idx]
-// For d∈[0,31]  (bit5=0): idx = 31-(d&31), point = -table_s[idx]
+// For din[32,63] (bit5=1): idx = d & 31, point = table_s[idx]
+// For din[0,31]  (bit5=0): idx = 31-(d&31), point = -table_s[idx]
 static inline
 void comb_lookup(CTAffinePoint* out,
                   const CTAffinePoint* table,
@@ -1420,7 +1455,7 @@ void comb_lookup(CTAffinePoint* out,
 
     std::uint64_t d_lo = digit & (COMB_TABLE_SIZE - 1);
 
-    // index: top=1 → d_lo; top=0 → (TABLE_SIZE-1 - d_lo)
+    // index: top=1 -> d_lo; top=0 -> (TABLE_SIZE-1 - d_lo)
     std::uint64_t idx_pos = d_lo;
     std::uint64_t idx_neg = (COMB_TABLE_SIZE - 1) - d_lo;
     // Branchless select
@@ -1443,7 +1478,7 @@ void comb_lookup(CTAffinePoint* out,
     out->infinity = 0;
 }
 
-// ── Build comb table ─────────────────────────────────────────────────────────
+// -- Build comb table ---------------------------------------------------------
 void build_comb_table() noexcept {
     Point G = Point::generator();
 
@@ -1485,7 +1520,7 @@ void build_comb_table() noexcept {
 
         // Build all 32 signed entries.
         // table_s[idx] = sum_{j=0}^{4} (2*bit_j(idx)-1)*P_j + (+1)*P_5
-        // Computation: build each entry as sum of ±P_j using Jacobian arithmetic.
+        // Computation: build each entry as sum of +/-P_j using Jacobian arithmetic.
         Point entries_jac[COMB_TABLE_SIZE];
 
         for (unsigned idx = 0; idx < COMB_TABLE_SIZE; ++idx) {
@@ -1563,7 +1598,7 @@ void init_generator_table() noexcept {
 Point generator_mul(const Scalar& k) noexcept {
     init_generator_table();
 
-    // ── Hamburg scalar transform ──────────────────────────────────────────
+    // -- Hamburg scalar transform ------------------------------------------
     // v = (k + K_gen) / 2 mod n
     static const Scalar K_gen_scalar = Scalar::from_limbs(
         {K_GEN[0], K_GEN[1], K_GEN[2], K_GEN[3]});
@@ -1574,7 +1609,7 @@ Point generator_mul(const Scalar& k) noexcept {
     CTJacobianPoint R;
     CTAffinePoint T;
 
-    // ── Main loop: 43 comb blocks ────────────────────────────────────────
+    // -- Main loop: 43 comb blocks ----------------------------------------
     // First block: initialize R directly from table lookup
     {
         std::uint64_t digit = extract_comb_digit(v, 0);
@@ -1593,7 +1628,7 @@ Point generator_mul(const Scalar& k) noexcept {
         unified_add_core<false>(&R, R, T);
     }
 
-    // ── Correction: add (2^256 + 2^257)*G for the 2 extra comb bits ─────
+    // -- Correction: add (2^256 + 2^257)*G for the 2 extra comb bits -----
     unified_add_core<false>(&R, R, g_comb_table.correction);
 
     Point result = R.to_point();
@@ -1601,25 +1636,25 @@ Point generator_mul(const Scalar& k) noexcept {
     return result;
 }
 
-#else // !SECP256K1_FAST_52BIT — Full CT for 4×64 FieldElement
+#else // !SECP256K1_FAST_52BIT -- Full CT for 4x64 FieldElement
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// 4×64 Constant-Time Path (MSVC / 32-bit / non-__int128 platforms)
-// ═══════════════════════════════════════════════════════════════════════════════
-// Full CT implementation using ct::field_* on FieldElement (4×64 limbs).
-// All arithmetic is always fully reduced — no magnitude tracking needed.
+// ===============================================================================
+// 4x64 Constant-Time Path (MSVC / 32-bit / non-__int128 platforms)
+// ===============================================================================
+// Full CT implementation using ct::field_* on FieldElement (4x64 limbs).
+// All arithmetic is always fully reduced -- no magnitude tracking needed.
 // Supports: ESP32-S3, MSVC x86-64, ARM32, RISC-V 32-bit.
 //
-// Translation from FE52 (5×52 lazy reduction):
-//   a * b           → field_mul(a, b)
-//   a.square()      → field_sqr(a)
-//   a + b           → field_add(a, b)
-//   a - b           → field_sub(a, b)
-//   a.negate(m)     → field_neg(a)   (magnitude param ignored)
-//   a.half()        → field_half(a)
-//   normalize_weak  → no-op          (always normalized)
-//   fe52_cmov       → field_cmov
-//   fe52_normalizes_to_zero → field_is_zero
+// Translation from FE52 (5x52 lazy reduction):
+//   a * b           -> field_mul(a, b)
+//   a.square()      -> field_sqr(a)
+//   a + b           -> field_add(a, b)
+//   a - b           -> field_sub(a, b)
+//   a.negate(m)     -> field_neg(a)   (magnitude param ignored)
+//   a.half()        -> field_half(a)
+//   normalize_weak  -> no-op          (always normalized)
+//   fe52_cmov       -> field_cmov
+//   fe52_normalizes_to_zero -> field_is_zero
 
 #if defined(_MSC_VER) && defined(_M_X64)
 #include <intrin.h>
@@ -1627,9 +1662,9 @@ Point generator_mul(const Scalar& k) noexcept {
 
 // FE52 = FieldElement on this path (typedef from ct/point.hpp)
 
-namespace /* 4×64 CT helpers */ {
+namespace /* 4x64 CT helpers */ {
 
-// ─── Portable 64×64→128 multiply (no __int128) ──────────────────────────────
+// --- Portable 64x64->128 multiply (no __int128) ------------------------------
 
 struct U128 { std::uint64_t lo, hi; };
 
@@ -1639,7 +1674,7 @@ inline U128 mul64(std::uint64_t u, std::uint64_t v) noexcept {
     std::uint64_t lo = _umul128(u, v, &hi);
     return {lo, hi};
 #else
-    // Knuth Algorithm M: 4 × 32-bit multiplies
+    // Knuth Algorithm M: 4 x 32-bit multiplies
     std::uint64_t u0 = u & 0xFFFFFFFFULL, u1 = u >> 32;
     std::uint64_t v0 = v & 0xFFFFFFFFULL, v1 = v >> 32;
     std::uint64_t t  = u0 * v0;
@@ -1654,7 +1689,7 @@ inline U128 mul64(std::uint64_t u, std::uint64_t v) noexcept {
 #endif
 }
 
-// ─── 4×4 → 8 limb schoolbook multiply ───────────────────────────────────────
+// --- 4x4 -> 8 limb schoolbook multiply ---------------------------------------
 
 inline void mul_4x4(std::uint64_t d[8],
                     const std::uint64_t a[4],
@@ -1675,7 +1710,7 @@ inline void mul_4x4(std::uint64_t d[8],
     }
 }
 
-// ─── Variable-time Jacobian + Affine addition (for public table build) ───────
+// --- Variable-time Jacobian + Affine addition (for public table build) -------
 // NOT constant-time: used only for precomputation where POINT is public.
 // Standard formula: 3S + 8M. Caller ensures no degenerate cases.
 
@@ -1702,7 +1737,7 @@ inline Jac4x64 jac_add_ge_var_zr(const Jac4x64& a,
     return {x3, y3, z3};
 }
 
-// ─── Montgomery batch inversion ──────────────────────────────────────────────
+// --- Montgomery batch inversion ----------------------------------------------
 
 inline void fe_batch_inverse(FE52* inv, const FE52* z, std::size_t n) noexcept {
     if (n == 0) return;
@@ -1718,9 +1753,9 @@ inline void fe_batch_inverse(FE52* inv, const FE52* z, std::size_t n) noexcept {
     inv[0] = acc;
 }
 
-} // anonymous namespace (4×64 CT helpers)
+} // anonymous namespace (4x64 CT helpers)
 
-// ─── CTJacobianPoint helpers ─────────────────────────────────────────────────
+// --- CTJacobianPoint helpers -------------------------------------------------
 
 CTJacobianPoint CTJacobianPoint::from_point(const Point& p) noexcept {
     CTJacobianPoint r;
@@ -1746,7 +1781,7 @@ CTJacobianPoint CTJacobianPoint::make_infinity() noexcept {
     return r;
 }
 
-// ─── CT Conditional Operations on Points ─────────────────────────────────────
+// --- CT Conditional Operations on Points -------------------------------------
 
 void point_cmov(CTJacobianPoint* r, const CTJacobianPoint& a,
                 std::uint64_t mask) noexcept {
@@ -1787,7 +1822,7 @@ CTJacobianPoint point_table_lookup(const CTJacobianPoint* table,
     return result;
 }
 
-// ─── CT Conditional Operations on Affine Points ──────────────────────────────
+// --- CT Conditional Operations on Affine Points ------------------------------
 
 void affine_cmov(CTAffinePoint* r, const CTAffinePoint& a,
                  std::uint64_t mask) noexcept {
@@ -1808,7 +1843,7 @@ CTAffinePoint affine_table_lookup(const CTAffinePoint* table,
     return result;
 }
 
-// ─── Signed-Digit Affine Table Lookup (Hamburg encoding, 4×64) ───────────────
+// --- Signed-Digit Affine Table Lookup (Hamburg encoding, 4x64) ---------------
 
 CTAffinePoint affine_table_lookup_signed(const CTAffinePoint* table,
                                           std::size_t table_size,
@@ -1819,7 +1854,7 @@ CTAffinePoint affine_table_lookup_signed(const CTAffinePoint* table,
     return r;
 }
 
-// ─── Always-inline scalar table lookup core (4×64) ───────────────────────────
+// --- Always-inline scalar table lookup core (4x64) ---------------------------
 // NORMALIZE_Y exists for API compat with FE52 path; ignored (always normalized).
 
 template<bool NORMALIZE_Y>
@@ -1858,7 +1893,7 @@ void affine_table_lookup_signed_into(CTAffinePoint* out,
     table_lookup_core<true>(out, table, table_size, n, group_size);
 }
 
-// ─── Complete Addition (Jacobian, a=0, 4×64) ────────────────────────────────
+// --- Complete Addition (Jacobian, a=0, 4x64) --------------------------------
 // Brier-Joye unified addition/doubling. Handles all cases branchlessly.
 // Cost: 11M + 6S.
 
@@ -1923,7 +1958,7 @@ CTJacobianPoint point_add_complete(const CTJacobianPoint& p,
     return result;
 }
 
-// ─── Mixed Jacobian+Affine Complete Addition (a=0, 4×64) ─────────────────────
+// --- Mixed Jacobian+Affine Complete Addition (a=0, 4x64) ---------------------
 // Brier-Joye 7M + 5S. Handles all cases branchlessly.
 
 CTJacobianPoint point_add_mixed_complete(const CTJacobianPoint& p,
@@ -1985,16 +2020,16 @@ CTJacobianPoint point_add_mixed_complete(const CTJacobianPoint& p,
     return result;
 }
 
-// ─── CT Point Doubling (4×64) ────────────────────────────────────────────────
-// 3M + 4S + 1half. Formula: L=(3/2)X², S=Y², T=-XS, X3=L²+2T,
-// Y3=-(L(X3+T)+S²), Z3=YZ.
+// --- CT Point Doubling (4x64) ------------------------------------------------
+// 3M + 4S + 1half. Formula: L=(3/2)X^2, S=Y^2, T=-XS, X3=L^2+2T,
+// Y3=-(L(X3+T)+S^2), Z3=YZ.
 
 CTJacobianPoint point_dbl(const CTJacobianPoint& p) noexcept {
     FE52 X = p.x, Y = p.y, Z = p.z;
 
     FE52 s  = field_sqr(Y);                                     // [sqr 1]
     FE52 l  = field_sqr(X);                                     // [sqr 2]
-    l = field_half(field_add(field_add(l, l), l));               // (3/2)X²
+    l = field_half(field_add(field_add(l, l), l));               // (3/2)X^2
     FE52 t  = field_mul(field_neg(s), X);                        // [mul 1]
     FE52 z3 = field_mul(Z, Y);                                   // [mul 2]
     FE52 x3 = field_add(field_add(field_sqr(l), t), t);         // [sqr 3]
@@ -2010,7 +2045,7 @@ CTJacobianPoint point_dbl(const CTJacobianPoint& p) noexcept {
     return result;
 }
 
-// ─── Brier-Joye Unified Mixed Addition template (4×64) ──────────────────────
+// --- Brier-Joye Unified Mixed Addition template (4x64) ----------------------
 // CHECK_INFINITY=false skips infinity handling (safe in scalar_mul inner loop).
 // Cost: 7M + 5S.
 
@@ -2081,7 +2116,7 @@ void point_add_mixed_unified_into(CTJacobianPoint* out,
     unified_add_core<true>(out, a, b);
 }
 
-// ─── Batch N Doublings (4×64) ────────────────────────────────────────────────
+// --- Batch N Doublings (4x64) ------------------------------------------------
 // 3M + 4S + 1half per doubling. No magnitude tracking (always normalized).
 // Precondition: r is NOT infinity.
 
@@ -2114,11 +2149,11 @@ CTJacobianPoint point_dbl_n(const CTJacobianPoint& p, unsigned n) noexcept {
     return result;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// CT GLV Endomorphism — Helpers & Decomposition (4×64, portable)
-// ═══════════════════════════════════════════════════════════════════════════════
+// ===============================================================================
+// CT GLV Endomorphism -- Helpers & Decomposition (4x64, portable)
+// ===============================================================================
 
-namespace /* GLV CT helpers 4×64 */ {
+namespace /* GLV CT helpers 4x64 */ {
 
 static inline std::uint64_t local_sub256(std::uint64_t r[4],
                                           const std::uint64_t a[4],
@@ -2152,7 +2187,7 @@ static constexpr std::uint64_t ORDER[4] = {
 static constexpr std::uint64_t NC0 = 0x402DA1732FC9BEBFULL;
 static constexpr std::uint64_t NC1 = 0x4551231950B75FC4ULL;
 
-// ─── CT 256×256→512, shift >>384 (portable) ─────────────────────────────────
+// --- CT 256x256->512, shift >>384 (portable) ---------------------------------
 
 static std::array<std::uint64_t, 4> ct_mul_shift_384(
     const std::array<std::uint64_t, 4>& a,
@@ -2174,7 +2209,7 @@ static std::array<std::uint64_t, 4> ct_mul_shift_384(
     return result;
 }
 
-// ─── CT 128×128 → mod n (portable) ──────────────────────────────────────────
+// --- CT 128x128 -> mod n (portable) ------------------------------------------
 
 static Scalar ct_mul_lo128_mod(const std::uint64_t a[2],
                                 const std::uint64_t b[2]) noexcept {
@@ -2207,13 +2242,13 @@ static Scalar ct_mul_lo128_mod(const std::uint64_t a[2],
     return Scalar::from_limbs({r_arr[0], r_arr[1], r_arr[2], r_arr[3]});
 }
 
-// ─── CT 256×128 → mod n (portable, secp256k1-specific reduction) ────────────
+// --- CT 256x128 -> mod n (portable, secp256k1-specific reduction) ------------
 
 static Scalar ct_mul_256x_lo128_mod(const Scalar& a,
                                      const std::uint64_t b[2]) noexcept {
     const auto& al = a.limbs();
 
-    // 4×2 schoolbook → 6 limbs
+    // 4x2 schoolbook -> 6 limbs
     std::uint64_t d[6] = {};
     for (int i = 0; i < 4; ++i) {
         std::uint64_t carry = 0;
@@ -2274,7 +2309,7 @@ static Scalar ct_mul_256x_lo128_mod(const Scalar& a,
     return Scalar::from_limbs({r_arr[0], r_arr[1], r_arr[2], r_arr[3]});
 }
 
-// ─── β (beta) as 4×64 FieldElement ──────────────────────────────────────────
+// --- beta (beta) as 4x64 FieldElement ------------------------------------------
 
 static const FE52& get_beta_fe() noexcept {
     static const FE52 beta = FieldElement::from_bytes(
@@ -2282,7 +2317,7 @@ static const FE52& get_beta_fe() noexcept {
     return beta;
 }
 
-// ─── GLV lattice constants ───────────────────────────────────────────────────
+// --- GLV lattice constants ---------------------------------------------------
 
 static constexpr std::array<std::uint64_t, 4> kG1{{
     0xE893209A45DBB031ULL, 0x3DAA8A1471E8CA7FULL,
@@ -2299,9 +2334,9 @@ static constexpr std::array<std::uint8_t, 32> kLambdaBytes{{
     0xDF,0x02,0x96,0x7C,0x1B,0x23,0xBD,0x72
 }};
 
-} // anonymous namespace (GLV CT helpers 4×64)
+} // anonymous namespace (GLV CT helpers 4x64)
 
-// ─── CT GLV Endomorphism (4×64) ──────────────────────────────────────────────
+// --- CT GLV Endomorphism (4x64) ----------------------------------------------
 
 CTJacobianPoint point_endomorphism(const CTJacobianPoint& p) noexcept {
     CTJacobianPoint r;
@@ -2328,7 +2363,7 @@ CTAffinePoint affine_neg(const CTAffinePoint& p) noexcept {
     return r;
 }
 
-// ─── CT GLV Decomposition (4×64, fully CT, portable) ────────────────────────
+// --- CT GLV Decomposition (4x64, fully CT, portable) ------------------------
 
 CTGLVDecomposition ct_glv_decompose(const Scalar& k) noexcept {
     static const Scalar lambda = Scalar::from_bytes(kLambdaBytes);
@@ -2368,7 +2403,7 @@ CTGLVDecomposition ct_glv_decompose(const Scalar& k) noexcept {
     return result;
 }
 
-// ─── CT GLV Scalar Multiplication (4×64) — Hamburg Signed-Digit ──────────────
+// --- CT GLV Scalar Multiplication (4x64) -- Hamburg Signed-Digit --------------
 // Hamburg signed-digit comb + GLV. GROUP_SIZE=5, TABLE_SIZE=16, GROUPS=26.
 // Cost: 125 dbl + 52 unified_add + 52 signed_lookups(16).
 
@@ -2443,7 +2478,7 @@ Point scalar_mul(const Point& p, const Scalar& k) noexcept {
     SECP256K1_DECLASSIFY(pre_a, sizeof(pre_a));
     SECP256K1_DECLASSIFY(pre_a_lam, sizeof(pre_a_lam));
 
-    // 3. Main loop — in-place, always-inline
+    // 3. Main loop -- in-place, always-inline
     CTJacobianPoint R;
     CTAffinePoint t;
 
@@ -2483,9 +2518,9 @@ Point scalar_mul(const Point& p, const Scalar& k) noexcept {
     return result;
 }
 
-// ─── CT Generator Multiplication (4×64) — Comb Method ────────────────────────
-// COMB_TEETH=6, COMB_BLOCKS=43.  teeth × blocks = 258 ≥ 256.
-// Table: 43 blocks × 32 entries = 1376 affine points.
+// --- CT Generator Multiplication (4x64) -- Comb Method ------------------------
+// COMB_TEETH=6, COMB_BLOCKS=43.  teeth x blocks = 258 >= 256.
+// Table: 43 blocks x 32 entries = 1376 affine points.
 // Runtime: 42 additions + 43 lookups + 1 correction.
 
 namespace {
@@ -2661,7 +2696,7 @@ Point generator_mul(const Scalar& k) noexcept {
 
 #endif // SECP256K1_FAST_52BIT
 
-// ─── CT Curve Check (uses 4×64 FieldElement at API boundary) ─────────────────
+// --- CT Curve Check (uses 4x64 FieldElement at API boundary) -----------------
 
 std::uint64_t point_is_on_curve(const Point& p) noexcept {
     if (p.is_infinity()) {
@@ -2679,7 +2714,7 @@ std::uint64_t point_is_on_curve(const Point& p) noexcept {
     return field_eq(y2, rhs);
 }
 
-// ─── CT Point Equality (uses 4×64 at API boundary) ──────────────────────────
+// --- CT Point Equality (uses 4x64 at API boundary) --------------------------
 
 std::uint64_t point_eq(const Point& a, const Point& b) noexcept {
     if (a.is_infinity() && b.is_infinity()) {

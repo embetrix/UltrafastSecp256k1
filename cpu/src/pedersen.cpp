@@ -1,5 +1,5 @@
 // ============================================================================
-// Pedersen Commitments — Implementation
+// Pedersen Commitments -- Implementation
 // ============================================================================
 
 #include "secp256k1/pedersen.hpp"
@@ -13,9 +13,9 @@ using fast::Point;
 using fast::Scalar;
 using fast::FieldElement;
 
-// ── Nothing-up-my-sleeve generators ──────────────────────────────────────────
+// -- Nothing-up-my-sleeve generators ------------------------------------------
 
-// Modular sqrt: y = a^((p+1)/4) mod p, valid since p ≡ 3 (mod 4)
+// Modular sqrt: y = a^((p+1)/4) mod p, valid since p == 3 (mod 4)
 // Uses optimized addition chain from FieldElement::sqrt()
 static FieldElement field_sqrt(const FieldElement& a) {
     return a.sqrt();
@@ -26,14 +26,14 @@ static FieldElement field_sqrt(const FieldElement& a) {
 static Point lift_x_even(const FieldElement& x_in) {
     FieldElement x = x_in;
     for (int attempt = 0; attempt < 256; ++attempt) {
-        // y² = x³ + 7
+        // y^2 = x^3 + 7
         FieldElement x2 = x * x;
         FieldElement x3 = x2 * x;
         FieldElement rhs = x3 + FieldElement::from_uint64(7);
 
         FieldElement y = field_sqrt(rhs);
 
-        // Verify: y² == rhs (check that sqrt succeeded)
+        // Verify: y^2 == rhs (check that sqrt succeeded)
         if (y.square() == rhs) {
             // Ensure even y
             auto y_bytes = y.to_bytes();
@@ -46,7 +46,7 @@ static Point lift_x_even(const FieldElement& x_in) {
         // Try next x: x = x + 1
         x = x + FieldElement::one();
     }
-    // Should never happen — ~50% chance each attempt, 256 attempts
+    // Should never happen -- ~50% chance each attempt, 256 attempts
     return Point::infinity();
 }
 
@@ -76,7 +76,7 @@ const Point& pedersen_generator_J() {
     return J;
 }
 
-// ── PedersenCommitment methods ───────────────────────────────────────────────
+// -- PedersenCommitment methods -----------------------------------------------
 
 std::array<std::uint8_t, 33> PedersenCommitment::to_compressed() const {
     return point.to_compressed();
@@ -90,7 +90,7 @@ bool PedersenCommitment::verify(const Scalar& value, const Scalar& blinding) con
     return pedersen_verify(*this, value, blinding);
 }
 
-// ── Commit / Open ────────────────────────────────────────────────────────────
+// -- Commit / Open ------------------------------------------------------------
 
 PedersenCommitment pedersen_commit(const Scalar& value, const Scalar& blinding) {
     // C = v*H + r*G
@@ -109,7 +109,7 @@ bool pedersen_verify(const PedersenCommitment& commitment,
     return c1 == c2;
 }
 
-// ── Homomorphic Operations ───────────────────────────────────────────────────
+// -- Homomorphic Operations ---------------------------------------------------
 
 bool pedersen_verify_sum(const PedersenCommitment* commitments_pos,
                          std::size_t n_pos,
@@ -141,7 +141,7 @@ Scalar pedersen_blind_sum(const Scalar* blinds_in,
     return sum;
 }
 
-// ── Switch Commitment ────────────────────────────────────────────────────────
+// -- Switch Commitment --------------------------------------------------------
 
 PedersenCommitment pedersen_switch_commit(const Scalar& value,
                                           const Scalar& blinding,

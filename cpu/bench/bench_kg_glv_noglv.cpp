@@ -99,21 +99,21 @@ BenchResult benchmark_kg_noglv(const std::vector<Scalar>& scalars, int iteration
 }
 
 void print_box_top() {
-    std::cout << "╔════════════════════════════════════════════════════════════╗\n";
+    std::cout << "+============================================================+\n";
 }
 
 void print_box_mid() {
-    std::cout << "╠════════════════════════════════════════════════════════════╣\n";
+    std::cout << "+============================================================+\n";
 }
 
 void print_box_bottom() {
-    std::cout << "╚════════════════════════════════════════════════════════════╝\n";
+    std::cout << "+============================================================+\n";
 }
 
 void print_centered(const std::string& text) {
     int padding = (60 - text.length()) / 2;
-    std::cout << "║" << std::string(padding, ' ') << text 
-              << std::string(60 - padding - text.length(), ' ') << "║\n";
+    std::cout << "|" << std::string(padding, ' ') << text 
+              << std::string(60 - padding - text.length(), ' ') << "|\n";
 }
 
 int main() {
@@ -155,7 +155,7 @@ int main() {
     if (glv_result.median_ns < 1000) {
         std::cout << "\n";
     } else if (glv_result.median_ns < 1000000) {
-        std::cout << " (" << (glv_result.median_ns / 1000.0) << " μs)\n";
+        std::cout << " (" << (glv_result.median_ns / 1000.0) << " us)\n";
     } else {
         std::cout << " (" << (glv_result.median_ns / 1000000.0) << " ms)\n";
     }
@@ -167,7 +167,7 @@ int main() {
     if (noglv_result.median_ns < 1000) {
         std::cout << "\n";
     } else if (noglv_result.median_ns < 1000000) {
-        std::cout << " (" << (noglv_result.median_ns / 1000.0) << " μs)\n";
+        std::cout << " (" << (noglv_result.median_ns / 1000.0) << " us)\n";
     } else {
         std::cout << " (" << (noglv_result.median_ns / 1000000.0) << " ms)\n";
     }
@@ -187,16 +187,16 @@ int main() {
     if (time_saved < 1000) {
         std::cout << "\n";
     } else if (time_saved < 1000000) {
-        std::cout << " (" << (time_saved / 1000.0) << " μs)\n";
+        std::cout << " (" << (time_saved / 1000.0) << " us)\n";
     } else {
         std::cout << " (" << (time_saved / 1000000.0) << " ms)\n";
     }
     
     std::cout << "\nAnalysis:\n";
-    std::cout << "  • GLV optimization uses 2D precomputed tables\n";
-    std::cout << "  • Reduces scalar multiplication from 256 steps to ~128\n";
-    std::cout << "  • Trade-off: memory (precomputed points) for speed\n";
-    std::cout << "  • Ideal for generator multiplication (K*G)\n\n";
+    std::cout << "  * GLV optimization uses 2D precomputed tables\n";
+    std::cout << "  * Reduces scalar multiplication from 256 steps to ~128\n";
+    std::cout << "  * Trade-off: memory (precomputed points) for speed\n";
+    std::cout << "  * Ideal for generator multiplication (K*G)\n\n";
     
     return 0;
 }

@@ -1,8 +1,8 @@
 // ============================================================================
-// Tests for FieldElement52 (5×52 Lazy-Reduction Field Arithmetic)
+// Tests for FieldElement52 (5x52 Lazy-Reduction Field Arithmetic)
 // ============================================================================
-// Strategy: Every result is cross-checked against the proven FieldElement (4×64).
-// If 5×52 and 4×64 agree on all operations, the implementation is correct.
+// Strategy: Every result is cross-checked against the proven FieldElement (4x64).
+// If 5x52 and 4x64 agree on all operations, the implementation is correct.
 // ============================================================================
 
 #include "secp256k1/field.hpp"
@@ -65,12 +65,12 @@ const TestVector VECTORS[] = {
 };
 constexpr int NUM_VECTORS = sizeof(VECTORS) / sizeof(VECTORS[0]);
 
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
 // Test Sections
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
 
 void test_conversion_roundtrip() {
-    std::printf("── Conversion Roundtrip (4×64 → 5×52 → 4×64) ──\n");
+    std::printf("-- Conversion Roundtrip (4x64 -> 5x52 -> 4x64) --\n");
     for (int i = 0; i < NUM_VECTORS; ++i) {
         FieldElement fe = FieldElement::from_limbs(VECTORS[i].limbs);
         FieldElement52 fe52 = FieldElement52::from_fe(fe);
@@ -80,7 +80,7 @@ void test_conversion_roundtrip() {
 }
 
 void test_zero_one() {
-    std::printf("── Zero / One ──\n");
+    std::printf("-- Zero / One --\n");
     FieldElement52 z = FieldElement52::zero();
     FieldElement52 o = FieldElement52::one();
     CHECK(fe52_equals_fe64(z, FieldElement::zero()), "zero matches");
@@ -90,7 +90,7 @@ void test_zero_one() {
 }
 
 void test_addition() {
-    std::printf("── Addition ──\n");
+    std::printf("-- Addition --\n");
     for (int i = 0; i < NUM_VECTORS; ++i) {
         for (int j = 0; j < NUM_VECTORS; ++j) {
             FieldElement a = FieldElement::from_limbs(VECTORS[i].limbs);
@@ -117,7 +117,7 @@ void test_addition() {
 }
 
 void test_lazy_chain() {
-    std::printf("── Lazy Addition Chain (accumulate without normalize) ──\n");
+    std::printf("-- Lazy Addition Chain (accumulate without normalize) --\n");
 
     FieldElement a = FieldElement::from_limbs(VECTORS[7].limbs);  // Gx
     FieldElement b = FieldElement::from_limbs(VECTORS[8].limbs);  // Gy
@@ -144,7 +144,7 @@ void test_lazy_chain() {
 }
 
 void test_negate() {
-    std::printf("── Negate ──\n");
+    std::printf("-- Negate --\n");
     for (int i = 0; i < NUM_VECTORS; ++i) {
         FieldElement fe = FieldElement::from_limbs(VECTORS[i].limbs);
         FieldElement neg64 = FieldElement::zero() - fe;
@@ -164,7 +164,7 @@ void test_negate() {
 }
 
 void test_multiplication() {
-    std::printf("── Multiplication ──\n");
+    std::printf("-- Multiplication --\n");
     for (int i = 0; i < NUM_VECTORS; ++i) {
         for (int j = 0; j < NUM_VECTORS; ++j) {
             FieldElement a = FieldElement::from_limbs(VECTORS[i].limbs);
@@ -190,7 +190,7 @@ void test_multiplication() {
 }
 
 void test_squaring() {
-    std::printf("── Squaring ──\n");
+    std::printf("-- Squaring --\n");
     for (int i = 0; i < NUM_VECTORS; ++i) {
         FieldElement a = FieldElement::from_limbs(VECTORS[i].limbs);
         FieldElement sq64 = a.square();
@@ -214,7 +214,7 @@ void test_squaring() {
 }
 
 void test_mul_chain() {
-    std::printf("── Multiplication Chain (repeated squaring) ──\n");
+    std::printf("-- Multiplication Chain (repeated squaring) --\n");
     FieldElement fe = FieldElement::from_limbs(VECTORS[7].limbs);  // Gx
     FieldElement52 fe52 = FieldElement52::from_fe(fe);
 
@@ -234,7 +234,7 @@ void test_mul_chain() {
 }
 
 void test_mixed_operations() {
-    std::printf("── Mixed Operations (add + mul + square chains) ──\n");
+    std::printf("-- Mixed Operations (add + mul + square chains) --\n");
     FieldElement a = FieldElement::from_limbs(VECTORS[7].limbs);  // Gx
     FieldElement b = FieldElement::from_limbs(VECTORS[8].limbs);  // Gy
     FieldElement52 a52 = FieldElement52::from_fe(a);
@@ -247,13 +247,13 @@ void test_mixed_operations() {
     FieldElement52 r52 = sum52 * a52;
     FieldElement52 bsq52 = b52.square();
     r52 = r52 + bsq52;
-    CHECK(fe52_equals_fe64(r52, r64), "((a+b)*a + b²) matches");
+    CHECK(fe52_equals_fe64(r52, r64), "((a+b)*a + b^2) matches");
 
     // Longer chain simulating point doubling operations
     FieldElement t64 = a;
     FieldElement52 t52 = a52;
     for (int i = 0; i < 50; ++i) {
-        // t = t² + Gy * t + Gx
+        // t = t^2 + Gy * t + Gx
         FieldElement tsq64 = t64.square();
         FieldElement52 tsq52 = t52.square();
 
@@ -267,7 +267,7 @@ void test_mixed_operations() {
 }
 
 void test_half() {
-    std::printf("── Half ──\n");
+    std::printf("-- Half --\n");
     for (int i = 0; i < NUM_VECTORS; ++i) {
         FieldElement a = FieldElement::from_limbs(VECTORS[i].limbs);
         FieldElement52 a52 = FieldElement52::from_fe(a);
@@ -281,7 +281,7 @@ void test_half() {
 }
 
 void test_normalize_edge() {
-    std::printf("── Normalization Edge Cases ──\n");
+    std::printf("-- Normalization Edge Cases --\n");
 
     // Test value = p (should normalize to 0)
     FieldElement52 p_val;
@@ -316,7 +316,7 @@ void test_normalize_edge() {
 }
 
 void test_commutativity_associativity() {
-    std::printf("── Commutativity & Associativity ──\n");
+    std::printf("-- Commutativity & Associativity --\n");
     FieldElement52 a = FieldElement52::from_fe(FieldElement::from_limbs(VECTORS[7].limbs));
     FieldElement52 b = FieldElement52::from_fe(FieldElement::from_limbs(VECTORS[8].limbs));
     FieldElement52 c = FieldElement52::from_fe(FieldElement::from_limbs(VECTORS[9].limbs));
@@ -351,7 +351,7 @@ int main() {
 #else
 int test_field_52_main() {
 #endif
-    std::printf("\n=== FieldElement52 (5×52 Lazy-Reduction) Tests ===\n\n");
+    std::printf("\n=== FieldElement52 (5x52 Lazy-Reduction) Tests ===\n\n");
 
     test_conversion_roundtrip();
     test_zero_one();

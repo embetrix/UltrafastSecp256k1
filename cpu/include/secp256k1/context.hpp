@@ -3,7 +3,7 @@
 #pragma once
 
 // ============================================================================
-// CurveContext — Custom Generator Point & Curve Parameters
+// CurveContext -- Custom Generator Point & Curve Parameters
 // ============================================================================
 // Allows users to:
 //   1. Use a custom generator point G (default: standard secp256k1 G)
@@ -34,7 +34,7 @@
 
 namespace secp256k1 {
 
-// ── Curve Context ────────────────────────────────────────────────────────────
+// -- Curve Context ------------------------------------------------------------
 
 struct CurveContext {
     // Generator point (base point G)
@@ -52,7 +52,7 @@ struct CurveContext {
     // Fixed buffer to avoid heap allocation
     char name[32] = {};
     
-    // ── Factory methods ──────────────────────────────────────────────────
+    // -- Factory methods --------------------------------------------------
     
     // Standard secp256k1 context (default parameters)
     static CurveContext secp256k1_default() {
@@ -93,7 +93,7 @@ struct CurveContext {
         return ctx;
     }
     
-    // ── Helpers ──────────────────────────────────────────────────────────
+    // -- Helpers ----------------------------------------------------------
     
     std::string_view curve_name() const noexcept {
         return std::string_view(name);
@@ -110,7 +110,7 @@ private:
     }
 };
 
-// ── Context-Aware Operations ─────────────────────────────────────────────────
+// -- Context-Aware Operations -------------------------------------------------
 
 // Get the effective generator point (custom or default secp256k1 G)
 inline const fast::Point& effective_generator(const CurveContext* ctx = nullptr) {

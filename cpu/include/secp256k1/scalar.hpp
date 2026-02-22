@@ -71,7 +71,7 @@ public:
     std::vector<int8_t> to_naf() const;
 
     // Phase 5.7: wNAF (width-w Non-Adjacent Form) encoding
-    // Converts scalar to signed odd-digit representation {±1, ±3, ±5, ..., ±(2^w-1)}
+    // Converts scalar to signed odd-digit representation {+/-1, +/-3, +/-5, ..., +/-(2^w-1)}
     // width: window width (typically 4-6 bits)
     // Returns vector where wnaf[i] represents digit at position i
     // Only odd values are used, reducing precompute table size by 50%

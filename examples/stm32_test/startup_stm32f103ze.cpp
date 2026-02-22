@@ -41,7 +41,7 @@ extern uint32_t _estack;   // initial stack pointer
 #define RCC_CFGR_PPRE1_DIV2 (0x4U << 8)   // APB1 = HCLK/2 (36MHz max)
 #define RCC_CFGR_PPRE2_DIV1 (0x0U << 11)  // APB2 = HCLK
 #define RCC_CFGR_PLLSRC_HSE (1U << 16)    // PLL source = HSE
-#define RCC_CFGR_PLLMUL9    (0x7U << 18)  // PLL × 9 (8 × 9 = 72MHz)
+#define RCC_CFGR_PLLMUL9    (0x7U << 18)  // PLL x 9 (8 x 9 = 72MHz)
 
 // RCC_APB2ENR bits
 #define RCC_APB2ENR_IOPAEN  (1U << 2)     // GPIOA clock
@@ -74,7 +74,7 @@ static void SystemInit() {
     RCC_CR |= RCC_CR_HSEON;
     while (!(RCC_CR & RCC_CR_HSERDY)) {}  // Wait for HSE ready
 
-    // Configure PLL: HSE × 9 = 72MHz
+    // Configure PLL: HSE x 9 = 72MHz
     // AHB = 72MHz, APB1 = 36MHz (max), APB2 = 72MHz
     RCC_CFGR = RCC_CFGR_PLLSRC_HSE
              | RCC_CFGR_PLLMUL9

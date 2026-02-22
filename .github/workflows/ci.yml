@@ -11,7 +11,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # ── Linux (GCC + Clang) ────────────────────────────────────────────────────
+  # -- Linux (GCC + Clang) ----------------------------------------------------
   linux:
     runs-on: ubuntu-24.04
     strategy:
@@ -52,7 +52,7 @@ jobs:
       - name: Test
         run: ctest --test-dir build --output-on-failure -j$(nproc)
 
-  # ── Linux ARM64 (cross-compile, aarch64-linux-gnu) ───────────────────────
+  # -- Linux ARM64 (cross-compile, aarch64-linux-gnu) -----------------------
   linux-arm64:
     runs-on: ubuntu-24.04
 
@@ -84,7 +84,7 @@ jobs:
           file build-arm64/cpu/libfastsecp256k1.a
           echo "Library size: $(du -h build-arm64/cpu/libfastsecp256k1.a | cut -f1)"
 
-  # ── Sanitizers (ASan+UBSan, Clang on Linux) ────────────────────────────────
+  # -- Sanitizers (ASan+UBSan, Clang on Linux) --------------------------------
   sanitizers:
     runs-on: ubuntu-24.04
     strategy:
@@ -123,7 +123,7 @@ jobs:
       - name: Test (${{ matrix.label }})
         run: ctest --test-dir build-${{ matrix.sanitizer }} --output-on-failure -j$(nproc)
 
-  # ── Windows (MSVC + Clang-cl) ──────────────────────────────────────────────
+  # -- Windows (MSVC + Clang-cl) ----------------------------------------------
   windows:
     runs-on: windows-latest
     strategy:
@@ -148,7 +148,7 @@ jobs:
       - name: Test
         run: ctest --test-dir build -C ${{ matrix.build_type }} --output-on-failure -j
 
-  # ── macOS (AppleClang + Metal GPU) ─────────────────────────────────────────
+  # -- macOS (AppleClang + Metal GPU) -----------------------------------------
   macos:
     runs-on: macos-14
     strategy:
@@ -185,7 +185,7 @@ jobs:
             echo "Metal GPU test binary not found (expected on Apple Silicon)"
           fi
 
-  # ── iOS (CMake + Xcode, ARM64) ─────────────────────────────────────────────
+  # -- iOS (CMake + Xcode, ARM64) ---------------------------------------------
   ios:
     runs-on: macos-14
     strategy:
@@ -214,7 +214,7 @@ jobs:
           lipo -info "$LIB"
           echo "Size: $(du -h "$LIB" | cut -f1)"
 
-  # ── iOS XCFramework ────────────────────────────────────────────────────────
+  # -- iOS XCFramework --------------------------------------------------------
   ios-xcframework:
     runs-on: macos-14
     needs: [ios]
@@ -234,7 +234,7 @@ jobs:
           path: build-xcframework/output/UltrafastSecp256k1.xcframework
           retention-days: 30
 
-  # ── ROCm/HIP (AMD GPU, compile check) ───────────────────────────────────────
+  # -- ROCm/HIP (AMD GPU, compile check) ---------------------------------------
   # NOTE: GitHub-hosted runners have no AMD GPU (/dev/kfd, /dev/dri).
   # This job validates that the HIP toolchain compiles successfully.
   # Runtime GPU tests require a self-hosted runner with an AMD GPU.
@@ -266,7 +266,7 @@ jobs:
       - name: Test (CPU-only, compile check)
         run: ctest --test-dir build-rocm --output-on-failure -j$(nproc)
 
-  # ── WebAssembly (Emscripten) ───────────────────────────────────────────────
+  # -- WebAssembly (Emscripten) -----------------------------------------------
   wasm:
     runs-on: ubuntu-24.04
 
@@ -312,7 +312,7 @@ jobs:
             build-wasm/dist/package.json
           retention-days: 30
 
-  # ── Android NDK (ARM64, ARMv7, x86_64) ──────────────────────────────────
+  # -- Android NDK (ARM64, ARMv7, x86_64) ----------------------------------
   android:
     runs-on: ubuntu-24.04
     strategy:

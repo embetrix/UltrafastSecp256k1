@@ -1,5 +1,5 @@
 // ============================================================================
-// UltrafastSecp256k1 — Android ARM64 On-Device Test + Benchmarks
+// UltrafastSecp256k1 -- Android ARM64 On-Device Test + Benchmarks
 // ============================================================================
 // Standalone test binary (no JNI, no Java). Push via adb and run in shell.
 // Tests: selftest, point ops, scalar ops, CT ops, ECDH, timing.
@@ -59,7 +59,7 @@ static long long bench(const char* name, int iterations, F&& fn) {
 // ============================================================================
 static int run_tests() {
     printf("=============================================\n");
-    printf("UltrafastSecp256k1 — Android ARM64 Test\n");
+    printf("UltrafastSecp256k1 -- Android ARM64 Test\n");
     printf("=============================================\n\n");
 
     // 1. Self-test
@@ -167,7 +167,7 @@ static int run_tests() {
     FE fb = FE::from_uint64(0xCAFEBABE87654321ULL);
     FE fc = fa * fb;
     FE fd = fa.square();
-    // Verify a * a == a²
+    // Verify a * a == a^2
     FE fe = fa * fa;
     bool field_ok = (fd == fe) && !(fc == FE::zero());
     printf("%s\n", field_ok ? "PASS" : "FAIL");
@@ -190,7 +190,7 @@ static int run_tests() {
 // ============================================================================
 static void run_benchmarks() {
     printf("=============================================\n");
-    printf("BENCHMARKS — ARM64 (%s)\n", 
+    printf("BENCHMARKS -- ARM64 (%s)\n", 
 #ifdef SECP256K1_HAS_ARM64_ASM
         "ASM optimized"
 #else
@@ -214,7 +214,7 @@ static void run_benchmarks() {
         g_sink ^= fa.limbs()[0];
     });
     
-    long long sqr_ns = bench("field_sqr (a² mod p)", 100000, [&]() {
+    long long sqr_ns = bench("field_sqr (a^2 mod p)", 100000, [&]() {
         fa = fa.square();
         g_sink ^= fa.limbs()[0];
     });
@@ -307,7 +307,7 @@ static void run_benchmarks() {
 
     // ---- Summary ----
     printf("\n=============================================\n");
-    printf("SUMMARY — ARM64 Performance (4x64)\n");
+    printf("SUMMARY -- ARM64 Performance (4x64)\n");
     printf("=============================================\n");
     printf("  field_mul:       %6lld ns/op\n", mul_ns);
     printf("  field_sqr:       %6lld ns/op\n", sqr_ns);
@@ -325,10 +325,10 @@ static void run_benchmarks() {
     printf("=============================================\n");
 
     // ============================================================================
-    // 10×26 Field Element Benchmark (Lazy-Reduction for 32-bit targets)
+    // 10x26 Field Element Benchmark (Lazy-Reduction for 32-bit targets)
     // ============================================================================
     printf("\n=============================================\n");
-    printf("BENCHMARK — FieldElement26 (10x26 Lazy-Reduction)\n");
+    printf("BENCHMARK -- FieldElement26 (10x26 Lazy-Reduction)\n");
     printf("  4x64 vs 10x26 comparison on ARM64\n");
     printf("=============================================\n\n");
 
@@ -337,7 +337,7 @@ static void run_benchmarks() {
     FE fe_ref_a = FE::from_uint64(0xDEADBEEF12345678ULL);
     FE fe_ref_b = FE::from_uint64(0xCAFEBABE87654321ULL);
 
-    // ── Correctness check ──
+    // -- Correctness check --
     {
         FE26 prod26 = fe26_a * fe26_b;
         FE prod64 = fe_ref_a * fe_ref_b;
@@ -417,12 +417,12 @@ static void run_benchmarks() {
         g_sink ^= out.n[0];
     });
 
-    // ── 10x26 vs 4x64 Summary ──
+    // -- 10x26 vs 4x64 Summary --
     printf("\n=============================================\n");
-    printf("COMPARISON — 4x64 vs 10x26 on ARM64\n");
+    printf("COMPARISON -- 4x64 vs 10x26 on ARM64\n");
     printf("=============================================\n");
     printf("  Operation       4x64 (ns)   10x26 (ns)   Ratio\n");
-    printf("  ──────────────  ─────────   ──────────   ─────\n");
+    printf("  --------------  ---------   ----------   -----\n");
     printf("  Multiplication  %6lld       %6lld        %.2fx\n", mul_ns, mul26_ns, (double)mul_ns / mul26_ns);
     printf("  Squaring        %6lld       %6lld        %.2fx\n", sqr_ns, sqr26_ns, (double)sqr_ns / sqr26_ns);
     printf("  Addition        %6lld       %6lld        %.2fx\n", add_ns, add26_ns, (double)add_ns / add26_ns);

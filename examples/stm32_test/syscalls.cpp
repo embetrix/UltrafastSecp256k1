@@ -1,6 +1,6 @@
 /**
  * STM32F103ZET6 Syscalls
- * Redirects printf() → USART1 (PA9=TX, 115200 baud)
+ * Redirects printf() -> USART1 (PA9=TX, 115200 baud)
  * Provides _sbrk for malloc/new
  *
  * Bare-metal, no HAL dependency
@@ -55,7 +55,7 @@ void uart_init() {
     crh |=  (0xBU << 4);           // AF push-pull, 50MHz (MODE=11, CNF=10)
     GPIOA_CRH = crh;
 
-    // PA10 = USART1_RX: Input floating (default) — no change needed
+    // PA10 = USART1_RX: Input floating (default) -- no change needed
 
     // Baud rate: 72MHz / 115200 = 625 = 0x271
     USART1_BRR = 625;  // 72000000 / 115200 = 625.0

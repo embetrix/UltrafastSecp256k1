@@ -1,5 +1,5 @@
 """
-UltrafastSecp256k1 — Python bindings
+UltrafastSecp256k1 -- Python bindings
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 High-performance secp256k1 elliptic curve cryptography.
 

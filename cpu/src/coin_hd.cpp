@@ -1,5 +1,5 @@
 // ============================================================================
-// Coin HD — Implementation
+// Coin HD -- Implementation
 // ============================================================================
 // BIP-44 coin-type derivation using existing BIP-32 infrastructure.
 // ============================================================================
@@ -9,7 +9,7 @@
 
 namespace secp256k1::coins {
 
-// ── Purpose Selection ────────────────────────────────────────────────────────
+// -- Purpose Selection --------------------------------------------------------
 
 DerivationPurpose best_purpose(const CoinParams& coin) {
     if (coin.features.supports_taproot) return DerivationPurpose::BIP86;
@@ -17,7 +17,7 @@ DerivationPurpose best_purpose(const CoinParams& coin) {
     return DerivationPurpose::BIP44;
 }
 
-// ── Path Construction ────────────────────────────────────────────────────────
+// -- Path Construction --------------------------------------------------------
 
 std::string coin_derive_path(const CoinParams& coin,
                              std::uint32_t account,
@@ -38,7 +38,7 @@ std::string coin_derive_path(const CoinParams& coin,
     return path;
 }
 
-// ── Key Derivation ───────────────────────────────────────────────────────────
+// -- Key Derivation -----------------------------------------------------------
 
 std::pair<ExtendedKey, bool>
 coin_derive_key(const ExtendedKey& master,
@@ -63,7 +63,7 @@ coin_derive_key_with_purpose(const ExtendedKey& master,
     return bip32_derive_path(master, path);
 }
 
-// ── Seed → Address ───────────────────────────────────────────────────────────
+// -- Seed -> Address -----------------------------------------------------------
 
 std::pair<std::string, bool>
 coin_address_from_seed(const std::uint8_t* seed, std::size_t seed_len,

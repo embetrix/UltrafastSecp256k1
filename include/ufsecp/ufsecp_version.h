@@ -1,15 +1,15 @@
 /* ============================================================================
- * UltrafastSecp256k1 — Version & ABI Compatibility
+ * UltrafastSecp256k1 -- Version & ABI Compatibility
  * ============================================================================
  * NOTE: When building with CMake the real header is generated from
  *       ufsecp_version.h.in and placed in the build tree (takes priority).
  *       This source-tree copy contains dev placeholders for non-CMake use.
  * ============================================================================
  * RULES:
- *   UFSECP_VERSION_MAJOR bump  →  ABI breaking (struct layout, removed funcs)
- *   UFSECP_VERSION_MINOR bump  →  ABI compatible (new funcs only)
- *   UFSECP_VERSION_PATCH bump  →  ABI compatible (bugfixes only)
- *   UFSECP_ABI_VERSION   bump  →  only on ABI-incompatible changes
+ *   UFSECP_VERSION_MAJOR bump  ->  ABI breaking (struct layout, removed funcs)
+ *   UFSECP_VERSION_MINOR bump  ->  ABI compatible (new funcs only)
+ *   UFSECP_VERSION_PATCH bump  ->  ABI compatible (bugfixes only)
+ *   UFSECP_ABI_VERSION   bump  ->  only on ABI-incompatible changes
  *
  * Clients should check:  ufsecp_abi_version() == expected_abi
  * ============================================================================ */
@@ -21,7 +21,7 @@
 extern "C" {
 #endif
 
-/* ── Compile-time version (dev placeholder — CMake builds use generated header) */
+/* -- Compile-time version (dev placeholder -- CMake builds use generated header) */
 
 #define UFSECP_VERSION_MAJOR   0
 #define UFSECP_VERSION_MINOR   0
@@ -33,11 +33,11 @@ extern "C" {
 
 #define UFSECP_VERSION_STRING  "0.0.0-dev"
 
-/* ── ABI version (incremented ONLY on binary-incompatible changes) ────────── */
+/* -- ABI version (incremented ONLY on binary-incompatible changes) ---------- */
 
 #define UFSECP_ABI_VERSION     1
 
-/* ── Runtime queries ──────────────────────────────────────────────────────── */
+/* -- Runtime queries -------------------------------------------------------- */
 
 #ifndef UFSECP_API
   #if defined(_WIN32) || defined(__CYGWIN__)

@@ -33,7 +33,7 @@
 
 namespace secp256k1 {
 
-// ── Types ────────────────────────────────────────────────────────────────────
+// -- Types --------------------------------------------------------------------
 
 // Participant index (1-based, as per Shamir's secret sharing)
 using ParticipantId = std::uint32_t;
@@ -80,7 +80,7 @@ struct FrostPartialSig {
     fast::Scalar z_i;             // Partial signature scalar
 };
 
-// ── DKG (Distributed Key Generation) ─────────────────────────────────────────
+// -- DKG (Distributed Key Generation) -----------------------------------------
 
 // Round 1: Generate secret polynomial and commitment
 // Returns: (commitment to broadcast, shares to send privately)
@@ -105,7 +105,7 @@ frost_keygen_finalize(ParticipantId participant_id,
                       std::uint32_t threshold,
                       std::uint32_t num_participants);
 
-// ── Signing ──────────────────────────────────────────────────────────────────
+// -- Signing ------------------------------------------------------------------
 
 // Generate nonces for a signing round
 // Returns: (secret nonce pair, public commitment)
@@ -140,10 +140,10 @@ frost_aggregate(const std::vector<FrostPartialSig>& partial_sigs,
                 const fast::Point& group_public_key,
                 const std::array<std::uint8_t, 32>& msg);
 
-// ── Lagrange Coefficients ────────────────────────────────────────────────────
+// -- Lagrange Coefficients ----------------------------------------------------
 
-// Compute Lagrange coefficient λ_i for participant i in signer set S
-// λ_i = Π_{j∈S, j≠i} (j / (j - i)) mod n
+// Compute Lagrange coefficient lambda_i for participant i in signer set S
+// lambda_i = Pi_{jinS, j!=i} (j / (j - i)) mod n
 fast::Scalar frost_lagrange_coefficient(ParticipantId i,
                                          const std::vector<ParticipantId>& signer_ids);
 

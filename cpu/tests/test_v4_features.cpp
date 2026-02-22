@@ -31,9 +31,9 @@ static int g_fail = 0;
     else { g_fail++; std::printf("  [FAIL] %s (line %d)\n", name, __LINE__); } \
 } while(0)
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// ===============================================================================
 // Pedersen Commitment Tests
-// ═══════════════════════════════════════════════════════════════════════════════
+// ===============================================================================
 
 static void test_pedersen_basic() {
     std::printf("\n=== Pedersen Commitments ===\n");
@@ -85,7 +85,7 @@ static void test_pedersen_homomorphic() {
 static void test_pedersen_balance() {
     std::printf("\n=== Pedersen Balance ===\n");
 
-    // Simulate: 2 inputs (100, 200) → 2 outputs (150, 150)
+    // Simulate: 2 inputs (100, 200) -> 2 outputs (150, 150)
     Scalar v_in1 = Scalar::from_uint64(100);
     Scalar r_in1 = Scalar::from_uint64(111);
     Scalar v_in2 = Scalar::from_uint64(200);
@@ -134,31 +134,31 @@ static void test_pedersen_serialization() {
     CHECK(compressed.size() == 33, "compressed_size_33");
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// ===============================================================================
 // FROST Threshold Signature Tests
-// ═══════════════════════════════════════════════════════════════════════════════
+// ===============================================================================
 
 static void test_frost_lagrange() {
     std::printf("\n=== FROST Lagrange ===\n");
 
-    // For 2-of-3, signers {1, 2}: λ_1 = 2/(2-1) = 2, λ_2 = 1/(1-2) = -1
+    // For 2-of-3, signers {1, 2}: lambda_1 = 2/(2-1) = 2, lambda_2 = 1/(1-2) = -1
     std::vector<ParticipantId> signers = {1, 2};
     Scalar l1 = frost_lagrange_coefficient(1, signers);
     Scalar l2 = frost_lagrange_coefficient(2, signers);
 
-    // λ_1 should be 2
+    // lambda_1 should be 2
     Scalar expected_l1 = Scalar::from_uint64(2);
     CHECK(l1 == expected_l1, "lagrange_l1_equals_2");
 
-    // λ_2 should be -1 (= n-1)
+    // lambda_2 should be -1 (= n-1)
     Scalar expected_l2 = Scalar::from_uint64(1).negate();
     CHECK(l2 == expected_l2, "lagrange_l2_equals_neg1");
 
-    // λ_1 * 1 + λ_2 * 2 should equal the secret (Lagrange property)
-    // f(0) = λ_1*f(1) + λ_2*f(2) where f is degree-1 polynomial
+    // lambda_1 * 1 + lambda_2 * 2 should equal the secret (Lagrange property)
+    // f(0) = lambda_1*f(1) + lambda_2*f(2) where f is degree-1 polynomial
     // Let's verify with concrete values: f(x) = 5 + 3x
     // f(1) = 8, f(2) = 11
-    // λ_1*f(1) + λ_2*f(2) = 2*8 + (-1)*11 = 16 - 11 = 5 = f(0) ✓
+    // lambda_1*f(1) + lambda_2*f(2) = 2*8 + (-1)*11 = 16 - 11 = 5 = f(0) [ok]
     Scalar f1 = Scalar::from_uint64(8);
     Scalar f2 = Scalar::from_uint64(11);
     Scalar recovered = l1 * f1 + l2 * f2;
@@ -256,9 +256,9 @@ static void test_frost_2of3_signing() {
     CHECK(valid, "frost_2of3_signature_valid");
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// ===============================================================================
 // Adaptor Signature Tests
-// ═══════════════════════════════════════════════════════════════════════════════
+// ===============================================================================
 
 static void test_schnorr_adaptor_basic() {
     std::printf("\n=== Schnorr Adaptor Basic ===\n");
@@ -339,14 +339,14 @@ static void test_ecdsa_adaptor_basic() {
     CHECK(t_match, "ecdsa_extracted_secret_matches");
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// ===============================================================================
 // Address Generation Tests
-// ═══════════════════════════════════════════════════════════════════════════════
+// ===============================================================================
 
 static void test_base58check() {
     std::printf("\n=== Base58Check ===\n");
 
-    // Known vector: version=0x00, hash160=all zeros → "1111111111111111111114oLvT2"
+    // Known vector: version=0x00, hash160=all zeros -> "1111111111111111111114oLvT2"
     std::uint8_t payload[21] = {};  // version 0x00 + 20 zero bytes
     auto encoded = base58check_encode(payload, 21);
     CHECK(!encoded.empty(), "base58_encode_nonempty");
@@ -481,9 +481,9 @@ static void test_wif() {
     CHECK(dec_test.valid && dec_test.network == Network::Testnet, "wif_testnet_roundtrip");
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// ===============================================================================
 // Silent Payments Tests
-// ═══════════════════════════════════════════════════════════════════════════════
+// ===============================================================================
 
 static void test_silent_payment_basic() {
     std::printf("\n=== Silent Payments ===\n");
@@ -559,9 +559,9 @@ static void test_silent_payment_multiple_outputs() {
     CHECK(detected.size() == 3, "sp_detected_three_outputs");
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// ===============================================================================
 // Edge Cases
-// ═══════════════════════════════════════════════════════════════════════════════
+// ===============================================================================
 
 static void test_pedersen_zero_value() {
     std::printf("\n=== Edge: Zero Value Commitment ===\n");
@@ -610,16 +610,16 @@ static void test_address_consistency() {
     auto t2 = address_p2tr(pk);
     CHECK(t1 == t2, "p2tr_deterministic");
 
-    // Different keys → different addresses
+    // Different keys -> different addresses
     Scalar sk2 = Scalar::from_uint64(8);
     Point pk2 = Point::generator().scalar_mul(sk2);
     CHECK(address_p2pkh(pk) != address_p2pkh(pk2), "different_keys_different_p2pkh");
     CHECK(address_p2wpkh(pk) != address_p2wpkh(pk2), "different_keys_different_p2wpkh");
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// ===============================================================================
 // Main
-// ═══════════════════════════════════════════════════════════════════════════════
+// ===============================================================================
 
 int test_v4_features_run() {
     std::printf("===========================================\n");

@@ -7,8 +7,8 @@
 // ============================================================================
 // Standard ECDSA (RFC 6979 deterministic nonce recommended for production).
 // This implementation provides:
-//   - sign(message_hash, private_key) → (r, s)
-//   - verify(message_hash, public_key, r, s) → bool
+//   - sign(message_hash, private_key) -> (r, s)
+//   - verify(message_hash, public_key, r, s) -> bool
 //   - Signature normalization (low-S, BIP-62)
 //
 // WARNING: The nonce k MUST be cryptographically random or deterministic
@@ -23,7 +23,7 @@
 
 namespace secp256k1 {
 
-// ── Signature ────────────────────────────────────────────────────────────────
+// -- Signature ----------------------------------------------------------------
 
 struct ECDSASignature {
     fast::Scalar r;
@@ -46,7 +46,7 @@ struct ECDSASignature {
     bool is_low_s() const;
 };
 
-// ── ECDSA Operations ─────────────────────────────────────────────────────────
+// -- ECDSA Operations ---------------------------------------------------------
 
 // Sign a 32-byte message hash with a private key.
 // Uses RFC 6979 deterministic nonce generation.
@@ -61,7 +61,7 @@ bool ecdsa_verify(const std::array<std::uint8_t, 32>& msg_hash,
                   const fast::Point& public_key,
                   const ECDSASignature& sig);
 
-// ── RFC 6979 Deterministic Nonce ─────────────────────────────────────────────
+// -- RFC 6979 Deterministic Nonce ---------------------------------------------
 
 // Generate deterministic nonce k per RFC 6979.
 // Inputs: private key (32 bytes), message hash (32 bytes).

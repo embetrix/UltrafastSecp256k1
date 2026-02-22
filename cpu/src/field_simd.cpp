@@ -5,9 +5,9 @@ namespace secp256k1::simd {
 
 using fast::FieldElement;
 
-// ══════════════════════════════════════════════════════════════════════════════
+// ==============================================================================
 // Scalar Fallback (always available, any platform)
-// ══════════════════════════════════════════════════════════════════════════════
+// ==============================================================================
 
 namespace detail {
 
@@ -41,11 +41,11 @@ void batch_field_sqr_scalar(FieldElement* out, const FieldElement* a,
 
 } // namespace detail
 
-// ══════════════════════════════════════════════════════════════════════════════
+// ==============================================================================
 // Auto-Dispatching Batch Operations
-// ══════════════════════════════════════════════════════════════════════════════
+// ==============================================================================
 // Current implementation: scalar-only with architecture detection.
-// SIMD kernels (AVX2/AVX-512) operate on the 4×uint64 representation.
+// SIMD kernels (AVX2/AVX-512) operate on the 4xuint64 representation.
 //
 // For field multiplication, SIMD doesn't help much because secp256k1
 // modular reduction is inherently serial (carry propagation).
@@ -84,9 +84,9 @@ void batch_field_sqr(FieldElement* out,
     detail::batch_field_sqr_scalar(out, a, count);
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
+// ==============================================================================
 // Batch Modular Inverse (Montgomery's Trick)
-// ══════════════════════════════════════════════════════════════════════════════
+// ==============================================================================
 // Computes n inversions with only 1 actual field inversion.
 // Algorithm:
 //   1. Compute running products: prod[i] = a[0] * a[1] * ... * a[i]
@@ -110,7 +110,7 @@ void batch_field_inv(FieldElement* out,
     // (we'll overwrite it anyway)
     FieldElement* products = scratch ? scratch : out;
 
-    // Step 1: Forward pass — compute running products
+    // Step 1: Forward pass -- compute running products
     products[0] = a[0];
     for (std::size_t i = 1; i < count; ++i) {
         products[i] = products[i - 1] * a[i];
@@ -119,7 +119,7 @@ void batch_field_inv(FieldElement* out,
     // Step 2: Single inversion
     auto inv = products[count - 1].inverse();
 
-    // Step 3: Backward pass — distribute the inverse
+    // Step 3: Backward pass -- distribute the inverse
     for (std::size_t i = count - 1; i > 0; --i) {
         out[i] = inv * products[i - 1];
         inv = inv * a[i];

@@ -28,7 +28,7 @@ static void check(bool cond, const char* name) {
     }
 }
 
-// ── Test 1: Precompute G-multiples table ─────────────────────────────────────
+// -- Test 1: Precompute G-multiples table -------------------------------------
 
 static void test_precompute_g_multiples() {
     std::printf("[BatchAffine] Precompute G-multiples table...\n");
@@ -58,7 +58,7 @@ static void test_precompute_g_multiples() {
     std::printf("  Verified %zu G-multiples\n", N);
 }
 
-// ── Test 2: batch_add_affine_x correctness ──────────────────────────────────
+// -- Test 2: batch_add_affine_x correctness ----------------------------------
 
 static void test_batch_add_x_correctness() {
     std::printf("[BatchAffine] batch_add_affine_x correctness...\n");
@@ -80,11 +80,11 @@ static void test_batch_add_x_correctness() {
     // Verify against scalar multiplication
     FieldElement fe_zero = FieldElement::zero();
     for (std::size_t i = 0; i < BATCH; ++i) {
-        // When base == table[i] (i.e. i+1 == 42), dx=0 → sentinel zero output.
+        // When base == table[i] (i.e. i+1 == 42), dx=0 -> sentinel zero output.
         // This is the degenerate doubling case, handled correctly by sentinel.
         if (i + 1 == 42) {
             char label[80];
-            std::snprintf(label, sizeof(label), "P + %zuG: degenerate (dx=0) → sentinel zero", i + 1);
+            std::snprintf(label, sizeof(label), "P + %zuG: degenerate (dx=0) -> sentinel zero", i + 1);
             check(out_x[i] == fe_zero, label);
             continue;
         }
@@ -101,7 +101,7 @@ static void test_batch_add_x_correctness() {
     std::printf("  Verified %zu batch additions\n", BATCH);
 }
 
-// ── Test 3: batch_add_affine_xy correctness ─────────────────────────────────
+// -- Test 3: batch_add_affine_xy correctness ---------------------------------
 
 static void test_batch_add_xy_correctness() {
     std::printf("[BatchAffine] batch_add_affine_xy correctness...\n");
@@ -134,7 +134,7 @@ static void test_batch_add_xy_correctness() {
     std::printf("  Verified %zu XY results\n", BATCH);
 }
 
-// ── Test 4: Bidirectional batch add ──────────────────────────────────────────
+// -- Test 4: Bidirectional batch add ------------------------------------------
 
 static void test_bidirectional() {
     std::printf("[BatchAffine] Bidirectional batch add...\n");
@@ -175,7 +175,7 @@ static void test_bidirectional() {
     std::printf("  Verified %zu bidirectional pairs\n", BATCH);
 }
 
-// ── Test 5: Parity extraction ────────────────────────────────────────────────
+// -- Test 5: Parity extraction ------------------------------------------------
 
 static void test_parity() {
     std::printf("[BatchAffine] Y-parity extraction...\n");
@@ -209,7 +209,7 @@ static void test_parity() {
     std::printf("  Verified %zu parity values\n", BATCH);
 }
 
-// ── Test 6: Arbitrary point multiples ────────────────────────────────────────
+// -- Test 6: Arbitrary point multiples ----------------------------------------
 
 static void test_arbitrary_point_table() {
     std::printf("[BatchAffine] Arbitrary point multiples table...\n");
@@ -237,7 +237,7 @@ static void test_arbitrary_point_table() {
     std::printf("  Verified %zu arbitrary multiples\n", N);
 }
 
-// ── Test 7: Large batch (search-scale) ───────────────────────────────────────
+// -- Test 7: Large batch (search-scale) ---------------------------------------
 
 static void test_large_batch() {
     std::printf("[BatchAffine] Large batch (1024 points)...\n");
@@ -289,7 +289,7 @@ static void test_large_batch() {
     }
 }
 
-// ── Test 8: Edge case — empty batch ──────────────────────────────────────────
+// -- Test 8: Edge case -- empty batch ------------------------------------------
 
 static void test_empty() {
     std::printf("[BatchAffine] Empty batch...\n");
@@ -300,7 +300,7 @@ static void test_empty() {
     check(true, "empty batch: no crash");
 }
 
-// ── Test 9: Negate table correctness ─────────────────────────────────────────
+// -- Test 9: Negate table correctness -----------------------------------------
 
 static void test_negate_table() {
     std::printf("[BatchAffine] Negate table...\n");
@@ -310,7 +310,7 @@ static void test_negate_table() {
     auto neg = negate_affine_table(table.data(), N);
 
     for (std::size_t i = 0; i < N; ++i) {
-        // neg[i] = -(i+1)*G → x same, y = -y
+        // neg[i] = -(i+1)*G -> x same, y = -y
         Scalar s = Scalar::from_uint64(i + 1);
         Point expected = scalar_mul_generator(s).negate();
 
@@ -323,7 +323,7 @@ static void test_negate_table() {
     std::printf("  Verified %zu negated points\n", N);
 }
 
-// ── Entry point ──────────────────────────────────────────────────────────────
+// -- Entry point --------------------------------------------------------------
 
 int test_batch_add_affine_run() {
     std::printf("\n=== Affine Batch Addition Tests ===\n");

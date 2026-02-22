@@ -1,8 +1,8 @@
 /* ============================================================================
- * UltrafastSecp256k1 — C API (ABI-stable)
+ * UltrafastSecp256k1 -- C API (ABI-stable)
  * ============================================================================
  * Shared C interface for all language bindings.
- * All types are opaque byte arrays — no internal types exposed.
+ * All types are opaque byte arrays -- no internal types exposed.
  *
  * Conventions:
  *   - Private keys:   uint8_t[32]  (big-endian scalar)
@@ -22,7 +22,7 @@
 extern "C" {
 #endif
 
-/* ── Export macros ──────────────────────────────────────────────────────────── */
+/* -- Export macros ------------------------------------------------------------ */
 #if defined(_WIN32) || defined(__CYGWIN__)
   #ifdef ULTRAFAST_SECP256K1_BUILDING
     #define SECP256K1_API __declspec(dllexport)
@@ -35,7 +35,7 @@ extern "C" {
   #define SECP256K1_API
 #endif
 
-/* ── Version ───────────────────────────────────────────────────────────────── */
+/* -- Version ----------------------------------------------------------------- */
 #define ULTRAFAST_SECP256K1_VERSION_MAJOR 1
 #define ULTRAFAST_SECP256K1_VERSION_MINOR 0
 #define ULTRAFAST_SECP256K1_VERSION_PATCH 0
@@ -43,13 +43,13 @@ extern "C" {
 /** Return version string, e.g. "1.0.0" */
 SECP256K1_API const char* secp256k1_version(void);
 
-/* ── Library Lifecycle ─────────────────────────────────────────────────────── */
+/* -- Library Lifecycle ------------------------------------------------------- */
 
 /** Initialize library (runs selftest). Call once before any other function.
  *  Returns 0 on success, 1 on selftest failure. */
 SECP256K1_API int secp256k1_init(void);
 
-/* ── Key Operations ────────────────────────────────────────────────────────── */
+/* -- Key Operations ---------------------------------------------------------- */
 
 /** Compute public key (compressed, 33 bytes) from private key (32 bytes).
  *  Returns 0 on success. */
@@ -91,7 +91,7 @@ SECP256K1_API int secp256k1_ec_privkey_tweak_mul(
  *  Returns 1 if valid, 0 if invalid. */
 SECP256K1_API int secp256k1_ec_seckey_verify(const uint8_t privkey[32]);
 
-/* ── ECDSA ─────────────────────────────────────────────────────────────────── */
+/* -- ECDSA ------------------------------------------------------------------- */
 
 /** Sign a 32-byte message hash using ECDSA (RFC 6979 deterministic nonce).
  *  sig_out: 64-byte compact signature (R || S, low-S normalized).
@@ -119,7 +119,7 @@ SECP256K1_API int secp256k1_ecdsa_signature_serialize_der(
     uint8_t* der_out,
     size_t* der_len);
 
-/* ── ECDSA Recovery ────────────────────────────────────────────────────────── */
+/* -- ECDSA Recovery ---------------------------------------------------------- */
 
 /** Sign with recovery id.
  *  sig_out: 64-byte compact signature.
@@ -140,7 +140,7 @@ SECP256K1_API int secp256k1_ecdsa_recover(
     int recid,
     uint8_t pubkey_out[33]);
 
-/* ── Schnorr (BIP-340) ────────────────────────────────────────────────────── */
+/* -- Schnorr (BIP-340) ------------------------------------------------------ */
 
 /** Create a Schnorr signature (BIP-340).
  *  msg: 32-byte message.
@@ -167,7 +167,7 @@ SECP256K1_API int secp256k1_schnorr_pubkey(
     const uint8_t privkey[32],
     uint8_t pubkey_x_out[32]);
 
-/* ── ECDH ──────────────────────────────────────────────────────────────────── */
+/* -- ECDH -------------------------------------------------------------------- */
 
 /** Compute ECDH shared secret: SHA256(compressed_shared_point).
  *  pubkey: 33-byte compressed public key.
@@ -192,7 +192,7 @@ SECP256K1_API int secp256k1_ecdh_raw(
     const uint8_t pubkey[33],
     uint8_t secret_out[32]);
 
-/* ── Hashing ───────────────────────────────────────────────────────────────── */
+/* -- Hashing ----------------------------------------------------------------- */
 
 /** SHA-256 hash.
  *  digest_out: 32-byte output. */
@@ -216,7 +216,7 @@ SECP256K1_API void secp256k1_tagged_hash(
     size_t data_len,
     uint8_t digest_out[32]);
 
-/* ── Bitcoin Addresses ─────────────────────────────────────────────────────── */
+/* -- Bitcoin Addresses ------------------------------------------------------- */
 
 /** Network constants for address generation. */
 #define SECP256K1_NETWORK_MAINNET 0
@@ -250,7 +250,7 @@ SECP256K1_API int secp256k1_address_p2tr(
     char* addr_out,
     size_t* addr_len);
 
-/* ── WIF (Wallet Import Format) ────────────────────────────────────────────── */
+/* -- WIF (Wallet Import Format) ---------------------------------------------- */
 
 /** Encode private key to WIF string.
  *  wif_out: buffer (min 52 + 1 bytes).
@@ -273,7 +273,7 @@ SECP256K1_API int secp256k1_wif_decode(
     int* compressed_out,
     int* network_out);
 
-/* ── BIP-32 (HD Key Derivation) ────────────────────────────────────────────── */
+/* -- BIP-32 (HD Key Derivation) ---------------------------------------------- */
 
 /** Opaque BIP-32 extended key structure (78 bytes serialized). */
 typedef struct {
@@ -316,7 +316,7 @@ SECP256K1_API int secp256k1_bip32_get_pubkey(
     const secp256k1_bip32_key* key,
     uint8_t pubkey_out[33]);
 
-/* ── Taproot (BIP-341) ─────────────────────────────────────────────────────── */
+/* -- Taproot (BIP-341) ------------------------------------------------------- */
 
 /** Derive Taproot output key from internal key.
  *  merkle_root: 32-byte merkle root (NULL for key-path only).

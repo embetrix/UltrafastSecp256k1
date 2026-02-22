@@ -2,7 +2,7 @@
 #define SECP256K1_FIELD_SIMD_HPP
 
 // ============================================================================
-// AVX2 / AVX-512 SIMD Field Arithmetic — secp256k1
+// AVX2 / AVX-512 SIMD Field Arithmetic -- secp256k1
 // ============================================================================
 // Batch field operations using x86 SIMD intrinsics for 4x (AVX2) or
 // 8x (AVX-512) parallel field element processing.
@@ -13,8 +13,8 @@
 //   - Falls back to scalar when SIMD not available
 //
 // Performance model:
-//   - AVX2 (256-bit): 4 field ops in parallel → ~3x throughput for batch work
-//   - AVX-512 (512-bit): 8 field ops → ~5-6x throughput
+//   - AVX2 (256-bit): 4 field ops in parallel -> ~3x throughput for batch work
+//   - AVX-512 (512-bit): 8 field ops -> ~5-6x throughput
 //   - Only beneficial for batch operations (batch verify, multi-scalar mul)
 //   - Single-element ops are faster with scalar code (pipeline fill overhead)
 //
@@ -45,7 +45,7 @@ namespace secp256k1::simd {
 
 using fast::FieldElement;
 
-// ── Runtime Feature Detection ────────────────────────────────────────────────
+// -- Runtime Feature Detection ------------------------------------------------
 
 // Check if AVX2 is available at runtime
 inline bool avx2_available() noexcept {
@@ -85,7 +85,7 @@ inline bool avx512_available() noexcept {
 #endif
 }
 
-// ── SIMD Tier Enum ───────────────────────────────────────────────────────────
+// -- SIMD Tier Enum -----------------------------------------------------------
 
 enum class SimdTier : int {
     SCALAR  = 0,  // No SIMD, scalar fallback
@@ -108,7 +108,7 @@ inline const char* simd_tier_name(SimdTier tier) noexcept {
     }
 }
 
-// ── Batch API (auto-dispatching) ─────────────────────────────────────────────
+// -- Batch API (auto-dispatching) ---------------------------------------------
 // These functions auto-detect SIMD tier and dispatch accordingly.
 // All operate on arrays of FieldElements.
 // count can be any value; non-aligned remainder handled by scalar fallback.
@@ -131,12 +131,12 @@ void batch_field_mul(FieldElement* out,
                      const FieldElement* b,
                      std::size_t count);
 
-// Batch squaring: out[i] = a[i]²
+// Batch squaring: out[i] = a[i]^2
 void batch_field_sqr(FieldElement* out,
                      const FieldElement* a,
                      std::size_t count);
 
-// ── Batch Modular Inverse (Montgomery's trick) ──────────────────────────────
+// -- Batch Modular Inverse (Montgomery's trick) ------------------------------
 // Computes count inversions using only 1 field inversion + 3(n-1) multiplications.
 // Much faster than n individual inversions for batch verification.
 // Scratch buffer: needs at least 'count' FieldElements of scratch space.
@@ -146,7 +146,7 @@ void batch_field_inv(FieldElement* out,
                      std::size_t count,
                      FieldElement* scratch = nullptr);
 
-// ── Architecture-Specific Entry Points (for benchmarking) ────────────────────
+// -- Architecture-Specific Entry Points (for benchmarking) --------------------
 // These are only available if compiled with appropriate flags.
 // Normal code should use the auto-dispatching batch_field_* functions above.
 

@@ -8,19 +8,19 @@ using fast::Scalar;
 using fast::Point;
 using fast::FieldElement;
 
-// ── Lift x-coordinate to curve point ─────────────────────────────────────────
-// Given x, compute y such that y² = x³ + 7 (mod p).
+// -- Lift x-coordinate to curve point -----------------------------------------
+// Given x, compute y such that y^2 = x^3 + 7 (mod p).
 // parity selects which square root: 0 = even y, 1 = odd y.
 // Returns {Point, bool} where bool = true if point is valid.
 static std::pair<Point, bool> lift_x(const FieldElement& x_fe, int parity) {
-    // y² = x³ + 7
+    // y^2 = x^3 + 7
     auto x3 = x_fe.square() * x_fe;
     auto y2 = x3 + FieldElement::from_uint64(7);
 
     // Optimized sqrt via addition chain
     auto y = y2.sqrt();
 
-    // Verify: y² == y2
+    // Verify: y^2 == y2
     if (y.square() != y2) return {Point::infinity(), false};
 
     // Adjust parity
@@ -33,7 +33,7 @@ static std::pair<Point, bool> lift_x(const FieldElement& x_fe, int parity) {
     return {Point::from_affine(x_fe, y), true};
 }
 
-// ── secp256k1 order n ────────────────────────────────────────────────────────
+// -- secp256k1 order n --------------------------------------------------------
 // n = FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141
 static const std::array<uint8_t, 32> SECP256K1_ORDER_BYTES = {
     0xFF,0xFF,0xFF,0xFF, 0xFF,0xFF,0xFF,0xFF,
@@ -42,7 +42,7 @@ static const std::array<uint8_t, 32> SECP256K1_ORDER_BYTES = {
     0xBF,0xD2,0x5E,0x8C, 0xD0,0x36,0x41,0x41
 };
 
-// ── Sign with Recovery ID ────────────────────────────────────────────────────
+// -- Sign with Recovery ID ----------------------------------------------------
 
 RecoverableSignature ecdsa_sign_recoverable(
     const std::array<uint8_t, 32>& msg_hash,
@@ -81,7 +81,7 @@ RecoverableSignature ecdsa_sign_recoverable(
     }
     if (overflow) recid |= 2;
 
-    // s = k⁻¹ * (z + r * d) mod n
+    // s = k^-^1 * (z + r * d) mod n
     auto k_inv = k.inverse();
     auto s = k_inv * (z + r * private_key);
     if (s.is_zero()) return {{Scalar::zero(), Scalar::zero()}, 0};
@@ -96,7 +96,7 @@ RecoverableSignature ecdsa_sign_recoverable(
     return {sig, recid};
 }
 
-// ── Public Key Recovery ──────────────────────────────────────────────────────
+// -- Public Key Recovery ------------------------------------------------------
 
 std::pair<Point, bool> ecdsa_recover(
     const std::array<uint8_t, 32>& msg_hash,
@@ -112,7 +112,7 @@ std::pair<Point, bool> ecdsa_recover(
     FieldElement rx_fe;
 
     if (recid & 2) {
-        // R.x = r + n — need to add order to r as field element
+        // R.x = r + n -- need to add order to r as field element
         // This is extremely rare (~2^-128 probability)
         auto n_fe = FieldElement::from_bytes(SECP256K1_ORDER_BYTES);
         auto r_fe_val = FieldElement::from_bytes(r_bytes);
@@ -127,7 +127,7 @@ std::pair<Point, bool> ecdsa_recover(
     if (!valid) return {Point::infinity(), false};
 
     // Step 3: Recover public key
-    // Q = r⁻¹ * (s*R - z*G)
+    // Q = r^-^1 * (s*R - z*G)
     auto z = Scalar::from_bytes(msg_hash);
     auto r_inv = sig.r.inverse();
 
@@ -143,7 +143,7 @@ std::pair<Point, bool> ecdsa_recover(
     return {Q, true};
 }
 
-// ── Compact Serialization ────────────────────────────────────────────────────
+// -- Compact Serialization ----------------------------------------------------
 
 std::array<uint8_t, 65> recoverable_to_compact(
     const RecoverableSignature& rsig,

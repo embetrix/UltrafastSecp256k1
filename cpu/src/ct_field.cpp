@@ -1,16 +1,16 @@
 // ============================================================================
-// Constant-Time Field Arithmetic — Implementation
+// Constant-Time Field Arithmetic -- Implementation
 // ============================================================================
 // All operations have data-independent execution traces.
 // p = 2^256 - 2^32 - 977 = FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F
 //
 // PLATFORM DISPATCH (field_mul / field_sqr):
-//   x86-64:  Inline FE52 5×52 multiply — zero call overhead, best codegen.
-//   ARM64:   fast::operator* → native ASM (already fastest for ARM64).
-//   Generic: fast::operator* + field_normalize (MSVC, 32-bit — not perf-critical).
+//   x86-64:  Inline FE52 5x52 multiply -- zero call overhead, best codegen.
+//   ARM64:   fast::operator* -> native ASM (already fastest for ARM64).
+//   Generic: fast::operator* + field_normalize (MSVC, 32-bit -- not perf-critical).
 //
 // PLATFORM DISPATCH (field_inv):
-//   x86-64 / ARM64 (__int128): SafeGCD 10×59=590 divsteps (CT, matches libsecp).
+//   x86-64 / ARM64 (__int128): SafeGCD 10x59=590 divsteps (CT, matches libsecp).
 //   Generic:                   Fermat chain a^(p-2) via field_mul/field_sqr.
 // ============================================================================
 
@@ -20,17 +20,17 @@
 #include <cstring>
 #include <cstdint>
 
-// Include 5×52 inline implementations for __int128 platforms.
-// The inline 5×52 C path produces identical asm to hand-written mul/sqr
+// Include 5x52 inline implementations for __int128 platforms.
+// The inline 5x52 C path produces identical asm to hand-written mul/sqr
 // but with zero function-call overhead and superior register allocation.
 #if defined(__SIZEOF_INT128__)
 #include "secp256k1/field_52.hpp"
 #include "secp256k1/field_52_impl.hpp"
 #endif
 
-// ─── Platform dispatch ───────────────────────────────────────────────────────
-// x86-64 (Clang/GCC): inline FE52 5×52 multiply — zero call overhead, best codegen.
-// ARM64 (Clang/GCC): operator* delegates to native ASM via fast:: — already optimal.
+// --- Platform dispatch -------------------------------------------------------
+// x86-64 (Clang/GCC): inline FE52 5x52 multiply -- zero call overhead, best codegen.
+// ARM64 (Clang/GCC): operator* delegates to native ASM via fast:: -- already optimal.
 // Generic (MSVC/32-bit): operator* + field_normalize (functional, not perf-critical).
 
 namespace secp256k1::ct {
@@ -46,7 +46,7 @@ static constexpr std::uint64_t P[4] = {
 // 2^256 mod p = 2^32 + 977 = 0x1000003D1
 static constexpr std::uint64_t MOD_K = 0x1000003D1ULL;
 
-// ─── Internal helpers ────────────────────────────────────────────────────────
+// --- Internal helpers --------------------------------------------------------
 
 // CT 256-bit addition with carry out. Returns carry (0 or 1).
 static inline std::uint64_t add256(std::uint64_t r[4],
@@ -86,13 +86,13 @@ static inline std::uint64_t sub256(std::uint64_t r[4],
 static inline void ct_reduce_once(std::uint64_t r[4]) noexcept {
     std::uint64_t tmp[4];
     std::uint64_t borrow = sub256(tmp, r, P);
-    // If borrow == 0, r >= p → use tmp (reduced). Else keep r.
+    // If borrow == 0, r >= p -> use tmp (reduced). Else keep r.
     // mask = 0xFFF...F if no borrow (r >= p), else 0
     std::uint64_t mask = is_zero_mask(borrow);
     cmov256(r, tmp, mask);
 }
 
-// ─── Public API ──────────────────────────────────────────────────────────────
+// --- Public API --------------------------------------------------------------
 
 FieldElement field_normalize(const FieldElement& a) noexcept {
     std::uint64_t r[4];
@@ -139,26 +139,25 @@ FieldElement field_sub(const FieldElement& a, const FieldElement& b) noexcept {
 }
 
 FieldElement field_mul(const FieldElement& a, const FieldElement& b) noexcept {
-#if defined(__SIZEOF_INT128__) && (defined(__x86_64__) || defined(_M_X64))
-    // x86-64: inline FE52 5×52 multiply — zero call overhead, best codegen.
+#if defined(__SIZEOF_INT128__)
+    // FE52 5x52 multiply with integrated reduction -- best codegen on
+    // x86-64 (BMI2), ARM64, and RISC-V (dedicated asm: fe52_mul_inner_riscv64).
     using FE52 = secp256k1::fast::FieldElement52;
     return (FE52::from_fe(a) * FE52::from_fe(b)).to_fe();
 #else
-    // ARM64 / generic: fast:: operator* → mul_impl which already returns
-    // a fully reduced result (ESP32 Comba, ARM64 ASM, generic reduce all
-    // normalize). No additional field_normalize needed.
+    // MSVC / ESP32: 4x64 Comba with separate reduction.
     return a * b;
 #endif
 }
 
 FieldElement field_sqr(const FieldElement& a) noexcept {
-#if defined(__SIZEOF_INT128__) && (defined(__x86_64__) || defined(_M_X64))
-    // x86-64: inline FE52 5×52 square — zero call overhead.
+#if defined(__SIZEOF_INT128__)
+    // FE52 5x52 square with integrated reduction -- best codegen on
+    // x86-64 (BMI2), ARM64, and RISC-V (dedicated asm: fe52_sqr_inner_riscv64).
     using FE52 = secp256k1::fast::FieldElement52;
     return FE52::from_fe(a).square().to_fe();
 #else
-    // ARM64 / generic: fast:: square → square_impl which already returns
-    // a fully reduced result. No additional field_normalize needed.
+    // MSVC / ESP32: 4x64 square with separate reduction.
     return a.square();
 #endif
 }
@@ -205,14 +204,14 @@ FieldElement field_half(const FieldElement& a) noexcept {
     return FieldElement::from_limbs_raw({r0, r1, r2, r3});
 }
 
-// ── CT SafeGCD building blocks (extracted for register allocation) ──────────
+// -- CT SafeGCD building blocks (extracted for register allocation) ----------
 #if defined(__SIZEOF_INT128__)
 namespace {
 
 struct SG62   { int64_t v[5]; };
 struct SGTrans { int64_t u, v, q, r; };
 
-// secp256k1 prime in signed-62:  p = 2^256 − 2^32 − 977
+// secp256k1 prime in signed-62:  p = 2^256 - 2^32 - 977
 static constexpr SG62 SGP = {{
     -(int64_t)0x1000003D1LL, 0, 0, 0, 256
 }};
@@ -220,12 +219,12 @@ static constexpr SG62 SGP = {{
 static constexpr uint64_t P_INV62 = 0x27C7F6E22DDACACFULL;
 
 // CT batch of 59 divsteps using conditional-add pattern (not conditional-swap).
-// Result matrix is scaled by 2^62 (initial 8×identity + 59 halvings).
+// Result matrix is scaled by 2^62 (initial 8xidentity + 59 halvings).
 // zeta = -(delta + 1/2); swap condition is zeta < 0 (i.e., delta > 0).
-// Matches libsecp: 10 × 59 = 590 divsteps (proven sufficient for 256-bit).
+// Matches libsecp: 10 x 59 = 590 divsteps (proven sufficient for 256-bit).
 static int64_t ct_divsteps_59(int64_t zeta, uint64_t f0, uint64_t g0,
                                SGTrans& t) noexcept {
-    // Start with 8×identity (2^3) so output is scaled by 2^62 (3 + 59 = 62).
+    // Start with 8xidentity (2^3) so output is scaled by 2^62 (3 + 59 = 62).
     uint64_t u = 8, v = 0, q = 0, r = 8;
     uint64_t f = f0, g = g0;
 
@@ -246,7 +245,7 @@ static int64_t ct_divsteps_59(int64_t zeta, uint64_t f0, uint64_t g0,
         // Combined mask: zeta < 0 AND g was odd
         c1 &= c2;
 
-        // zeta update: swap → -zeta-2, no-swap → zeta-1
+        // zeta update: swap -> -zeta-2, no-swap -> zeta-1
         zeta = (zeta ^ (int64_t)c1) - 1;
 
         // Conditionally add (g,q,r) into (f,u,v) when both conditions met
@@ -383,11 +382,11 @@ static void ct_sg_normalize(SG62& r, int64_t f_sign) noexcept {
 
 FieldElement field_inv(const FieldElement& a) noexcept {
 #if defined(__SIZEOF_INT128__)
-    // ── CT SafeGCD inverse ───────────────────────────────────────────────
-    // Bernstein-Yang divstep: 10 × 59 = 590 branchless divsteps.
+    // -- CT SafeGCD inverse -----------------------------------------------
+    // Bernstein-Yang divstep: 10 x 59 = 590 branchless divsteps.
     // Matches bitcoin-core/secp256k1 proven bound for 256-bit modular inverse.
 
-    // fe → s62
+    // fe -> s62
     const auto& al = a.limbs();
     constexpr uint64_t M = (1ULL << 62) - 1;
 
@@ -403,7 +402,7 @@ FieldElement field_inv(const FieldElement& a) noexcept {
     }};
     int64_t zeta = -1;  // zeta = -(delta + 1/2); delta starts at 1/2
 
-    // 10 × 59 = 590 divsteps (proven sufficient for 256-bit; same as libsecp)
+    // 10 x 59 = 590 divsteps (proven sufficient for 256-bit; same as libsecp)
     for (int iter = 0; iter < 10; ++iter) {
         SGTrans t;
         zeta = ct_divsteps_59(zeta, (uint64_t)f.v[0], (uint64_t)g.v[0], t);
@@ -413,7 +412,7 @@ FieldElement field_inv(const FieldElement& a) noexcept {
 
     ct_sg_normalize(d, f.v[4]);
 
-    // s62 → fe
+    // s62 -> fe
     return FieldElement::from_limbs({
         (uint64_t)d.v[0] | ((uint64_t)d.v[1] << 62),
         ((uint64_t)d.v[1] >> 2)  | ((uint64_t)d.v[2] << 60),
@@ -422,7 +421,7 @@ FieldElement field_inv(const FieldElement& a) noexcept {
     });
 
 #else
-    // ── Generic 4×64 path (x86_64 ASM or fallback) ──────────────────────
+    // -- Generic 4x64 path (x86_64 ASM or fallback) ----------------------
     // Fermat's little theorem: a^(p-2) mod p
     // Using addition chain optimized for secp256k1:
     // p-2 = FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2D
@@ -431,7 +430,7 @@ FieldElement field_inv(const FieldElement& a) noexcept {
     // Always the same number of operations regardless of input.
     //
     // Optimal addition chain:
-    // 1. Compute a² ... a^(2^k) powers via repeated squaring
+    // 1. Compute a^2 ... a^(2^k) powers via repeated squaring
     // 2. Multiply specific powers together
     // Total: 255 squarings + 14 multiplications (fixed)
 
@@ -499,10 +498,10 @@ FieldElement field_inv(const FieldElement& a) noexcept {
     //   bits 31..0: FFFFFC2D = ...11111100 00101101
     //
     // After x223 (covers bits 255..33):
-    //   Square 23 times → x223 * 2^23, then multiply by x22
-    //   Square 5 times → then multiply by a
-    //   Square 3 times → then multiply by x2
-    //   Square 2 times → then multiply by a
+    //   Square 23 times -> x223 * 2^23, then multiply by x22
+    //   Square 5 times -> then multiply by a
+    //   Square 3 times -> then multiply by x2
+    //   Square 2 times -> then multiply by a
 
     FieldElement t = x223;
 
@@ -526,11 +525,11 @@ FieldElement field_inv(const FieldElement& a) noexcept {
 #endif  // __SIZEOF_INT128__
 }
 
-// ─── Conditional Operations ──────────────────────────────────────────────────
+// --- Conditional Operations --------------------------------------------------
 
 void field_cmov(FieldElement* r, const FieldElement& a,
                 std::uint64_t mask) noexcept {
-    // In-place XOR-mask conditional move — no temporary FieldElement.
+    // In-place XOR-mask conditional move -- no temporary FieldElement.
     // mask is all-ones (select a) or all-zeros (keep r).
     auto& rd = r->data().limbs;
     const auto& ad = a.data().limbs;
@@ -542,7 +541,7 @@ void field_cmov(FieldElement* r, const FieldElement& a,
 
 void field_cswap(FieldElement* a, FieldElement* b,
                  std::uint64_t mask) noexcept {
-    // Direct in-place XOR swap — no temporaries.
+    // Direct in-place XOR swap -- no temporaries.
     auto& ad = a->data().limbs;
     auto& bd = b->data().limbs;
     for (int i = 0; i < 4; ++i) {
@@ -569,7 +568,7 @@ FieldElement field_cneg(const FieldElement& a, std::uint64_t mask) noexcept {
     return field_select(neg, a, mask);
 }
 
-// ─── Comparison ──────────────────────────────────────────────────────────────
+// --- Comparison --------------------------------------------------------------
 
 std::uint64_t field_is_zero(const FieldElement& a) noexcept {
     const auto& l = a.limbs();

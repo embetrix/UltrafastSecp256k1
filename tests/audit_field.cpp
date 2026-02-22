@@ -54,11 +54,11 @@ static const std::array<uint8_t, 32> P_BYTES = {
 };
 
 // ============================================================================
-// 1. Addition mod p — overflow paths
+// 1. Addition mod p -- overflow paths
 // ============================================================================
 static void test_addition_overflow() {
     g_section = "add_overflow";
-    printf("[1] Addition mod p — overflow paths\n");
+    printf("[1] Addition mod p -- overflow paths\n");
 
     auto zero = FieldElement::from_uint64(0);
     auto one  = FieldElement::one();
@@ -205,19 +205,19 @@ static void test_square_vs_mul() {
         auto a = random_fe();
         auto sq = a.square();
         auto mul = a * a;
-        CHECK(sq == mul, "a² == a*a");
+        CHECK(sq == mul, "a^2 == a*a");
     }
 
     // Square of zero == 0
     {
         auto z = FieldElement::from_uint64(0);
-        CHECK(z.square() == z, "0² == 0");
+        CHECK(z.square() == z, "0^2 == 0");
     }
 
     // Square of one == 1
     {
         auto o = FieldElement::one();
-        CHECK(o.square() == o, "1² == 1");
+        CHECK(o.square() == o, "1^2 == 1");
     }
 
     printf("    %d checks\n\n", g_pass);
@@ -250,12 +250,12 @@ static void test_reduction() {
         CHECK(r == one, "from_bytes(p+1) == 1");
     }
 
-    // to_bytes → from_bytes roundtrip
+    // to_bytes -> from_bytes roundtrip
     for (int i = 0; i < 1000; ++i) {
         auto a = random_fe();
         auto bytes = a.to_bytes();
         auto b = FieldElement::from_bytes(bytes);
-        CHECK(a == b, "to_bytes → from_bytes roundtrip");
+        CHECK(a == b, "to_bytes -> from_bytes roundtrip");
     }
 
     printf("    %d checks\n\n", g_pass);
@@ -304,8 +304,8 @@ static void test_limb_boundary() {
     // Operations on p-1
     auto p_minus_1 = FieldElement::from_bytes(P_BYTES) - FieldElement::one();
     auto sq = p_minus_1.square();
-    // (p-1)² = (-1)² = 1 mod p
-    CHECK(sq == FieldElement::one(), "(p-1)² == 1");
+    // (p-1)^2 = (-1)^2 = 1 mod p
+    CHECK(sq == FieldElement::one(), "(p-1)^2 == 1");
 
     // p-1 inverse = p-1 (since (-1)^(-1) = -1)
     auto inv = p_minus_1.inverse();
@@ -320,7 +320,7 @@ static void test_limb_boundary() {
         auto b = FieldElement::from_bytes(bytes);
         auto c = a * b;
         auto d = a.square();
-        CHECK(c == d, "near-max: a*a == a²");
+        CHECK(c == d, "near-max: a*a == a^2");
     }
 
     printf("    %d checks\n\n", g_pass);
@@ -364,14 +364,14 @@ static void test_sqrt() {
     g_section = "sqrt";
     printf("[9] Square root\n");
 
-    // sqrt(x²) should give x or -x
+    // sqrt(x^2) should give x or -x
     int qr_count = 0;
     for (int i = 0; i < 10000; ++i) {
         auto x = random_fe();
         auto x2 = x.square();
         auto s = x2.sqrt();
         auto s2 = s.square();
-        CHECK(s2 == x2, "sqrt(x²)² == x²");
+        CHECK(s2 == x2, "sqrt(x^2)^2 == x^2");
         if (s == x) ++qr_count;
     }
     // Roughly half should match x directly (the other half give -x)
@@ -440,9 +440,9 @@ static void test_random_cross_check() {
 
 // ============================================================================
 int main() {
-    printf("═══════════════════════════════════════════════════════════════\n");
-    printf("  AUDIT I.1 — Field Arithmetic Correctness\n");
-    printf("═══════════════════════════════════════════════════════════════\n\n");
+    printf("===============================================================\n");
+    printf("  AUDIT I.1 -- Field Arithmetic Correctness\n");
+    printf("===============================================================\n\n");
 
     test_addition_overflow();
     test_subtraction_borrow();
@@ -456,9 +456,9 @@ int main() {
     test_batch_inverse();
     test_random_cross_check();
 
-    printf("═══════════════════════════════════════════════════════════════\n");
+    printf("===============================================================\n");
     printf("  FIELD AUDIT: %d passed, %d failed\n", g_pass, g_fail);
-    printf("═══════════════════════════════════════════════════════════════\n");
+    printf("===============================================================\n");
 
     return g_fail > 0 ? 1 : 0;
 }

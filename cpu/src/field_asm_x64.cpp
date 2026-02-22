@@ -173,12 +173,12 @@ void square_4_asm(const uint64_t a[4], uint64_t result[8]) {
 // ===================================================================
 // Fast reduction modulo secp256k1 prime
 // p = 2^256 - 2^32 - 977
-// Property: 2^256 ≡ 2^32 + 977 (mod p)
+// Property: 2^256 == 2^32 + 977 (mod p)
 // ===================================================================
 
 void montgomery_reduce_asm(uint64_t t[8], uint64_t result[4]) {
     // Implement fast reduction using secp256k1 properties
-    // For 512-bit t: t ≡ t_low + t_high * (2^32 + 977) (mod p)
+    // For 512-bit t: t == t_low + t_high * (2^32 + 977) (mod p)
     
     constexpr uint64_t p0 = 0xFFFFFFFEFFFFFC2FULL;
     constexpr uint64_t p1 = 0xFFFFFFFFFFFFFFFFULL;

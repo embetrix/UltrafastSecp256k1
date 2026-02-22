@@ -1,7 +1,7 @@
 // ============================================================================
 // ARM64 (AArch64) Optimized Field Arithmetic for secp256k1
 // ============================================================================
-// Uses MUL/UMULH instructions for 64×64→128 multiply (single cycle each on
+// Uses MUL/UMULH instructions for 64x64->128 multiply (single cycle each on
 // Cortex-A55/A76). Fully unrolled, allocation-free, branchless.
 //
 // secp256k1 prime: p = 2^256 - 2^32 - 977
@@ -25,16 +25,16 @@ namespace arm64 {
 // ============================================================================
 // ARM64 256-bit Field Multiplication with secp256k1 Reduction
 // ============================================================================
-// Full 4×4 limb multiply → 512-bit → reduce mod p in one pass.
+// Full 4x4 limb multiply -> 512-bit -> reduce mod p in one pass.
 // Uses MUL/UMULH pairs (2 cycles each on Cortex-A76, 3 on A55).
-// Total: 16 MUL + 16 UMULH + reduction ≈ 50-80 cycles on A76
+// Total: 16 MUL + 16 UMULH + reduction ~= 50-80 cycles on A76
 //
-// Strategy: Schoolbook 4×4 multiply into 8 limbs, then secp256k1-specific
+// Strategy: Schoolbook 4x4 multiply into 8 limbs, then secp256k1-specific
 // reduction using c = 2^32 + 977.
 // ============================================================================
 
 void field_mul_arm64(uint64_t out[4], const uint64_t a[4], const uint64_t b[4]) noexcept {
-    // Phase 1: Full 256×256 → 512 bit multiplication
+    // Phase 1: Full 256x256 -> 512 bit multiplication
     // Using inline assembly to maximize register utilization and
     // exploit ARM64's ability to do MUL+UMULH in parallel pipelines.
     
@@ -146,7 +146,7 @@ void field_mul_arm64(uint64_t out[4], const uint64_t a[4], const uint64_t b[4]) 
         "str    x10, [%[t], #48]        \n\t"   // t[6]
         "str    x9,  [%[t], #56]        \n\t"   // t[7]
 
-        : /* no output operands — results stored via pointers */
+        : /* no output operands -- results stored via pointers */
         : [a0] "r"(a[0]), [a1] "r"(a[1]), [a2] "r"(a[2]), [a3] "r"(a[3]),
           [b0] "r"(b[0]), [b1] "r"(b[1]), [b2] "r"(b[2]), [b3] "r"(b[3]),
           [t] "r"(t)
@@ -197,7 +197,7 @@ void field_mul_arm64(uint64_t out[4], const uint64_t a[4], const uint64_t b[4]) 
         "adds   %[r3], %[r3], x8        \n\t"
         "adc    x14, x14, x9            \n\t"
 
-        // Second-round reduction for overflow in x14 (≤ ~0x1000003D1 max)
+        // Second-round reduction for overflow in x14 (<= ~0x1000003D1 max)
         "mul    x8,  x14, %[c]          \n\t"
         "umulh  x9,  x14, %[c]          \n\t"
         "adds   %[r0], %[r0], x8        \n\t"
@@ -263,7 +263,7 @@ void field_mul_arm64(uint64_t out[4], const uint64_t a[4], const uint64_t b[4]) 
 // ============================================================================
 // ARM64 256-bit Field Squaring with secp256k1 Reduction
 // ============================================================================
-// Exploits symmetry: a[i]*a[j] appears twice for i≠j, so we compute it once
+// Exploits symmetry: a[i]*a[j] appears twice for i!=j, so we compute it once
 // and double. Only 10 multiplications instead of 16.
 // ============================================================================
 
@@ -271,7 +271,7 @@ void field_sqr_arm64(uint64_t out[4], const uint64_t a[4]) noexcept {
     uint64_t t[8];
     
     __asm__ __volatile__(
-        // Compute cross products (i<j), each appears 2×
+        // Compute cross products (i<j), each appears 2x
         // We compute them once and will double later
         
         // a[0]*a[1]
@@ -326,44 +326,44 @@ void field_sqr_arm64(uint64_t out[4], const uint64_t a[4]) noexcept {
         "adds   x17, x17, x19          \n\t"
         "adc    x20, x20, x21          \n\t"   // col6
         
-        // Double everything (shift left by 1 for 2× cross products)
-        "adds   x8,  x8,  x8           \n\t"   // col1 × 2
-        "adcs   x9,  x9,  x9           \n\t"   // col2 × 2
-        "adcs   x11, x11, x11          \n\t"   // col3 × 2
-        "adcs   x13, x13, x13          \n\t"   // col4 × 2
-        "adcs   x17, x17, x17          \n\t"   // col5 × 2
-        "adcs   x20, x20, x20          \n\t"   // col6 × 2
+        // Double everything (shift left by 1 for 2x cross products)
+        "adds   x8,  x8,  x8           \n\t"   // col1 x 2
+        "adcs   x9,  x9,  x9           \n\t"   // col2 x 2
+        "adcs   x11, x11, x11          \n\t"   // col3 x 2
+        "adcs   x13, x13, x13          \n\t"   // col4 x 2
+        "adcs   x17, x17, x17          \n\t"   // col5 x 2
+        "adcs   x20, x20, x20          \n\t"   // col6 x 2
         "adc    x21, xzr, xzr          \n\t"   // col7 carry
         
         // Now add diagonal products a[i]*a[i]
         // a[0]*a[0]
         "mul    x10, %[a0], %[a0]       \n\t"
         "umulh  x12, %[a0], %[a0]       \n\t"
-        "str    x10, [%[t], #0]         \n\t"   // t[0] = lo(a0²)
-        "adds   x8,  x8,  x12          \n\t"   // t[1] += hi(a0²)
+        "str    x10, [%[t], #0]         \n\t"   // t[0] = lo(a0^2)
+        "adds   x8,  x8,  x12          \n\t"   // t[1] += hi(a0^2)
         "str    x8,  [%[t], #8]         \n\t"   // t[1]
         
         // a[1]*a[1]  
         "mul    x10, %[a1], %[a1]       \n\t"
         "umulh  x12, %[a1], %[a1]       \n\t"
-        "adcs   x9,  x9,  x10          \n\t"   // t[2] += lo(a1²)
-        "adcs   x11, x11, x12          \n\t"   // t[3] += hi(a1²)
+        "adcs   x9,  x9,  x10          \n\t"   // t[2] += lo(a1^2)
+        "adcs   x11, x11, x12          \n\t"   // t[3] += hi(a1^2)
         "str    x9,  [%[t], #16]        \n\t"   // t[2]
         "str    x11, [%[t], #24]        \n\t"   // t[3]
         
         // a[2]*a[2]
         "mul    x10, %[a2], %[a2]       \n\t"
         "umulh  x12, %[a2], %[a2]       \n\t"
-        "adcs   x13, x13, x10          \n\t"   // t[4] += lo(a2²)
-        "adcs   x17, x17, x12          \n\t"   // t[5] += hi(a2²)
+        "adcs   x13, x13, x10          \n\t"   // t[4] += lo(a2^2)
+        "adcs   x17, x17, x12          \n\t"   // t[5] += hi(a2^2)
         "str    x13, [%[t], #32]        \n\t"   // t[4]
         "str    x17, [%[t], #40]        \n\t"   // t[5]
         
         // a[3]*a[3]
         "mul    x10, %[a3], %[a3]       \n\t"
         "umulh  x12, %[a3], %[a3]       \n\t"
-        "adcs   x20, x20, x10          \n\t"   // t[6] += lo(a3²)
-        "adc    x21, x21, x12          \n\t"   // t[7] += hi(a3²)
+        "adcs   x20, x20, x10          \n\t"   // t[6] += lo(a3^2)
+        "adc    x21, x21, x12          \n\t"   // t[7] += hi(a3^2)
         "str    x20, [%[t], #48]        \n\t"   // t[6]
         "str    x21, [%[t], #56]        \n\t"   // t[7]
         
@@ -471,7 +471,7 @@ void field_add_arm64(uint64_t out[4], const uint64_t a[4], const uint64_t b[4]) 
     uint64_t s0, s1, s2, s3;
     uint64_t mask;
     
-    // Prime p limbs — passed as register inputs (ARM64 MOV can't encode arbitrary 64-bit)
+    // Prime p limbs -- passed as register inputs (ARM64 MOV can't encode arbitrary 64-bit)
     constexpr uint64_t P0 = 0xFFFFFFFEFFFFFC2FULL;
     constexpr uint64_t P1 = 0xFFFFFFFFFFFFFFFFULL;
     
@@ -607,7 +607,7 @@ void field_neg_arm64(uint64_t out[4], const uint64_t a[4]) noexcept {
 } // namespace arm64
 
 // ============================================================================
-// Public API — FieldElement wrappers
+// Public API -- FieldElement wrappers
 // ============================================================================
 
 FieldElement field_mul_arm64(const FieldElement& a, const FieldElement& b) {

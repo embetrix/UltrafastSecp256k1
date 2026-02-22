@@ -12,7 +12,7 @@ using fast::Scalar;
 using fast::Point;
 using fast::FieldElement;
 
-// ── Window Width Selection ───────────────────────────────────────────────────
+// -- Window Width Selection ---------------------------------------------------
 
 unsigned strauss_optimal_window(std::size_t n) {
     if (n <= 1)   return 4;
@@ -22,10 +22,10 @@ unsigned strauss_optimal_window(std::size_t n) {
     return 6;
 }
 
-// ── Shamir's Trick (2-point) ─────────────────────────────────────────────────
+// -- Shamir's Trick (2-point) -------------------------------------------------
 // R = a*P + b*Q
 // When one point is the generator, its scalar_mul automatically uses the
-// precomputed fixed-base comb method (~7μs), which is faster than wNAF.
+// precomputed fixed-base comb method (~7us), which is faster than wNAF.
 
 Point shamir_trick(const Scalar& a, const Point& P,
                    const Scalar& b, const Point& Q) {
@@ -34,16 +34,16 @@ Point shamir_trick(const Scalar& a, const Point& P,
     if (b.is_zero()) return P.scalar_mul(a);
 
     // Each scalar_mul checks is_generator_ internally:
-    //   - Generator: uses precomputed comb tables (~7μs)
-    //   - Generic:   uses GLV + 5×52 Shamir (~25μs)
-    // Total: ~32μs for a*G + b*Q (faster than 4-stream wNAF because
+    //   - Generator: uses precomputed comb tables (~7us)
+    //   - Generic:   uses GLV + 5x52 Shamir (~25us)
+    // Total: ~32us for a*G + b*Q (faster than 4-stream wNAF because
     // the precomputed generator tables are wider/deeper than wNAF w=5).
     auto aP = P.scalar_mul(a);
     aP.add_inplace(Q.scalar_mul(b));
     return aP;
 }
 
-// ── Strauss Multi-Scalar Multiplication ──────────────────────────────────────
+// -- Strauss Multi-Scalar Multiplication --------------------------------------
 // Interleaved wNAF: pre-compute odd multiples of each point, then scan
 // all wNAFs simultaneously from MSB to LSB.
 

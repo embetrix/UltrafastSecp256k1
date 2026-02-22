@@ -16,7 +16,7 @@ using fast::Scalar;
 using fast::Point;
 using fast::FieldElement;
 
-// ── Generate batch weight ────────────────────────────────────────────────────
+// -- Generate batch weight ----------------------------------------------------
 // Deterministic weight derived from all signatures in the batch.
 // This avoids requiring a CSPRNG while remaining sound.
 // Weight a_i = SHA256("batch" || i || R1 || s1 || R2 || s2 || ...)
@@ -47,14 +47,14 @@ Scalar batch_weight(const std::array<uint8_t, 32>& batch_seed, uint32_t index) {
 std::pair<bool, Point> lift_x(const std::array<uint8_t, 32>& pubkey_x) {
     auto px_fe = FieldElement::from_bytes(pubkey_x);
 
-    // y² = x³ + 7
+    // y^2 = x^3 + 7
     auto x3 = px_fe.square() * px_fe;
     auto y2 = x3 + FieldElement::from_uint64(7);
 
     // Optimized sqrt via addition chain
     auto y = y2.sqrt();
 
-    // Verify: y² == y2
+    // Verify: y^2 == y2
     if (y.square() != y2) return {false, Point::infinity()};
 
     // Ensure even Y (BIP-340)
@@ -68,7 +68,7 @@ std::pair<bool, Point> lift_x(const std::array<uint8_t, 32>& pubkey_x) {
 
 } // anonymous namespace
 
-// ── Schnorr Batch Verification ───────────────────────────────────────────────
+// -- Schnorr Batch Verification -----------------------------------------------
 // Equation: sum(a_i * s_i) * G = sum(a_i * R_i) + sum(a_i * e_i * P_i)
 // Rearranged: sum(a_i * s_i) * G - sum(a_i * e_i) * P_i - sum(a_i) * R_i = O
 // We verify: (sum(a_i * s_i)) * G + sum(-a_i * e_i * P_i) + sum(-a_i * R_i) = infinity
@@ -160,7 +160,7 @@ bool schnorr_batch_verify(const std::vector<SchnorrBatchEntry>& entries) {
     return schnorr_batch_verify(entries.data(), entries.size());
 }
 
-// ── ECDSA Batch Verification ─────────────────────────────────────────────────
+// -- ECDSA Batch Verification -------------------------------------------------
 // For each sig (r_i, s_i), message z_i, pubkey Q_i:
 //   w_i = s_i^{-1}
 //   u1_i = z_i * w_i
@@ -233,7 +233,7 @@ bool ecdsa_batch_verify(const std::vector<ECDSABatchEntry>& entries) {
     return ecdsa_batch_verify(entries.data(), entries.size());
 }
 
-// ── Identify Invalid Signatures ──────────────────────────────────────────────
+// -- Identify Invalid Signatures ----------------------------------------------
 
 std::vector<std::size_t> schnorr_batch_identify_invalid(
     const SchnorrBatchEntry* entries, std::size_t n) {

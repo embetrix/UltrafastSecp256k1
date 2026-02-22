@@ -196,7 +196,7 @@ static void test_oversized_scalars() {
     auto big = Scalar::from_bytes(all_ff);
     CHECK(!big.is_zero(), "0xFF*32 reduces to nonzero");
 
-    // p (field prime) as scalar — should also reduce
+    // p (field prime) as scalar -- should also reduce
     auto p_bytes = std::array<uint8_t, 32>{
         0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,
         0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,
@@ -438,7 +438,7 @@ static void test_sig_normalization() {
 
         // Normalize should bring it back to low-S
         auto normalized = high_s_sig.normalize();
-        CHECK(normalized.is_low_s(), "normalize → low-S");
+        CHECK(normalized.is_low_s(), "normalize -> low-S");
         CHECK(normalized.r == sig.r && normalized.s == sig.s, "normalize matches original");
     }
 
@@ -447,9 +447,9 @@ static void test_sig_normalization() {
 
 // ============================================================================
 int main() {
-    printf("═══════════════════════════════════════════════════════════════\n");
-    printf("  AUDIT III — Fuzzing & Adversarial Testing\n");
-    printf("═══════════════════════════════════════════════════════════════\n\n");
+    printf("===============================================================\n");
+    printf("  AUDIT III -- Fuzzing & Adversarial Testing\n");
+    printf("===============================================================\n\n");
 
     test_malformed_pubkeys();
     test_invalid_ecdsa_sigs();
@@ -462,9 +462,9 @@ int main() {
     test_schnorr_bytes_roundtrip();
     test_sig_normalization();
 
-    printf("═══════════════════════════════════════════════════════════════\n");
+    printf("===============================================================\n");
     printf("  FUZZ AUDIT: %d passed, %d failed\n", g_pass, g_fail);
-    printf("═══════════════════════════════════════════════════════════════\n");
+    printf("===============================================================\n");
 
     return g_fail > 0 ? 1 : 0;
 }

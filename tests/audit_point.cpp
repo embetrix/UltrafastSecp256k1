@@ -225,7 +225,7 @@ static void test_affine_conversion() {
     for (int i = 0; i < 1000; ++i) {
         auto P = G.scalar_mul(random_scalar());
 
-        // compressed → uncompressed should represent same point
+        // compressed -> uncompressed should represent same point
         auto comp = P.to_compressed();
         auto uncomp = P.to_uncompressed();
 
@@ -237,7 +237,7 @@ static void test_affine_conversion() {
         CHECK(std::memcmp(comp.data() + 1, uncomp.data() + 1, 32) == 0,
               "compressed/uncompressed X match");
 
-        // Verify point is on curve: y² == x³ + 7
+        // Verify point is on curve: y^2 == x^3 + 7
         auto x = FieldElement::from_bytes(
             *reinterpret_cast<const std::array<uint8_t, 32>*>(uncomp.data() + 1));
         auto y = FieldElement::from_bytes(
@@ -245,7 +245,7 @@ static void test_affine_conversion() {
         auto y2 = y.square();
         auto x3 = x.square() * x;
         auto rhs = x3 + FieldElement::from_uint64(7);
-        CHECK(y2 == rhs, "on-curve: y² == x³ + 7");
+        CHECK(y2 == rhs, "on-curve: y^2 == x^3 + 7");
     }
 
     printf("    %d checks\n\n", g_pass);
@@ -406,9 +406,9 @@ static void test_stress_random() {
 
 // ============================================================================
 int main() {
-    printf("═══════════════════════════════════════════════════════════════\n");
-    printf("  AUDIT I.3 — Point Operations & Signature Correctness\n");
-    printf("═══════════════════════════════════════════════════════════════\n\n");
+    printf("===============================================================\n");
+    printf("  AUDIT I.3 -- Point Operations & Signature Correctness\n");
+    printf("===============================================================\n\n");
 
     test_infinity();
     test_jacobian_add();
@@ -422,9 +422,9 @@ int main() {
     test_schnorr_roundtrip();
     test_stress_random();
 
-    printf("═══════════════════════════════════════════════════════════════\n");
+    printf("===============================================================\n");
     printf("  POINT AUDIT: %d passed, %d failed\n", g_pass, g_fail);
-    printf("═══════════════════════════════════════════════════════════════\n");
+    printf("===============================================================\n");
 
     return g_fail > 0 ? 1 : 0;
 }

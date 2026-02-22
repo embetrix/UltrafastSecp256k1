@@ -1,23 +1,23 @@
 // ============================================================================
-// Side-Channel Attack Test Suite — dudect methodology
+// Side-Channel Attack Test Suite -- dudect methodology
 // ============================================================================
-// ტესტავს CT ოპერაციების წინააღმდეგობას timing side-channel შეტევების მიმართ.
+//  CT   timing side-channel  .
 //
-// მეთოდოლოგია (სწორი dudect პროტოკოლი):
-//   1. ყველა ინფუტი PRE-GENERATED — არანაირი random_fe()/random_scalar()
-//      measurement loop-ის შიგნით.
-//   2. ორი კლასის ინფუტი ინახება ცალ-ცალკე მასივებში.
-//   3. class selection = array index lookup (იდენტური cost ორივესთვის).
-//   4. Welch t-test |t| > 4.5 → timing leak (99.999% confidence).
+//  ( dudect ):
+//   1.   PRE-GENERATED --  random_fe()/random_scalar()
+//      measurement loop- .
+//   2.     - .
+//   3. class selection = array index lookup ( cost ).
+//   4. Welch t-test |t| > 4.5 -> timing leak (99.999% confidence).
 //
-// CRITICAL: ტესტის მეთოდოლოგია
-//   - Class 0: ფიქსირებული ინფუტი (edge-case: zero, one, identity, etc.)
-//   - Class 1: რანდომ ინფუტი (pre-generated)
-//   - ორივე კლასი IDENTICAL selection path-ით (array[cls][i])
-//   - asm volatile barriers ზომვის გარშემო
+// CRITICAL:  
+//   - Class 0:   (edge-case: zero, one, identity, etc.)
+//   - Class 1:   (pre-generated)
+//   -   IDENTICAL selection path- (array[cls][i])
+//   - asm volatile barriers  
 //
-// გაშვება:
-//   ნორმალური:  build_rel/tests/test_ct_sidechannel
+// :
+//   :  build_rel/tests/test_ct_sidechannel
 //   Valgrind:   valgrind build_rel/tests/test_ct_sidechannel_vg
 // ============================================================================
 
@@ -30,7 +30,7 @@
 #include <chrono>
 #include <algorithm>
 
-// ── Our CT layer ─────────────────────────────────────────────────────────────
+// -- Our CT layer -------------------------------------------------------------
 #include "secp256k1/field.hpp"
 #include "secp256k1/scalar.hpp"
 #include "secp256k1/point.hpp"
@@ -44,9 +44,9 @@
 
 using namespace secp256k1::fast;
 
-// ═══════════════════════════════════════════════════════════════════════════
-// Timer — rdtsc(p) on x86_64, cntvct on aarch64
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
+// Timer -- rdtsc(p) on x86_64, cntvct on aarch64
+// ===========================================================================
 
 #if defined(__x86_64__) || defined(_M_X64)
 static inline uint64_t rdtsc() {
@@ -66,9 +66,9 @@ static inline uint64_t rdtsc() {
 }
 #endif
 
-// ═══════════════════════════════════════════════════════════════════════════
-// Welch t-test (online/incremental — no allocation needed)
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
+// Welch t-test (online/incremental -- no allocation needed)
+// ===========================================================================
 
 struct WelchState {
     double n[2]    = {};
@@ -93,9 +93,9 @@ struct WelchState {
     }
 };
 
-// ═══════════════════════════════════════════════════════════════════════════
-// PRNG + helpers — pre-generation only
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
+// PRNG + helpers -- pre-generation only
+// ===========================================================================
 
 static std::mt19937_64 rng(0xA0D17'51DE0);
 
@@ -122,25 +122,25 @@ static FieldElement random_fe() {
     return FieldElement::from_bytes(buf);
 }
 
-// ── Framework ────────────────────────────────────────────────────────────────
+// -- Framework ----------------------------------------------------------------
 static int g_pass = 0, g_fail = 0;
 static constexpr double T_THRESHOLD = 4.5;
 
 static void check(bool cond, const char* msg) {
     if (cond) { ++g_pass; }
-    else      { ++g_fail; printf("    ✗ FAIL: %s\n", msg); }
+    else      { ++g_fail; printf("    [x] FAIL: %s\n", msg); }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// ტესტი 1: CT პრიმიტივები (masks, cmov, cswap, lookup)
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
+//  1: CT  (masks, cmov, cswap, lookup)
+// ===========================================================================
 
 static void test_ct_primitives() {
-    printf("\n[1] CT პრიმიტივები — timing ტესტი\n");
+    printf("\n[1] CT  -- timing \n");
 
     constexpr int N = 100000;
 
-    // ── 1a: is_zero_mask ─────────────────────────────────────────────────
+    // -- 1a: is_zero_mask -------------------------------------------------
     {
         // Pre-generate inputs: class 0 = always 0, class 1 = random nonzero
         uint64_t inputs[2][N];
@@ -170,11 +170,11 @@ static void test_ct_primitives() {
         double t = std::abs(ws.t_value());
         printf("    is_zero_mask:    |t| = %6.2f  (%d/%d)  %s\n",
                t, (int)ws.n[0], (int)ws.n[1],
-               t < T_THRESHOLD ? "✅ CT" : "⚠️  LEAK");
+               t < T_THRESHOLD ? "[OK] CT" : "[!]  LEAK");
         check(t < T_THRESHOLD, "is_zero_mask timing leak");
     }
 
-    // ── 1b: bool_to_mask ─────────────────────────────────────────────────
+    // -- 1b: bool_to_mask -------------------------------------------------
     {
         bool inputs[2][N];
         int classes[N];
@@ -203,11 +203,11 @@ static void test_ct_primitives() {
         double t = std::abs(ws.t_value());
         printf("    bool_to_mask:    |t| = %6.2f  (%d/%d)  %s\n",
                t, (int)ws.n[0], (int)ws.n[1],
-               t < T_THRESHOLD ? "✅ CT" : "⚠️  LEAK");
+               t < T_THRESHOLD ? "[OK] CT" : "[!]  LEAK");
         check(t < T_THRESHOLD, "bool_to_mask timing leak");
     }
 
-    // ── 1c: cmov256 ─────────────────────────────────────────────────────
+    // -- 1c: cmov256 -----------------------------------------------------
     {
         uint64_t masks[2][N];
         int classes[N];
@@ -237,11 +237,11 @@ static void test_ct_primitives() {
         double t = std::abs(ws.t_value());
         printf("    cmov256:         |t| = %6.2f  (%d/%d)  %s\n",
                t, (int)ws.n[0], (int)ws.n[1],
-               t < T_THRESHOLD ? "✅ CT" : "⚠️  LEAK");
+               t < T_THRESHOLD ? "[OK] CT" : "[!]  LEAK");
         check(t < T_THRESHOLD, "cmov256 timing leak");
     }
 
-    // ── 1d: cswap256 ────────────────────────────────────────────────────
+    // -- 1d: cswap256 ----------------------------------------------------
     {
         uint64_t masks[2][N];
         int classes[N];
@@ -270,11 +270,11 @@ static void test_ct_primitives() {
         double t = std::abs(ws.t_value());
         printf("    cswap256:        |t| = %6.2f  (%d/%d)  %s\n",
                t, (int)ws.n[0], (int)ws.n[1],
-               t < T_THRESHOLD ? "✅ CT" : "⚠️  LEAK");
+               t < T_THRESHOLD ? "[OK] CT" : "[!]  LEAK");
         check(t < T_THRESHOLD, "cswap256 timing leak");
     }
 
-    // ── 1e: ct_lookup_256 (16 entries) ──────────────────────────────────
+    // -- 1e: ct_lookup_256 (16 entries) ----------------------------------
     {
         size_t indices[2][N];
         int classes[N];
@@ -306,11 +306,11 @@ static void test_ct_primitives() {
         double t = std::abs(ws.t_value());
         printf("    ct_lookup_256:   |t| = %6.2f  (%d/%d)  %s\n",
                t, (int)ws.n[0], (int)ws.n[1],
-               t < T_THRESHOLD ? "✅ CT" : "⚠️  LEAK");
+               t < T_THRESHOLD ? "[OK] CT" : "[!]  LEAK");
         check(t < T_THRESHOLD, "ct_lookup_256 timing leak");
     }
 
-    // ── 1f: ct_equal ────────────────────────────────────────────────────
+    // -- 1f: ct_equal ----------------------------------------------------
     {
         // Pre-generate: class 0 = identical buffers, class 1 = different
         struct Pair { uint8_t a[32]; uint8_t b[32]; };
@@ -347,17 +347,17 @@ static void test_ct_primitives() {
         double t = std::abs(ws.t_value());
         printf("    ct_equal:        |t| = %6.2f  (%d/%d)  %s\n",
                t, (int)ws.n[0], (int)ws.n[1],
-               t < T_THRESHOLD ? "✅ CT" : "⚠️  LEAK");
+               t < T_THRESHOLD ? "[OK] CT" : "[!]  LEAK");
         check(t < T_THRESHOLD, "ct_equal timing leak");
     }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// ტესტი 2: CT Field ოპერაციები
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
+//  2: CT Field 
+// ===========================================================================
 
 static void test_ct_field() {
-    printf("\n[2] CT Field ოპერაციები — timing ტესტი\n");
+    printf("\n[2] CT Field  -- timing \n");
 
     constexpr int N = 50000;
 
@@ -377,7 +377,7 @@ static void test_ct_field() {
         fe_base[i]  = random_fe(); // second operand
     }
 
-    // ── 2a: field_add ───────────────────────────────────────────────────
+    // -- 2a: field_add ---------------------------------------------------
     {
         WelchState ws;
         for (int i = 0; i < N; ++i) {
@@ -397,11 +397,11 @@ static void test_ct_field() {
         }
         double t = std::abs(ws.t_value());
         printf("    field_add:       |t| = %6.2f  %s\n",
-               t, t < T_THRESHOLD ? "✅ CT" : "⚠️  LEAK");
+               t, t < T_THRESHOLD ? "[OK] CT" : "[!]  LEAK");
         check(t < T_THRESHOLD, "ct::field_add timing leak");
     }
 
-    // ── 2b: field_mul ───────────────────────────────────────────────────
+    // -- 2b: field_mul ---------------------------------------------------
     {
         WelchState ws;
         for (int i = 0; i < N; ++i) {
@@ -421,11 +421,11 @@ static void test_ct_field() {
         }
         double t = std::abs(ws.t_value());
         printf("    field_mul:       |t| = %6.2f  %s\n",
-               t, t < T_THRESHOLD ? "✅ CT" : "⚠️  LEAK");
+               t, t < T_THRESHOLD ? "[OK] CT" : "[!]  LEAK");
         check(t < T_THRESHOLD, "ct::field_mul timing leak");
     }
 
-    // ── 2c: field_sqr ───────────────────────────────────────────────────
+    // -- 2c: field_sqr ---------------------------------------------------
     {
         // Swap cls0 to fe_one for sqr
         for (int i = 0; i < N; ++i) fe_cls0[i] = fe_one;
@@ -448,11 +448,11 @@ static void test_ct_field() {
         }
         double t = std::abs(ws.t_value());
         printf("    field_sqr:       |t| = %6.2f  %s\n",
-               t, t < T_THRESHOLD ? "✅ CT" : "⚠️  LEAK");
+               t, t < T_THRESHOLD ? "[OK] CT" : "[!]  LEAK");
         check(t < T_THRESHOLD, "ct::field_sqr timing leak");
     }
 
-    // ── 2d: field_inv ───────────────────────────────────────────────────
+    // -- 2d: field_inv ---------------------------------------------------
     {
         constexpr int NSLOW = 5000;
         // Re-generate for fewer samples
@@ -480,11 +480,11 @@ static void test_ct_field() {
         }
         double t = std::abs(ws.t_value());
         printf("    field_inv:       |t| = %6.2f  %s\n",
-               t, t < T_THRESHOLD ? "✅ CT" : "⚠️  LEAK");
+               t, t < T_THRESHOLD ? "[OK] CT" : "[!]  LEAK");
         check(t < T_THRESHOLD, "ct::field_inv timing leak");
     }
 
-    // ── 2e: field_cmov ──────────────────────────────────────────────────
+    // -- 2e: field_cmov --------------------------------------------------
     {
         uint64_t masks[2];
         masks[0] = 0;
@@ -509,11 +509,11 @@ static void test_ct_field() {
         }
         double t = std::abs(ws.t_value());
         printf("    field_cmov:      |t| = %6.2f  %s\n",
-               t, t < T_THRESHOLD ? "✅ CT" : "⚠️  LEAK");
+               t, t < T_THRESHOLD ? "[OK] CT" : "[!]  LEAK");
         check(t < T_THRESHOLD, "ct::field_cmov timing leak");
     }
 
-    // ── 2f: field_is_zero ───────────────────────────────────────────────
+    // -- 2f: field_is_zero -----------------------------------------------
     {
         for (int i = 0; i < N; ++i) fe_cls0[i] = fe_zero;
 
@@ -535,7 +535,7 @@ static void test_ct_field() {
         }
         double t = std::abs(ws.t_value());
         printf("    field_is_zero:   |t| = %6.2f  %s\n",
-               t, t < T_THRESHOLD ? "✅ CT" : "⚠️  LEAK");
+               t, t < T_THRESHOLD ? "[OK] CT" : "[!]  LEAK");
         check(t < T_THRESHOLD, "ct::field_is_zero timing leak");
     }
 
@@ -545,12 +545,12 @@ static void test_ct_field() {
     delete[] classes;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// ტესტი 3: CT Scalar ოპერაციები
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
+//  3: CT Scalar 
+// ===========================================================================
 
 static void test_ct_scalar() {
-    printf("\n[3] CT Scalar ოპერაციები — timing ტესტი\n");
+    printf("\n[3] CT Scalar  -- timing \n");
 
     constexpr int N = 50000;
 
@@ -571,7 +571,7 @@ static void test_ct_scalar() {
         sc_base[i] = random_scalar();
     }
 
-    // ── 3a: scalar_add ──────────────────────────────────────────────────
+    // -- 3a: scalar_add --------------------------------------------------
     {
         WelchState ws;
         for (int i = 0; i < N; ++i) {
@@ -591,11 +591,11 @@ static void test_ct_scalar() {
         }
         double t = std::abs(ws.t_value());
         printf("    scalar_add:      |t| = %6.2f  %s\n",
-               t, t < T_THRESHOLD ? "✅ CT" : "⚠️  LEAK");
+               t, t < T_THRESHOLD ? "[OK] CT" : "[!]  LEAK");
         check(t < T_THRESHOLD, "ct::scalar_add timing leak");
     }
 
-    // ── 3b: scalar_sub ──────────────────────────────────────────────────
+    // -- 3b: scalar_sub --------------------------------------------------
     {
         WelchState ws;
         for (int i = 0; i < N; ++i) {
@@ -615,11 +615,11 @@ static void test_ct_scalar() {
         }
         double t = std::abs(ws.t_value());
         printf("    scalar_sub:      |t| = %6.2f  %s\n",
-               t, t < T_THRESHOLD ? "✅ CT" : "⚠️  LEAK");
+               t, t < T_THRESHOLD ? "[OK] CT" : "[!]  LEAK");
         check(t < T_THRESHOLD, "ct::scalar_sub timing leak");
     }
 
-    // ── 3c: scalar_cmov ─────────────────────────────────────────────────
+    // -- 3c: scalar_cmov -------------------------------------------------
     {
         uint64_t masks[2] = {0, ~0ULL};
         WelchState ws;
@@ -641,11 +641,11 @@ static void test_ct_scalar() {
         }
         double t = std::abs(ws.t_value());
         printf("    scalar_cmov:     |t| = %6.2f  %s\n",
-               t, t < T_THRESHOLD ? "✅ CT" : "⚠️  LEAK");
+               t, t < T_THRESHOLD ? "[OK] CT" : "[!]  LEAK");
         check(t < T_THRESHOLD, "ct::scalar_cmov timing leak");
     }
 
-    // ── 3d: scalar_is_zero ──────────────────────────────────────────────
+    // -- 3d: scalar_is_zero ----------------------------------------------
     {
         for (int i = 0; i < N; ++i) sc_cls0[i] = sc_zero;
 
@@ -667,11 +667,11 @@ static void test_ct_scalar() {
         }
         double t = std::abs(ws.t_value());
         printf("    scalar_is_zero:  |t| = %6.2f  %s\n",
-               t, t < T_THRESHOLD ? "✅ CT" : "⚠️  LEAK");
+               t, t < T_THRESHOLD ? "[OK] CT" : "[!]  LEAK");
         check(t < T_THRESHOLD, "ct::scalar_is_zero timing leak");
     }
 
-    // ── 3e: scalar_bit (position 0 vs random position) ──────────────────
+    // -- 3e: scalar_bit (position 0 vs random position) ------------------
     {
         // Pre-generate positions. Test: same scalar, different bit positions
         size_t positions[2][N];
@@ -698,11 +698,11 @@ static void test_ct_scalar() {
         }
         double t = std::abs(ws.t_value());
         printf("    scalar_bit:      |t| = %6.2f  %s\n",
-               t, t < T_THRESHOLD ? "✅ CT" : "⚠️  LEAK");
+               t, t < T_THRESHOLD ? "[OK] CT" : "[!]  LEAK");
         check(t < T_THRESHOLD, "ct::scalar_bit timing leak");
     }
 
-    // ── 3f: scalar_window ───────────────────────────────────────────────
+    // -- 3f: scalar_window -----------------------------------------------
     {
         size_t positions[2][N];
         for (int i = 0; i < N; ++i) {
@@ -728,7 +728,7 @@ static void test_ct_scalar() {
         }
         double t = std::abs(ws.t_value());
         printf("    scalar_window:   |t| = %6.2f  %s\n",
-               t, t < T_THRESHOLD ? "✅ CT" : "⚠️  LEAK");
+               t, t < T_THRESHOLD ? "[OK] CT" : "[!]  LEAK");
         check(t < T_THRESHOLD, "ct::scalar_window timing leak");
     }
 
@@ -738,16 +738,16 @@ static void test_ct_scalar() {
     delete[] classes;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// ტესტი 4: CT Point ოპერაციები (ყველაზე კრიტიკული)
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
+//  4: CT Point  ( )
+// ===========================================================================
 
 static void test_ct_point() {
-    printf("\n[4] CT Point ოპერაციები — timing ტესტი (ყველაზე კრიტიკული)\n");
+    printf("\n[4] CT Point  -- timing  ( )\n");
 
     auto G = Point::generator();
 
-    // ── 4a: complete addition (P+O vs P+Q) ──────────────────────────────
+    // -- 4a: complete addition (P+O vs P+Q) ------------------------------
     {
         constexpr int N = 10000;
         auto ct_G = secp256k1::ct::CTJacobianPoint::from_point(G);
@@ -780,11 +780,11 @@ static void test_ct_point() {
         }
         double t = std::abs(ws.t_value());
         printf("    complete_add (P+O vs P+Q):   |t| = %6.2f  %s\n",
-               t, t < T_THRESHOLD ? "✅ CT" : "⚠️  LEAK");
+               t, t < T_THRESHOLD ? "[OK] CT" : "[!]  LEAK");
         check(t < T_THRESHOLD, "complete_add P+O vs P+Q timing leak");
     }
 
-    // ── 4b: complete addition (P+P vs P+Q) — doubling case ─────────────
+    // -- 4b: complete addition (P+P vs P+Q) -- doubling case -------------
     {
         constexpr int N = 10000;
         auto ct_G = secp256k1::ct::CTJacobianPoint::from_point(G);
@@ -815,12 +815,12 @@ static void test_ct_point() {
         }
         double t = std::abs(ws.t_value());
         printf("    complete_add (P+P vs P+Q):   |t| = %6.2f  %s\n",
-               t, t < T_THRESHOLD ? "✅ CT" : "⚠️  LEAK");
+               t, t < T_THRESHOLD ? "[OK] CT" : "[!]  LEAK");
         check(t < T_THRESHOLD, "complete_add P+P vs P+Q timing leak");
     }
 
-    // ── 4c: CT scalar_mul (k=1 vs k=random) ────────────────────────────
-    //    ყველაზე კრიტიკული ტესტი. secret key timing leak.
+    // -- 4c: CT scalar_mul (k=1 vs k=random) ----------------------------
+    //      . secret key timing leak.
     {
         constexpr int N = 2000;
         auto sc_one = Scalar::from_hex(
@@ -853,11 +853,11 @@ static void test_ct_point() {
         double t = std::abs(ws.t_value());
         printf("    scalar_mul (k=1 vs random):  |t| = %6.2f  (%d/%d)  %s\n",
                t, (int)ws.n[0], (int)ws.n[1],
-               t < T_THRESHOLD ? "✅ CT" : "⚠️  LEAK");
+               t < T_THRESHOLD ? "[OK] CT" : "[!]  LEAK");
         check(t < T_THRESHOLD, "ct::scalar_mul k=1 vs random timing leak");
     }
 
-    // ── 4d: CT scalar_mul (k=n-1 vs k=random) ──────────────────────────
+    // -- 4d: CT scalar_mul (k=n-1 vs k=random) --------------------------
     {
         constexpr int N = 2000;
         auto sc_nm1 = Scalar::from_hex(
@@ -890,11 +890,11 @@ static void test_ct_point() {
         double t = std::abs(ws.t_value());
         printf("    scalar_mul (k=n-1 vs random):|t| = %6.2f  (%d/%d)  %s\n",
                t, (int)ws.n[0], (int)ws.n[1],
-               t < T_THRESHOLD ? "✅ CT" : "⚠️  LEAK");
+               t < T_THRESHOLD ? "[OK] CT" : "[!]  LEAK");
         check(t < T_THRESHOLD, "ct::scalar_mul k=n-1 vs random timing leak");
     }
 
-    // ── 4e: CT generator_mul (low HW vs high HW scalar) ────────────────
+    // -- 4e: CT generator_mul (low HW vs high HW scalar) ----------------
     {
         constexpr int N = 2000;
         auto sc_low = Scalar::from_hex(
@@ -929,11 +929,11 @@ static void test_ct_point() {
         double t = std::abs(ws.t_value());
         printf("    generator_mul (low vs high HW):|t| = %6.2f  (%d/%d)  %s\n",
                t, (int)ws.n[0], (int)ws.n[1],
-               t < T_THRESHOLD ? "✅ CT" : "⚠️  LEAK");
+               t < T_THRESHOLD ? "[OK] CT" : "[!]  LEAK");
         check(t < T_THRESHOLD, "ct::generator_mul low vs high HW timing leak");
     }
 
-    // ── 4f: point_table_lookup (index 0 vs 15) ─────────────────────────
+    // -- 4f: point_table_lookup (index 0 vs 15) -------------------------
     {
         constexpr int N = 50000;
         secp256k1::ct::CTJacobianPoint table[16];
@@ -970,21 +970,21 @@ static void test_ct_point() {
         }
         double t = std::abs(ws.t_value());
         printf("    point_tbl_lookup (0 vs 15):  |t| = %6.2f  %s\n",
-               t, t < T_THRESHOLD ? "✅ CT" : "⚠️  LEAK");
+               t, t < T_THRESHOLD ? "[OK] CT" : "[!]  LEAK");
         check(t < T_THRESHOLD, "point_table_lookup timing leak");
     }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// ტესტი 5: CT Byte Utilities
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
+//  5: CT Byte Utilities
+// ===========================================================================
 
 static void test_ct_utils() {
-    printf("\n[5] CT Byte Utilities — timing ტესტი\n");
+    printf("\n[5] CT Byte Utilities -- timing \n");
 
     constexpr int N = 100000;
 
-    // ── 5a: ct_memcpy_if ────────────────────────────────────────────────
+    // -- 5a: ct_memcpy_if ------------------------------------------------
     {
         uint8_t dst[32], src[32];
         random_bytes(src, 32);
@@ -1011,11 +1011,11 @@ static void test_ct_utils() {
         }
         double t = std::abs(ws.t_value());
         printf("    ct_memcpy_if:    |t| = %6.2f  %s\n",
-               t, t < T_THRESHOLD ? "✅ CT" : "⚠️  LEAK");
+               t, t < T_THRESHOLD ? "[OK] CT" : "[!]  LEAK");
         check(t < T_THRESHOLD, "ct_memcpy_if timing leak");
     }
 
-    // ── 5b: ct_memswap_if ───────────────────────────────────────────────
+    // -- 5b: ct_memswap_if -----------------------------------------------
     {
         uint8_t a[32], b[32];
         random_bytes(a, 32);
@@ -1042,11 +1042,11 @@ static void test_ct_utils() {
         }
         double t = std::abs(ws.t_value());
         printf("    ct_memswap_if:   |t| = %6.2f  %s\n",
-               t, t < T_THRESHOLD ? "✅ CT" : "⚠️  LEAK");
+               t, t < T_THRESHOLD ? "[OK] CT" : "[!]  LEAK");
         check(t < T_THRESHOLD, "ct_memswap_if timing leak");
     }
 
-    // ── 5c: ct_memzero ──────────────────────────────────────────────────
+    // -- 5c: ct_memzero --------------------------------------------------
     {
         // Both classes: zero 32-byte buffer. Test: already-zero vs random content.
         struct Buf { uint8_t data[32]; };
@@ -1078,11 +1078,11 @@ static void test_ct_utils() {
         delete[] bufs1;
         double t = std::abs(ws.t_value());
         printf("    ct_memzero:      |t| = %6.2f  %s\n",
-               t, t < T_THRESHOLD ? "✅ CT" : "⚠️  LEAK");
+               t, t < T_THRESHOLD ? "[OK] CT" : "[!]  LEAK");
         check(t < T_THRESHOLD, "ct_memzero timing leak");
     }
 
-    // ── 5d: ct_compare ──────────────────────────────────────────────────
+    // -- 5d: ct_compare --------------------------------------------------
     {
         struct Pair { uint8_t a[32]; uint8_t b[32]; };
         auto* pairs0 = new Pair[N];
@@ -1117,18 +1117,18 @@ static void test_ct_utils() {
         delete[] pairs1;
         double t = std::abs(ws.t_value());
         printf("    ct_compare:      |t| = %6.2f  %s\n",
-               t, t < T_THRESHOLD ? "✅ CT" : "⚠️  LEAK");
+               t, t < T_THRESHOLD ? "[OK] CT" : "[!]  LEAK");
         check(t < T_THRESHOLD, "ct_compare timing leak");
     }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// ტესტი 6: fast:: path-ების CT ტესტი (მოსალოდნელია NOT CT)
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
+//  6: fast:: path- CT  ( NOT CT)
+// ===========================================================================
 
 static void test_fast_not_ct() {
-    printf("\n[6] fast:: path control test (მოსალოდნელია NOT CT)\n");
-    printf("    (ადასტურებს რომ fast:: და ct:: რეალურად განსხვავდება)\n");
+    printf("\n[6] fast:: path control test ( NOT CT)\n");
+    printf("    (  fast::  ct::  )\n");
 
     auto G = Point::generator();
     constexpr int N = 5000;
@@ -1162,22 +1162,22 @@ static void test_fast_not_ct() {
     }
     double t = std::abs(ws.t_value());
     printf("    fast::scalar_mul: |t| = %6.2f  %s\n",
-           t, t >= T_THRESHOLD ? "⏱️  NOT CT (მოსალოდნელი)" : "≈ CT-like");
+           t, t >= T_THRESHOLD ? "[time]  NOT CT ()" : "~= CT-like");
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// ტესტი 7: Valgrind CLASSIFY/DECLASSIFY (ფუნქციონალური ტესტი)
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
+//  7: Valgrind CLASSIFY/DECLASSIFY ( )
+// ===========================================================================
 
 static void test_valgrind_markers() {
-    printf("\n[7] Valgrind CLASSIFY/DECLASSIFY ტესტი\n");
+    printf("\n[7] Valgrind CLASSIFY/DECLASSIFY \n");
 
 #if defined(SECP256K1_CT_VALGRIND) && SECP256K1_CT_VALGRIND
-    printf("    ⚡ Valgrind CT mode ENABLED — running with secret tagging\n");
+    printf("    [*] Valgrind CT mode ENABLED -- running with secret tagging\n");
 #else
-    printf("    ℹ️  Valgrind CT mode DISABLED\n");
-    printf("    ℹ️  ჩართვა: cmake -DSECP256K1_CT_VALGRIND=1\n");
-    printf("    ℹ️  გაშვება: valgrind ./test_ct_sidechannel\n");
+    printf("      Valgrind CT mode DISABLED\n");
+    printf("      : cmake -DSECP256K1_CT_VALGRIND=1\n");
+    printf("      : valgrind ./test_ct_sidechannel\n");
 #endif
 
     auto G = Point::generator();
@@ -1189,7 +1189,7 @@ static void test_valgrind_markers() {
         auto R = secp256k1::ct::scalar_mul(G, k);
         SECP256K1_DECLASSIFY(&R, sizeof(R));
         check(!R.is_infinity(), "CT scalar_mul with classified k");
-        printf("    ct::scalar_mul classified: ✅\n");
+        printf("    ct::scalar_mul classified: [OK]\n");
     }
     // 7b: CT field ops
     {
@@ -1203,7 +1203,7 @@ static void test_valgrind_markers() {
         SECP256K1_DECLASSIFY(&prod, sizeof(prod));
         SECP256K1_DECLASSIFY(&sq, sizeof(sq));
         check(true, "CT field ops classified");
-        printf("    ct::field_{add,mul,sqr} classified: ✅\n");
+        printf("    ct::field_{add,mul,sqr} classified: [OK]\n");
     }
     // 7c: CT scalar ops
     {
@@ -1215,7 +1215,7 @@ static void test_valgrind_markers() {
         SECP256K1_DECLASSIFY(&sum, sizeof(sum));
         SECP256K1_DECLASSIFY(&neg, sizeof(neg));
         check(true, "CT scalar ops classified");
-        printf("    ct::scalar_{add,neg} classified: ✅\n");
+        printf("    ct::scalar_{add,neg} classified: [OK]\n");
     }
     // 7d: cmov with classified mask
     {
@@ -1225,7 +1225,7 @@ static void test_valgrind_markers() {
         secp256k1::ct::field_cmov(&a, b, mask);
         SECP256K1_DECLASSIFY(&a, sizeof(a));
         check(true, "CT field_cmov classified mask");
-        printf("    ct::field_cmov classified mask: ✅\n");
+        printf("    ct::field_cmov classified mask: [OK]\n");
     }
     // 7e: table lookup with classified index
     {
@@ -1239,7 +1239,7 @@ static void test_valgrind_markers() {
         SECP256K1_DECLASSIFY(&out, sizeof(out));
         SECP256K1_DECLASSIFY(&idx, sizeof(idx));
         check(true, "CT lookup classified index");
-        printf("    ct::ct_lookup_256 classified index: ✅\n");
+        printf("    ct::ct_lookup_256 classified index: [OK]\n");
     }
     // 7f: generator_mul
     {
@@ -1248,53 +1248,53 @@ static void test_valgrind_markers() {
         auto R = secp256k1::ct::generator_mul(k);
         SECP256K1_DECLASSIFY(&R, sizeof(R));
         check(!R.is_infinity(), "CT generator_mul classified k");
-        printf("    ct::generator_mul classified: ✅\n");
+        printf("    ct::generator_mul classified: [OK]\n");
     }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// ტესტი 8: ასემბლის ანალიზი — ინფორმაცია
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
+//  8:   -- 
+// ===========================================================================
 
 static void test_assembly_info() {
-    printf("\n[8] ასემბლის ინსპექცია — ინსტრუქცია\n");
-    printf("    CT ფუნქციების ასემბლის შემოწმება:\n");
+    printf("\n[8]   -- \n");
+    printf("    CT   :\n");
     printf("    objdump -d build_rel/tests/test_ct_sidechannel | less\n\n");
-    printf("    ეძებეთ ct:: ფუნქციებში:\n");
-    printf("    ✅ კარგი: cmov, cmovne, cmove (branchless conditional)\n");
-    printf("    ❌ ცუდი:  jz/jnz/je/jne (secret-dependent branch)\n\n");
-    printf("    სწრაფი ავტომატური შემოწმება:\n");
+    printf("     ct:: :\n");
+    printf("    [OK] : cmov, cmovne, cmove (branchless conditional)\n");
+    printf("    [FAIL] :  jz/jnz/je/jne (secret-dependent branch)\n\n");
+    printf("      :\n");
     printf("    objdump -d build_rel/tests/test_ct_sidechannel | \\\n");
     printf("      awk '/ct.*:$/,/^$/' | grep -cE 'j[a-z]{1,3}\\s'\n");
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
 int main() {
-    printf("═══════════════════════════════════════════════════════════════\n");
+    printf("===============================================================\n");
     printf("  Side-Channel Attack Test Suite (dudect methodology)\n");
-    printf("  Welch t-test: |t| > %.1f → timing leak (p < 0.00001)\n", T_THRESHOLD);
-    printf("  All inputs pre-generated — no RNG in measurement loops\n");
-    printf("═══════════════════════════════════════════════════════════════\n");
+    printf("  Welch t-test: |t| > %.1f -> timing leak (p < 0.00001)\n", T_THRESHOLD);
+    printf("  All inputs pre-generated -- no RNG in measurement loops\n");
+    printf("===============================================================\n");
 
     test_ct_primitives();    // 1
     test_ct_field();         // 2
     test_ct_scalar();        // 3
     test_ct_point();         // 4
     test_ct_utils();         // 5
-    test_fast_not_ct();      // 6 (ინფორმაციული)
+    test_fast_not_ct();      // 6 ()
     test_valgrind_markers(); // 7
     test_assembly_info();    // 8
 
-    printf("\n═══════════════════════════════════════════════════════════════\n");
+    printf("\n===============================================================\n");
     printf("  SIDE-CHANNEL AUDIT: %d passed, %d failed\n", g_pass, g_fail);
     if (g_fail > 0) {
-        printf("  ⚠️  TIMING LEAK-ები აღმოჩენილია\n");
+        printf("  [!]  TIMING LEAK- \n");
     } else {
-        printf("  ✅ ყველა CT ოპერაცია გაიარა dudect ტესტი\n");
+        printf("  [OK]  CT   dudect \n");
     }
-    printf("═══════════════════════════════════════════════════════════════\n");
+    printf("===============================================================\n");
 
-    printf("\n  სრული სერთიფიკაციის ნაბიჯები:\n");
+    printf("\n    :\n");
     printf("  1. Valgrind: -DSECP256K1_CT_VALGRIND=1 && valgrind ./test\n");
     printf("  2. asm:      objdump -d <binary> | grep branches\n");
     printf("  3. hw:       Intel Pin / Flush+Reload (hardware level)\n\n");

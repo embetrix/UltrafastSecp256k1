@@ -1,12 +1,12 @@
 // =============================================================================
-// UltrafastSecp256k1 Metal — Point Operations (secp256k1_point.h)
+// UltrafastSecp256k1 Metal -- Point Operations (secp256k1_point.h)
 // =============================================================================
 // Jacobian coordinate point operations for secp256k1 (a=0 short Weierstrass).
 // All formulas match the CUDA backend exactly.
 //
 // Point doubling:    dbl-2001-b  (3M + 4S)
-// Mixed addition:    madd-2007-bl (7M + 4S) — Jacobian + Affine
-// General addition:  add-2007-bl  (11M + 5S) — Jacobian + Jacobian
+// Mixed addition:    madd-2007-bl (7M + 4S) -- Jacobian + Affine
+// General addition:  add-2007-bl  (11M + 5S) -- Jacobian + Jacobian
 // Scalar mul:        4-bit fixed window (64 doubles + 64 adds, ~35% faster)
 // =============================================================================
 
@@ -30,7 +30,7 @@ struct JacobianPoint {
     uint infinity;  // 1 = point at infinity, 0 = normal
 };
 
-// Scalar (256-bit integer, 8×32) — same layout as FieldElement
+// Scalar (256-bit integer, 8x32) -- same layout as FieldElement
 struct Scalar256 {
     uint limbs[8];
 };
@@ -73,7 +73,7 @@ inline JacobianPoint point_at_infinity() {
 }
 
 // =============================================================================
-// Point Doubling — dbl-2001-b for a=0 (3M + 4S + 7add)
+// Point Doubling -- dbl-2001-b for a=0 (3M + 4S + 7add)
 // =============================================================================
 
 inline JacobianPoint jacobian_double(thread const JacobianPoint &p) {
@@ -84,36 +84,36 @@ inline JacobianPoint jacobian_double(thread const JacobianPoint &p) {
 
     FieldElement YY, S, M, X3, Y3, Z3, YYYY, t1;
 
-    // YY = Y² [1S]
+    // YY = Y^2 [1S]
     YY = field_sqr(p.y);
 
-    // S = 4·X·Y² [1M + 2add]
+    // S = 4*X*Y^2 [1M + 2add]
     S = field_mul(p.x, YY);
     S = field_add(S, S);
     S = field_add(S, S);
 
-    // M = 3·X² [2S + 2add] (a=0 for secp256k1)
+    // M = 3*X^2 [2S + 2add] (a=0 for secp256k1)
     M = field_sqr(p.x);
-    t1 = field_add(M, M);     // 2X²
-    M = field_add(M, t1);     // 3X²
+    t1 = field_add(M, M);     // 2X^2
+    M = field_add(M, t1);     // 3X^2
 
-    // X3 = M² - 2S [3S + sub]
+    // X3 = M^2 - 2S [3S + sub]
     X3 = field_sqr(M);
     t1 = field_add(S, S);
     X3 = field_sub(X3, t1);
 
-    // YYYY = Y⁴ [4S]
+    // YYYY = Y^4 [4S]
     YYYY = field_sqr(YY);
 
-    // Y3 = M·(S - X3) - 8·Y⁴
-    t1 = field_add(YYYY, YYYY); // 2Y⁴
-    t1 = field_add(t1, t1);     // 4Y⁴
-    t1 = field_add(t1, t1);     // 8Y⁴
+    // Y3 = M*(S - X3) - 8*Y^4
+    t1 = field_add(YYYY, YYYY); // 2Y^4
+    t1 = field_add(t1, t1);     // 4Y^4
+    t1 = field_add(t1, t1);     // 8Y^4
     FieldElement diff = field_sub(S, X3);
     Y3 = field_mul(M, diff);
     Y3 = field_sub(Y3, t1);
 
-    // Z3 = 2·Y·Z
+    // Z3 = 2*Y*Z
     Z3 = field_mul(p.y, p.z);
     Z3 = field_add(Z3, Z3);
 
@@ -124,8 +124,8 @@ inline JacobianPoint jacobian_double(thread const JacobianPoint &p) {
 }
 
 // =============================================================================
-// Mixed Addition: P (Jacobian) + Q (Affine) → Result (Jacobian)
-// madd-2007-bl formula (7M + 4S) — Q has implicit Z=1
+// Mixed Addition: P (Jacobian) + Q (Affine) -> Result (Jacobian)
+// madd-2007-bl formula (7M + 4S) -- Q has implicit Z=1
 // =============================================================================
 
 inline JacobianPoint jacobian_add_mixed(thread const JacobianPoint &p,
@@ -141,13 +141,13 @@ inline JacobianPoint jacobian_add_mixed(thread const JacobianPoint &p,
     FieldElement z1z1, u2, s2, h, hh, i, j, rr, v;
     FieldElement X3, Y3, Z3, t1, t2;
 
-    // Z1² [1S]
+    // Z1^2 [1S]
     z1z1 = field_sqr(p.z);
 
-    // U2 = X2·Z1² [1M]
+    // U2 = X2*Z1^2 [1M]
     u2 = field_mul(q.x, z1z1);
 
-    // S2 = Y2·Z1³ [2M]
+    // S2 = Y2*Z1^3 [2M]
     t1 = field_mul(p.z, z1z1);
     s2 = field_mul(q.y, t1);
 
@@ -163,37 +163,37 @@ inline JacobianPoint jacobian_add_mixed(thread const JacobianPoint &p,
         return point_at_infinity();
     }
 
-    // HH = H² [2S]
+    // HH = H^2 [2S]
     hh = field_sqr(h);
 
-    // I = 4·HH
+    // I = 4*HH
     i = field_add(hh, hh);
     i = field_add(i, i);
 
-    // J = H·I [3M]
+    // J = H*I [3M]
     j = field_mul(h, i);
 
-    // rr = 2·(S2 - Y1)
+    // rr = 2*(S2 - Y1)
     t1 = field_sub(s2, p.y);
     rr = field_add(t1, t1);
 
-    // V = X1·I [4M]
+    // V = X1*I [4M]
     v = field_mul(p.x, i);
 
-    // X3 = rr² - J - 2V [3S]
+    // X3 = rr^2 - J - 2V [3S]
     X3 = field_sqr(rr);
     X3 = field_sub(X3, j);
     t1 = field_add(v, v);
     X3 = field_sub(X3, t1);
 
-    // Y3 = rr·(V - X3) - 2·Y1·J [5M, 6M]
+    // Y3 = rr*(V - X3) - 2*Y1*J [5M, 6M]
     t1 = field_sub(v, X3);
     Y3 = field_mul(rr, t1);
     t2 = field_mul(p.y, j);
     t2 = field_add(t2, t2);
     Y3 = field_sub(Y3, t2);
 
-    // Z3 = (Z1 + H)² - Z1² - HH [4S]
+    // Z3 = (Z1 + H)^2 - Z1^2 - HH [4S]
     t1 = field_add(p.z, h);
     Z3 = field_sqr(t1);
     Z3 = field_sub(Z3, z1z1);
@@ -206,7 +206,7 @@ inline JacobianPoint jacobian_add_mixed(thread const JacobianPoint &p,
 }
 
 // =============================================================================
-// General Jacobian Addition: P + Q (both Jacobian) → Result
+// General Jacobian Addition: P + Q (both Jacobian) -> Result
 // add-2007-bl formula (11M + 5S)
 // =============================================================================
 
@@ -246,10 +246,10 @@ inline JacobianPoint jacobian_add(thread const JacobianPoint &p,
 
     FieldElement hh = field_sqr(h);
     FieldElement i = field_add(hh, hh);
-    i = field_add(i, i);                // I = 4H²
+    i = field_add(i, i);                // I = 4H^2
 
-    FieldElement j = field_mul(h, i);    // J = H·I
-    FieldElement v = field_mul(u1, i);   // V = U1·I
+    FieldElement j = field_mul(h, i);    // J = H*I
+    FieldElement v = field_mul(u1, i);   // V = U1*I
 
     FieldElement X3 = field_sqr(r_val);
     X3 = field_sub(X3, j);
@@ -262,7 +262,7 @@ inline JacobianPoint jacobian_add(thread const JacobianPoint &p,
     t2 = field_add(t2, t2);
     Y3 = field_sub(Y3, t2);
 
-    // Z3 = ((Z1+Z2)² - Z1² - Z2²)·H
+    // Z3 = ((Z1+Z2)^2 - Z1^2 - Z2^2)*H
     t1 = field_add(p.z, q.z);
     FieldElement Z3 = field_sqr(t1);
     Z3 = field_sub(Z3, z1z1);
@@ -276,7 +276,7 @@ inline JacobianPoint jacobian_add(thread const JacobianPoint &p,
 }
 
 // =============================================================================
-// Jacobian → Affine Conversion
+// Jacobian -> Affine Conversion
 // (Defined here before scalar_mul which depends on it)
 // =============================================================================
 
@@ -298,7 +298,7 @@ inline AffinePoint jacobian_to_affine(thread const JacobianPoint &p) {
 }
 
 // =============================================================================
-// Scalar Multiplication: P × k — 4-bit Fixed Window (w=4)
+// Scalar Multiplication: P x k -- 4-bit Fixed Window (w=4)
 //
 // ACCELERATION: Instead of simple double-and-add (256 doubles + ~128 adds),
 // this uses a 4-bit window: 64 doubles + 64 lookups + 64 adds.
@@ -308,11 +308,11 @@ inline AffinePoint jacobian_to_affine(thread const JacobianPoint &p) {
 // Then processes scalar 4 bits at a time (64 windows).
 //
 // This is the Metal equivalent of CUDA's wNAF or fixed-window approaches.
-// Register pressure: 16 AffinePoints × 16 limbs = 256 registers — fits
+// Register pressure: 16 AffinePoints x 16 limbs = 256 registers -- fits
 // nicely in Apple Silicon's large register file.
 // =============================================================================
 
-// Branchless conditional select — avoids divergent control flow on GPU
+// Branchless conditional select -- avoids divergent control flow on GPU
 inline AffinePoint affine_select(thread const AffinePoint table[16], uint idx) {
     AffinePoint result;
     for (int i = 0; i < 8; i++) { result.x.limbs[i] = 0; result.y.limbs[i] = 0; }
@@ -332,7 +332,7 @@ inline JacobianPoint scalar_mul(thread const AffinePoint &base,
     // === Precompute table[0..15] ===
     AffinePoint table[16];
 
-    // table[0] = O (point at infinity — zero affine)
+    // table[0] = O (point at infinity -- zero affine)
     for (int i = 0; i < 8; i++) { table[0].x.limbs[i] = 0; table[0].y.limbs[i] = 0; }
 
     // table[1] = P
@@ -389,7 +389,7 @@ inline JacobianPoint scalar_mul(thread const AffinePoint &base,
 }
 
 // =============================================================================
-// GLV Endomorphism: φ(x,y) = (β·x, y) where β³ ≡ 1 (mod p)
+// GLV Endomorphism: phi(x,y) = (beta*x, y) where beta^3 == 1 (mod p)
 // =============================================================================
 
 constant uint BETA_LIMBS[8] = {

@@ -54,7 +54,7 @@ int main() {
     std::cout << "  Testing individual building blocks (10,000 iterations each)\n";
     std::cout << "================================================================\n\n";
 
-    // Prepare test data — full 256-bit values for representative results
+    // Prepare test data -- full 256-bit values for representative results
     Point G = Point::generator();
     Point P = scalar_mul_generator(Scalar::from_hex(
         "e8f32e723decf4051aefac8e2c93c9c5b214313817cdb01a1494b917c8436b35"));

@@ -6,7 +6,7 @@
 #include "field.hpp"
 #include "scalar.hpp"
 
-// On 5×52-capable platforms, Point stores FieldElement52 internally
+// On 5x52-capable platforms, Point stores FieldElement52 internally
 // for zero-conversion-overhead point arithmetic.
 // FE52 native storage: only on 64-bit platforms with __int128
 #if defined(__SIZEOF_INT128__) && !defined(SECP256K1_PLATFORM_ESP32) && !defined(SECP256K1_PLATFORM_STM32)
@@ -18,7 +18,7 @@
 
 namespace secp256k1::fast {
 
-// Fixed K × Variable Q optimization plan
+// Fixed K x Variable Q optimization plan
 // Caches all K-dependent work: GLV decomposition + wNAF computation
 // Use this when you need to multiply many different points Q by the same scalar K
 struct KPlan {
@@ -62,7 +62,7 @@ public:
     FieldElement X() const noexcept;
     FieldElement Y() const noexcept;
     FieldElement z() const noexcept;
-    // Direct access to 5×52 internals (for hot paths)
+    // Direct access to 5x52 internals (for hot paths)
     const FieldElement52& X52() const noexcept { return x_; }
     const FieldElement52& Y52() const noexcept { return y_; }
     const FieldElement52& Z52() const noexcept { return z_; }
@@ -82,7 +82,7 @@ public:
     
     // Optimized: Q * K with pre-decomposed K (k1, k2, signs)
     // Use this when K decomposition is done once at startup
-    // Runtime only computes: Q*k1 + φ(Q)*k2
+    // Runtime only computes: Q*k1 + phi(Q)*k2
     Point scalar_mul_predecomposed(const Scalar& k1, const Scalar& k2, 
                                     bool neg1, bool neg2) const;
     
@@ -93,9 +93,9 @@ public:
                                        const std::vector<int32_t>& wnaf2,
                                        bool neg1, bool neg2) const;
     
-    // Fixed K × Variable Q: Use precomputed KPlan for maximum speed
+    // Fixed K x Variable Q: Use precomputed KPlan for maximum speed
     // All K-dependent work (GLV + wNAF) is cached in the plan
-    // Runtime only: φ(Q), table generation, Shamir's trick
+    // Runtime only: phi(Q), table generation, Shamir's trick
     Point scalar_mul_with_plan(const KPlan& plan) const;
     
     // Negation: returns the opposite point on the curve

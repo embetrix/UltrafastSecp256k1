@@ -1,20 +1,20 @@
 // ============================================================================
-// Benchmark: FieldElement (4×64) vs FieldElement26 (10×26 Lazy-Reduction)
+// Benchmark: FieldElement (4x64) vs FieldElement26 (10x26 Lazy-Reduction)
 // ============================================================================
 //
 // Measures individual field operations and realistic ECC-like chains
-// to quantify the lazy-reduction advantage of the 10×26 representation.
+// to quantify the lazy-reduction advantage of the 10x26 representation.
 //
-// Key hypothesis: 10×26 wins on add-heavy chains because
-// additions are 10 plain adds with NO carry propagation, while 4×64 needs
+// Key hypothesis: 10x26 wins on add-heavy chains because
+// additions are 10 plain adds with NO carry propagation, while 4x64 needs
 // carry propagation + conditional reduction after every add.
 //
 // Target platforms: ESP32 (Xtensa LX6/LX7), STM32 (Cortex-M3/M4),
 //                   any 32-bit CPU where uint64_t multiply is expensive.
 //
-// On x86-64 this benchmark shows the OVERHEAD of 10×26 vs 4×64 (native),
+// On x86-64 this benchmark shows the OVERHEAD of 10x26 vs 4x64 (native),
 // but on 32-bit targets the relative advantage should be significant
-// because 10×26 needs only 32×32→64 multiplies (native on 32-bit).
+// because 10x26 needs only 32x32->64 multiplies (native on 32-bit).
 // ============================================================================
 
 #include "secp256k1/field_26.hpp"
@@ -35,7 +35,7 @@
 using namespace secp256k1::fast;
 using Clock = std::chrono::high_resolution_clock;
 
-// ── Benchmark Harness ────────────────────────────────────────────────────────
+// -- Benchmark Harness --------------------------------------------------------
 
 static constexpr int WARMUP   = 500;
 static constexpr int PASSES   = 7;       // median-of-7 for stability
@@ -67,7 +67,7 @@ static void escape(const void* p) {
     sink = reinterpret_cast<uintptr_t>(p);
 }
 
-// ── Test Data ────────────────────────────────────────────────────────────────
+// -- Test Data ----------------------------------------------------------------
 
 // Generator point Gx, Gy
 static const uint64_t GX_LIMBS[4] = {
@@ -83,7 +83,7 @@ static FieldElement make_fe(const uint64_t limbs[4]) {
     return FieldElement::from_limbs({limbs[0], limbs[1], limbs[2], limbs[3]});
 }
 
-// ── Formatting ───────────────────────────────────────────────────────────────
+// -- Formatting ---------------------------------------------------------------
 
 struct BenchResult {
     const char* name;
@@ -98,8 +98,8 @@ static void print_header() {
     std::printf("  Median of %d passes, %d warmup iterations\n", PASSES, WARMUP);
     std::printf("===================================================================\n\n");
     std::printf("%-36s %10s %10s %10s\n", "Operation", "4x64 (ns)", "10x26(ns)", "Ratio");
-    std::printf("%-36s %10s %10s %10s\n", "────────────────────────────────────",
-                "──────────", "──────────", "──────────");
+    std::printf("%-36s %10s %10s %10s\n", "------------------------------------",
+                "----------", "----------", "----------");
 }
 
 static void print_result(const BenchResult& r) {
@@ -114,16 +114,16 @@ static void print_separator(const char* section) {
     std::printf("\n--- %s ---\n", section);
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
 // Old Reference Benchmarks (from docs/BENCHMARKS.md)
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
 static void print_reference_table() {
     std::printf("\n");
     std::printf("===================================================================\n");
     std::printf("  Reference: Old Benchmark Data (docs/BENCHMARKS.md)\n");
     std::printf("===================================================================\n");
     std::printf("  Platform               Field Mul (ns)  Field Add (ns)\n");
-    std::printf("  ─────────────────────  ──────────────  ──────────────\n");
+    std::printf("  ---------------------  --------------  --------------\n");
     std::printf("  x86-64 (i7-13700K)           33              11\n");
     std::printf("  ARM64  (RK3588)              85              18\n");
     std::printf("  RISC-V 64 (D1)              198              34\n");
@@ -133,9 +133,9 @@ static void print_reference_table() {
     std::printf("===================================================================\n\n");
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
 // main
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
 
 int main() {
     std::printf("[bench_field_26] Running arithmetic validation...\n");
@@ -152,7 +152,7 @@ int main() {
     SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_HIGHEST);
 #endif
 
-    // ── Prepare test data ────────────────────────────────────────────────────
+    // -- Prepare test data ----------------------------------------------------
     FieldElement fe_a = make_fe(GX_LIMBS);
     FieldElement fe_b = make_fe(GY_LIMBS);
 
@@ -161,12 +161,12 @@ int main() {
 
     print_header();
 
-    // ══════════════════════════════════════════════════════════════════════
+    // ======================================================================
     // Section 1: Single Operations
-    // ══════════════════════════════════════════════════════════════════════
+    // ======================================================================
     print_separator("Single Operations");
 
-    // ── 1. Single Addition ───────────────────────────────────────────────
+    // -- 1. Single Addition -----------------------------------------------
     {
         constexpr int ITERS = 500000;
 
@@ -185,7 +185,7 @@ int main() {
         print_result({"Addition (single)", ns4, ns26});
     }
 
-    // ── 2. Single Multiplication ─────────────────────────────────────────
+    // -- 2. Single Multiplication -----------------------------------------
     {
         constexpr int ITERS = 200000;
 
@@ -204,7 +204,7 @@ int main() {
         print_result({"Multiplication (single)", ns4, ns26});
     }
 
-    // ── 3. Single Squaring ───────────────────────────────────────────────
+    // -- 3. Single Squaring -----------------------------------------------
     {
         constexpr int ITERS = 200000;
 
@@ -223,11 +223,11 @@ int main() {
         print_result({"Squaring (single)", ns4, ns26});
     }
 
-    // ── 4. Normalization ─────────────────────────────────────────────────
+    // -- 4. Normalization -------------------------------------------------
     {
         constexpr int ITERS = 500000;
 
-        // Create slightly un-normalized element for 10×26
+        // Create slightly un-normalized element for 10x26
         FieldElement26 acc26 = fe26_a + fe26_b;
 
         double ns26_weak = bench_ns([&]() {
@@ -246,7 +246,7 @@ int main() {
         std::printf("%-36s %9s  %9.2f\n", "Normalize (full, 10x26 only)", "N/A", ns26_full);
     }
 
-    // ── 5. Negation ──────────────────────────────────────────────────────
+    // -- 5. Negation ------------------------------------------------------
     {
         constexpr int ITERS = 500000;
 
@@ -265,7 +265,7 @@ int main() {
         print_result({"Negation", ns4, ns26});
     }
 
-    // ── 6. Half ──────────────────────────────────────────────────────────
+    // -- 6. Half ----------------------------------------------------------
     {
         constexpr int ITERS = 500000;
 
@@ -278,7 +278,7 @@ int main() {
         std::printf("%-36s %9s  %9.2f\n", "Half (10x26 only)", "N/A", ns26);
     }
 
-    // ── 7. Conversion cost ───────────────────────────────────────────────
+    // -- 7. Conversion cost -----------------------------------------------
     {
         constexpr int ITERS = 500000;
 
@@ -298,15 +298,15 @@ int main() {
         std::printf("%-36s %9.2f  %9s\n", "Convert 10x26 -> 4x64", ns_to4, "N/A");
     }
 
-    // ══════════════════════════════════════════════════════════════════════
+    // ======================================================================
     // Section 2: Addition Chains (Lazy-Reduction Core Advantage)
-    // ══════════════════════════════════════════════════════════════════════
+    // ======================================================================
     print_separator("Addition Chains (Lazy-Reduction Core Advantage)");
 
     for (int chain_len : {4, 8, 16, 32, 64}) {
         constexpr int ITERS = 50000;
 
-        // 4×64: each add does carry + conditional reduction
+        // 4x64: each add does carry + conditional reduction
         double ns4 = bench_ns([&]() {
             FieldElement acc = fe_a;
             for (int i = 0; i < chain_len; ++i) {
@@ -315,7 +315,7 @@ int main() {
             escape(&acc);
         }, ITERS);
 
-        // 10×26: N plain adds, ONE normalize at end
+        // 10x26: N plain adds, ONE normalize at end
         double ns26 = bench_ns([&]() {
             FieldElement26 acc = fe26_a;
             for (int i = 0; i < chain_len; ++i) {
@@ -330,16 +330,16 @@ int main() {
         print_result({name, ns4, ns26});
     }
 
-    // ══════════════════════════════════════════════════════════════════════
+    // ======================================================================
     // Section 3: Mixed Chains (ECC Point Operation Simulation)
-    // ══════════════════════════════════════════════════════════════════════
+    // ======================================================================
     print_separator("Mixed Chains (ECC Point Operation Simulation)");
 
     // ECC point addition: ~12 muls + 4 sqrs + ~7 adds + ~3 subs
     {
         constexpr int ITERS = 50000;
 
-        // 4×64 version
+        // 4x64 version
         double ns4 = bench_ns([&]() {
             FieldElement t0 = fe_a, t1 = fe_b;
             FieldElement u1 = t0 * t1;
@@ -357,7 +357,7 @@ int main() {
             escape(&out);
         }, ITERS);
 
-        // 10×26 version
+        // 10x26 version
         double ns26 = bench_ns([&]() {
             FieldElement26 t0 = fe26_a, t1 = fe26_b;
             FieldElement26 u1 = t0 * t1;
@@ -378,7 +378,7 @@ int main() {
         print_result({"Point-Add simulation (12M+4S+7A)", ns4, ns26});
     }
 
-    // ── Repeated squaring chain (scalar field inversion pattern) ─────────
+    // -- Repeated squaring chain (scalar field inversion pattern) ---------
     {
         constexpr int ITERS = 10000;
         constexpr int CHAIN = 256;   // ~256 squarings like in Fermat inverse
@@ -402,7 +402,7 @@ int main() {
         print_result({"Sqr chain (256 squarings)", ns4, ns26});
     }
 
-    // ── Alternating mul+add (mixed pipeline) ────────────────────────────
+    // -- Alternating mul+add (mixed pipeline) ----------------------------
     {
         constexpr int ITERS = 20000;
         constexpr int CHAIN = 32;
@@ -429,7 +429,7 @@ int main() {
         print_result({"Mul+Add alternating (32 iters)", ns4, ns26});
     }
 
-    // ── Pure multiplication chain ────────────────────────────────────────
+    // -- Pure multiplication chain ----------------------------------------
     {
         constexpr int ITERS = 20000;
         constexpr int CHAIN = 32;
@@ -453,9 +453,9 @@ int main() {
         print_result({"Mul chain (32 muls)", ns4, ns26});
     }
 
-    // ══════════════════════════════════════════════════════════════════════
+    // ======================================================================
     // Section 4: Throughput Summary
-    // ══════════════════════════════════════════════════════════════════════
+    // ======================================================================
     print_separator("Throughput Summary");
     {
         constexpr int ITERS = 500000;
@@ -515,21 +515,21 @@ int main() {
                     sqr4_mops, sqr26_mops, sqr26_mops / sqr4_mops);
     }
 
-    // ══════════════════════════════════════════════════════════════════════
+    // ======================================================================
     // Section 5: Platform Context
-    // ══════════════════════════════════════════════════════════════════════
+    // ======================================================================
     std::printf("\n===================================================================\n");
     std::printf("  Legend: Ratio = 4x64_time / 10x26_time  (>1 = 10x26 faster)\n");
     std::printf("\n");
-    std::printf("  On x86-64:  4x64 uses native 64-bit ops → 4x64 expected to win.\n");
+    std::printf("  On x86-64:  4x64 uses native 64-bit ops -> 4x64 expected to win.\n");
     std::printf("              10x26 loses here due to more limbs (10 vs 4).\n");
     std::printf("\n");
-    std::printf("  On 32-bit:  10x26 uses only 32x32→64 multiplies (native).\n");
-    std::printf("              4x64 needs 64-bit math emulated as 4× calls.\n");
+    std::printf("  On 32-bit:  10x26 uses only 32x32->64 multiplies (native).\n");
+    std::printf("              4x64 needs 64-bit math emulated as 4x calls.\n");
     std::printf("              10x26 wins significantly on ESP32/STM32/ARM32.\n");
     std::printf("\n");
     std::printf("  Lazy-reduction advantage: add chains ALWAYS benefit regardless\n");
-    std::printf("  of platform, since 10×26 adds are 10 plain uint32 adds.\n");
+    std::printf("  of platform, since 10x26 adds are 10 plain uint32 adds.\n");
     std::printf("===================================================================\n\n");
 
     return 0;

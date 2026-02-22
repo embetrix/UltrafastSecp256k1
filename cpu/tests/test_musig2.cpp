@@ -45,7 +45,7 @@ static bool points_equal(const Point& a, const Point& b) {
     return a.to_compressed() == b.to_compressed();
 }
 
-// ── Key Aggregation ──────────────────────────────────────────────────────────
+// -- Key Aggregation ----------------------------------------------------------
 
 static void test_key_aggregation() {
     printf("\n--- Key Aggregation ---\n");
@@ -75,12 +75,12 @@ static void test_key_aggregation() {
     CHECK(!points_equal(ctx.Q, P1), "Agg key != P1");
     CHECK(!points_equal(ctx.Q, P2), "Agg key != P2");
 
-    // Deterministic: same inputs → same output
+    // Deterministic: same inputs -> same output
     auto ctx2 = musig2_key_agg(pubkeys);
     CHECK(points_equal(ctx.Q, ctx2.Q), "Key aggregation is deterministic");
 }
 
-// ── Nonce Generation ─────────────────────────────────────────────────────────
+// -- Nonce Generation ---------------------------------------------------------
 
 static void test_nonce_gen() {
     printf("\n--- Nonce Generation ---\n");
@@ -111,14 +111,14 @@ static void test_nonce_gen() {
     CHECK((pub_nonce.R2[0] == 0x02 || pub_nonce.R2[0] == 0x03),
           "R2 is valid compressed point");
 
-    // Different extra_input → different nonces
+    // Different extra_input -> different nonces
     std::array<uint8_t, 32> extra2{};
     extra2[0] = 0x43;
     auto [sec2, pub2] = musig2_nonce_gen(sk, pk, pk, msg, extra2.data());
-    CHECK(pub_nonce.R1 != pub2.R1, "Different extra → different nonce");
+    CHECK(pub_nonce.R1 != pub2.R1, "Different extra -> different nonce");
 }
 
-// ── Full 2-of-2 Signing ─────────────────────────────────────────────────────
+// -- Full 2-of-2 Signing -----------------------------------------------------
 
 static void test_2of2_signing() {
     printf("\n--- 2-of-2 MuSig2 Signing ---\n");
@@ -179,7 +179,7 @@ static void test_2of2_signing() {
     CHECK(schnorr_ok, "Final MuSig2 sig verifies as standard Schnorr");
 }
 
-// ── Full 3-of-3 Signing ─────────────────────────────────────────────────────
+// -- Full 3-of-3 Signing -----------------------------------------------------
 
 static void test_3of3_signing() {
     printf("\n--- 3-of-3 MuSig2 Signing ---\n");
@@ -241,7 +241,7 @@ static void test_3of3_signing() {
     CHECK(final_ok, "3-of-3 MuSig2 sig verifies as Schnorr");
 }
 
-// ── Edge Cases ───────────────────────────────────────────────────────────────
+// -- Edge Cases ---------------------------------------------------------------
 
 static void test_edge_cases() {
     printf("\n--- Edge Cases ---\n");
@@ -280,7 +280,7 @@ static void test_edge_cases() {
     CHECK(schnorr_ok, "Single-signer MuSig2 = valid Schnorr sig");
 }
 
-// ── Main ─────────────────────────────────────────────────────────────────────
+// -- Main ---------------------------------------------------------------------
 
 int test_musig2_run() {
     printf("=== MuSig2 Multi-Signature Tests ===\n");

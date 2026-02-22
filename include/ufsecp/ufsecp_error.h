@@ -1,5 +1,5 @@
 /* ============================================================================
- * UltrafastSecp256k1 — Error Model
+ * UltrafastSecp256k1 -- Error Model
  * ============================================================================
  * Every ufsecp_* function returns ufsecp_error_t (0 = success).
  * For detailed diagnostics, call ufsecp_last_error() / ufsecp_last_error_msg()
@@ -17,7 +17,7 @@
 extern "C" {
 #endif
 
-/* ── Error codes ──────────────────────────────────────────────────────────── */
+/* -- Error codes ------------------------------------------------------------ */
 
 typedef int ufsecp_error_t;
 
@@ -33,7 +33,7 @@ typedef int ufsecp_error_t;
 #define UFSECP_ERR_INTERNAL      9   /**< Unexpected internal error            */
 #define UFSECP_ERR_BUF_TOO_SMALL 10  /**< Output buffer too small              */
 
-/* ── Error inspection ─────────────────────────────────────────────────────── */
+/* -- Error inspection ------------------------------------------------------- */
 
 /** Map error code to a short English description (never NULL). */
 UFSECP_API const char* ufsecp_error_str(ufsecp_error_t err);

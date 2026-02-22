@@ -3,13 +3,13 @@
 #ifndef FF81ACF1_826F_4559_8EDE_731FC33ED31C
 #define FF81ACF1_826F_4559_8EDE_731FC33ED31C
 // 
-// Goal: Reduce decomposition from 13.6μs to <5μs (2.7x speedup)
+// Goal: Reduce decomposition from 13.6us to <5us (2.7x speedup)
 // Main bottlenecks:
-//   1. k2 calculation: 15,000 cycles (4.3μs)  - Scalar arithmetic
-//   2. lambda×k2:      33,000 cycles (9.3μs)  - 256×256 mul + Barrett
+//   1. k2 calculation: 15,000 cycles (4.3us)  - Scalar arithmetic
+//   2. lambdaxk2:      33,000 cycles (9.3us)  - 256x256 mul + Barrett
 //
 // Optimizations:
-//   - Use BMI2 intrinsics (mulx, adox, adcx) for 256×256 multiplication
+//   - Use BMI2 intrinsics (mulx, adox, adcx) for 256x256 multiplication
 //   - Inline all hot paths to eliminate function call overhead
 //   - Use lazy reduction where possible
 //   - Optimize Barrett reduction with precomputed mu
@@ -26,12 +26,12 @@
 
 namespace secp256k1::fast {
 
-// 256-bit limb representation (4 × 64-bit)
+// 256-bit limb representation (4 x 64-bit)
 using Limbs4 = std::array<std::uint64_t, 4>;
 using Limbs8 = std::array<std::uint64_t, 8>;
 
 // ============================================================================
-// BMI2-Optimized 256×256 → 512-bit Multiplication
+// BMI2-Optimized 256x256 -> 512-bit Multiplication
 // ============================================================================
 // Uses mulx + adcx/adox for 2-3x speedup over generic multiplication
 //
@@ -48,7 +48,7 @@ inline Limbs8 mul_256x256_bmi2(const Limbs4& a, const Limbs4& b) {
     
     std::uint64_t carry_add = 0, carry_mul = 0;
     
-    // Row 0: a[0] × b[0..3]
+    // Row 0: a[0] x b[0..3]
     r[0] = _mulx_u64(a[0], b[0], &r[1]);
     {
         std::uint64_t hi;
@@ -71,7 +71,7 @@ inline Limbs8 mul_256x256_bmi2(const Limbs4& a, const Limbs4& b) {
         r[4] = hi + c;
     }
     
-    // Row 1: a[1] × b[0..3] (add to r[1..5])
+    // Row 1: a[1] x b[0..3] (add to r[1..5])
     {
         std::uint64_t hi;
         std::uint64_t lo = _mulx_u64(a[1], b[0], &hi);
@@ -100,7 +100,7 @@ inline Limbs8 mul_256x256_bmi2(const Limbs4& a, const Limbs4& b) {
         r[5] = hi + c;
     }
     
-    // Row 2: a[2] × b[0..3] (add to r[2..6])
+    // Row 2: a[2] x b[0..3] (add to r[2..6])
     {
         std::uint64_t hi;
         std::uint64_t lo = _mulx_u64(a[2], b[0], &hi);
@@ -129,7 +129,7 @@ inline Limbs8 mul_256x256_bmi2(const Limbs4& a, const Limbs4& b) {
         r[6] = hi + c;
     }
     
-    // Row 3: a[3] × b[0..3] (add to r[3..7])
+    // Row 3: a[3] x b[0..3] (add to r[3..7])
     {
         std::uint64_t hi;
         std::uint64_t lo = _mulx_u64(a[3], b[0], &hi);
@@ -204,9 +204,9 @@ inline Limbs8 mul_256x256_bmi2(const Limbs4& a, const Limbs4& b) {
 #endif
 
 // ============================================================================
-// Optimized Barrett Reduction: 512-bit → 256-bit (mod n)
+// Optimized Barrett Reduction: 512-bit -> 256-bit (mod n)
 // ============================================================================
-// For GLV, lambda×k2 result is usually < 2^257, so we can use fast path
+// For GLV, lambdaxk2 result is usually < 2^257, so we can use fast path
 
 inline Limbs4 barrett_reduce_512_fast(const Limbs8& wide) {
     // Secp256k1 group order n
@@ -241,7 +241,7 @@ inline Limbs4 barrett_reduce_512_fast(const Limbs8& wide) {
     
     // Slow path: Full Barrett reduction (rare for GLV)
     // For simplicity, we'll just implement modular reduction
-    // In practice, this path should never be hit for lambda×k2
+    // In practice, this path should never be hit for lambdaxk2
     
     // TODO: Implement full Barrett reduction if needed
     // For now, return approximate result (needs proper implementation)

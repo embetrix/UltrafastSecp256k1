@@ -1,5 +1,5 @@
 # ============================================================================
-# Benchmark Dashboard — Performance Tracking CI
+# Benchmark Dashboard -- Performance Tracking CI
 # ============================================================================
 # Runs benchmarks on every push to dev/main and stores results.
 # Uses github-action-benchmark to track performance regressions.

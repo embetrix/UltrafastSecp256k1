@@ -25,7 +25,7 @@
 
 namespace secp256k1::coins {
 
-// ── Keccak-256 State ─────────────────────────────────────────────────────────
+// -- Keccak-256 State ---------------------------------------------------------
 
 struct Keccak256State {
     std::uint64_t state[25];     // 1600-bit Keccak state (5x5 lanes)
@@ -42,7 +42,7 @@ struct Keccak256State {
     std::array<std::uint8_t, 32> finalize();
 };
 
-// ── One-Shot API ─────────────────────────────────────────────────────────────
+// -- One-Shot API -------------------------------------------------------------
 
 // Compute Keccak-256 hash of data
 std::array<std::uint8_t, 32> keccak256(const std::uint8_t* data, std::size_t len);

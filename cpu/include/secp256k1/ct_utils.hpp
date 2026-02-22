@@ -2,7 +2,7 @@
 #define SECP256K1_CT_UTILS_HPP
 
 // ============================================================================
-// Constant-Time Utilities — High-Level API
+// Constant-Time Utilities -- High-Level API
 // ============================================================================
 // Provides byte-level constant-time operations for use in protocol
 // implementations (ECDSA, Schnorr, ECDH, etc.).
@@ -13,15 +13,15 @@
 // Audit Status:
 //   - Value barriers: compiler optimization fence via inline asm / volatile
 //   - Mask generation: arithmetic (no branches)
-//   - Conditional ops: bitwise (no cmov — explicit XOR/AND/OR)
+//   - Conditional ops: bitwise (no cmov -- explicit XOR/AND/OR)
 //   - Table lookup: full scan (no early exit)
 //
 // Layers:
-//   ct/ops.hpp     — 64-bit primitives (value_barrier, masks, cmov, cswap)
-//   ct/field.hpp   — FieldElement CT ops (add/sub/mul/sqr/inv)
-//   ct/scalar.hpp  — Scalar CT ops (add/sub/neg/cmov/cswap)
-//   ct/point.hpp   — Point CT ops (complete addition, CT scalar_mul)
-//   ct_utils.hpp   — THIS FILE: byte-level utilities for protocols
+//   ct/ops.hpp     -- 64-bit primitives (value_barrier, masks, cmov, cswap)
+//   ct/field.hpp   -- FieldElement CT ops (add/sub/mul/sqr/inv)
+//   ct/scalar.hpp  -- Scalar CT ops (add/sub/neg/cmov/cswap)
+//   ct/point.hpp   -- Point CT ops (complete addition, CT scalar_mul)
+//   ct_utils.hpp   -- THIS FILE: byte-level utilities for protocols
 // ============================================================================
 
 #include <cstdint>
@@ -32,7 +32,7 @@
 
 namespace secp256k1::ct {
 
-// ── Byte-level Constant-Time Compare ─────────────────────────────────────────
+// -- Byte-level Constant-Time Compare -----------------------------------------
 // Returns true if a[0..len) == b[0..len). Constant-time (no early exit).
 inline bool ct_equal(const void* a, const void* b, std::size_t len) noexcept {
     const auto* pa = static_cast<const std::uint8_t*>(a);
@@ -62,8 +62,8 @@ inline bool ct_equal(const std::array<std::uint8_t, N>& a,
     return ct_equal(a.data(), b.data(), N);
 }
 
-// ── Byte-level Constant-Time Conditional Copy ────────────────────────────────
-// if (flag) memcpy(dst, src, len);  — constant-time
+// -- Byte-level Constant-Time Conditional Copy --------------------------------
+// if (flag) memcpy(dst, src, len);  -- constant-time
 inline void ct_memcpy_if(void* dst, const void* src, std::size_t len,
                          bool flag) noexcept {
     auto mask = bool_to_mask(flag);
@@ -77,8 +77,8 @@ inline void ct_memcpy_if(void* dst, const void* src, std::size_t len,
     }
 }
 
-// ── Constant-Time Conditional Swap ───────────────────────────────────────────
-// if (flag) swap(a[0..len), b[0..len));  — constant-time
+// -- Constant-Time Conditional Swap -------------------------------------------
+// if (flag) swap(a[0..len), b[0..len));  -- constant-time
 inline void ct_memswap_if(void* a, void* b, std::size_t len,
                           bool flag) noexcept {
     auto mask = bool_to_mask(flag);
@@ -94,7 +94,7 @@ inline void ct_memswap_if(void* a, void* b, std::size_t len,
     }
 }
 
-// ── Constant-Time Zero Check ─────────────────────────────────────────────────
+// -- Constant-Time Zero Check -------------------------------------------------
 // Returns true if all bytes are zero. Constant-time.
 inline bool ct_is_zero(const void* data, std::size_t len) noexcept {
     const auto* p = static_cast<const std::uint8_t*>(data);
@@ -110,7 +110,7 @@ inline bool ct_is_zero(const std::array<std::uint8_t, N>& data) noexcept {
     return ct_is_zero(data.data(), N);
 }
 
-// ── Constant-Time Memory Set ─────────────────────────────────────────────────
+// -- Constant-Time Memory Set -------------------------------------------------
 // Guaranteed not to be optimized away by the compiler.
 inline void ct_memzero(void* data, std::size_t len) noexcept {
     auto* p = static_cast<volatile std::uint8_t*>(data);
@@ -122,7 +122,7 @@ inline void ct_memzero(void* data, std::size_t len) noexcept {
 #endif
 }
 
-// ── Constant-Time Byte Select ────────────────────────────────────────────────
+// -- Constant-Time Byte Select ------------------------------------------------
 // Returns a if flag is true, b otherwise. No branch.
 inline std::uint8_t ct_select_byte(std::uint8_t a, std::uint8_t b,
                                     bool flag) noexcept {
@@ -131,7 +131,7 @@ inline std::uint8_t ct_select_byte(std::uint8_t a, std::uint8_t b,
     return static_cast<std::uint8_t>((a & mask8) | (b & ~mask8));
 }
 
-// ── Constant-Time Lexicographic Compare ──────────────────────────────────────
+// -- Constant-Time Lexicographic Compare --------------------------------------
 // Returns: -1 if a < b, 0 if a == b, 1 if a > b. Constant-time.
 inline int ct_compare(const void* a, const void* b, std::size_t len) noexcept {
     const auto* pa = static_cast<const std::uint8_t*>(a);

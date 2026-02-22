@@ -1,5 +1,5 @@
 // ============================================================================
-// UltrafastSecp256k1 — Desktop Quick-Start Example
+// UltrafastSecp256k1 -- Desktop Quick-Start Example
 // ============================================================================
 // Demonstrates basic usage: key generation, point operations, serialization.
 // Build: cmake --build <build_dir> --target example_basic_usage
@@ -16,7 +16,7 @@
 
 using namespace secp256k1::fast;
 
-// ── helpers ──────────────────────────────────────────────────────────────────
+// -- helpers ------------------------------------------------------------------
 
 static void print_hex(const char* label, const uint8_t* data, size_t len) {
     printf("  %s: ", label);
@@ -30,10 +30,10 @@ static double now_us() {
     return std::chrono::duration<double, std::micro>(clk::now() - t0).count();
 }
 
-// ── main ─────────────────────────────────────────────────────────────────────
+// -- main ---------------------------------------------------------------------
 
 int main() {
-    printf("=== UltrafastSecp256k1 — Basic Usage Example ===\n\n");
+    printf("=== UltrafastSecp256k1 -- Basic Usage Example ===\n\n");
 
     // 1) Self-test
     printf("[1] Running self-test...\n");
@@ -77,7 +77,7 @@ int main() {
     constexpr int ITERS = 1000;
 
     // Pre-generate random-looking 256-bit scalars (deterministic PRNG for reproducibility)
-    // Using golden-ratio stepping from a full 256-bit base — avoids trivially small scalars.
+    // Using golden-ratio stepping from a full 256-bit base -- avoids trivially small scalars.
     Scalar scalars[ITERS];
     {
         auto base = Scalar::from_hex(

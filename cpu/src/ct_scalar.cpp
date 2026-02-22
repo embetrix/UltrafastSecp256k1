@@ -1,5 +1,5 @@
 // ============================================================================
-// Constant-Time Scalar Arithmetic — Implementation
+// Constant-Time Scalar Arithmetic -- Implementation
 // ============================================================================
 // All operations have data-independent execution traces.
 // n = FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141
@@ -19,7 +19,7 @@ static constexpr std::uint64_t N[4] = {
     0xFFFFFFFFFFFFFFFFULL
 };
 
-// ─── Internal helpers ────────────────────────────────────────────────────────
+// --- Internal helpers --------------------------------------------------------
 
 static inline std::uint64_t add256_scalar(std::uint64_t r[4],
                                            const std::uint64_t a[4],
@@ -58,7 +58,7 @@ static inline void ct_reduce_once_n(std::uint64_t r[4]) noexcept {
     cmov256(r, tmp, mask);
 }
 
-// ─── Public API ──────────────────────────────────────────────────────────────
+// --- Public API --------------------------------------------------------------
 
 Scalar scalar_add(const Scalar& a, const Scalar& b) noexcept {
     std::uint64_t r[4];
@@ -127,7 +127,7 @@ Scalar scalar_half(const Scalar& a) noexcept {
     return Scalar::from_limbs({r[0], r[1], r[2], r[3]});
 }
 
-// ─── Conditional Operations ──────────────────────────────────────────────────
+// --- Conditional Operations --------------------------------------------------
 
 void scalar_cmov(Scalar* r, const Scalar& a, std::uint64_t mask) noexcept {
     *r = scalar_select(a, *r, mask);
@@ -157,7 +157,7 @@ Scalar scalar_cneg(const Scalar& a, std::uint64_t mask) noexcept {
     return scalar_select(neg, a, mask);
 }
 
-// ─── Comparison ──────────────────────────────────────────────────────────────
+// --- Comparison --------------------------------------------------------------
 
 std::uint64_t scalar_is_zero(const Scalar& a) noexcept {
     const auto& l = a.limbs();
@@ -173,7 +173,7 @@ std::uint64_t scalar_eq(const Scalar& a, const Scalar& b) noexcept {
     return is_zero_mask(diff);
 }
 
-// ─── Bit Access ──────────────────────────────────────────────────────────────
+// --- Bit Access --------------------------------------------------------------
 
 std::uint64_t scalar_bit(const Scalar& a, std::size_t index) noexcept {
     // Always access the same limb pattern (CT)

@@ -11,10 +11,10 @@
 //   - Payment channel protocols
 //
 // Protocol:
-//   1. Signer creates pre-signature σ̃ w.r.t. adaptor point T = t*G
+//   1. Signer creates pre-signature sigma~ w.r.t. adaptor point T = t*G
 //   2. Verifier checks pre-signature validity against T
-//   3. Once signer learns secret t, they adapt σ̃ → valid signature σ
-//   4. Verifier extracts t from (σ̃, σ)
+//   3. Once signer learns secret t, they adapt sigma~ -> valid signature sigma
+//   4. Verifier extracts t from (sigma~, sigma)
 //
 // Works with both ECDSA and Schnorr signatures.
 // ============================================================================
@@ -29,13 +29,13 @@
 
 namespace secp256k1 {
 
-// ── Schnorr Adaptor Signatures ───────────────────────────────────────────────
+// -- Schnorr Adaptor Signatures -----------------------------------------------
 
 // Pre-signature (adaptor signature) for Schnorr
 struct SchnorrAdaptorSig {
-    fast::Point R_hat;    // R̂ = k*G (before adapting with T)
-    fast::Scalar s_hat;   // ŝ = k - e*x (partial, needs adapting)
-    bool needs_negation;  // Whether R̂+T has even y (BIP-340)
+    fast::Point R_hat;    // R^ = k*G (before adapting with T)
+    fast::Scalar s_hat;   // s = k - e*x (partial, needs adapting)
+    bool needs_negation;  // Whether R^+T has even y (BIP-340)
 };
 
 // Create Schnorr adaptor pre-signature
@@ -51,31 +51,31 @@ schnorr_adaptor_sign(const fast::Scalar& private_key,
                      const std::array<std::uint8_t, 32>& aux_rand);
 
 // Verify a Schnorr adaptor pre-signature
-// Checks: ŝ*G == R̂ - e*P (where e = H(R̂+T, P, m))
+// Checks: s*G == R^ - e*P (where e = H(R^+T, P, m))
 bool schnorr_adaptor_verify(const SchnorrAdaptorSig& pre_sig,
                             const std::array<std::uint8_t, 32>& pubkey_x,
                             const std::array<std::uint8_t, 32>& msg,
                             const fast::Point& adaptor_point);
 
 // Adapt pre-signature with secret t to produce valid Schnorr signature
-// σ = (R̂+T, ŝ+t)
+// sigma = (R^+T, s+t)
 SchnorrSignature
 schnorr_adaptor_adapt(const SchnorrAdaptorSig& pre_sig,
                       const fast::Scalar& adaptor_secret);
 
 // Extract adaptor secret t from pre-signature and completed signature
-// t = s - ŝ (mod n)
+// t = s - s (mod n)
 std::pair<fast::Scalar, bool>
 schnorr_adaptor_extract(const SchnorrAdaptorSig& pre_sig,
                         const SchnorrSignature& sig);
 
-// ── ECDSA Adaptor Signatures ─────────────────────────────────────────────────
+// -- ECDSA Adaptor Signatures -------------------------------------------------
 
 // Pre-signature for ECDSA adaptor
 struct ECDSAAdaptorSig {
-    fast::Point R_hat;    // R̂ = k*G
+    fast::Point R_hat;    // R^ = k*G
     fast::Scalar s_hat;   // Encrypted signature scalar
-    fast::Scalar r;       // r = x-coord of (R̂ + T)
+    fast::Scalar r;       // r = x-coord of (R^ + T)
 };
 
 // Create ECDSA adaptor pre-signature

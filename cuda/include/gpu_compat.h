@@ -1,5 +1,5 @@
 // ============================================================================
-// GPU Compatibility Layer — CUDA ↔ HIP (ROCm) Runtime API Mapping
+// GPU Compatibility Layer -- CUDA <-> HIP (ROCm) Runtime API Mapping
 // ============================================================================
 // Allows the same .cu source to compile with both NVIDIA CUDA and AMD ROCm.
 //
@@ -17,7 +17,7 @@
 
 #pragma once
 
-// ── Platform Detection ──────────────────────────────────────────────────────
+// -- Platform Detection ------------------------------------------------------
 #if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
     #define SECP256K1_GPU_HIP 1
     #define SECP256K1_GPU_CUDA 0
@@ -30,7 +30,7 @@
     #include <cuda_runtime.h>
 #endif
 
-// ── Runtime API Mapping (CUDA → HIP) ───────────────────────────────────────
+// -- Runtime API Mapping (CUDA -> HIP) ---------------------------------------
 #if SECP256K1_GPU_HIP
 
 // Memory management

@@ -1,5 +1,5 @@
 // ============================================================================
-// shim_pubkey.cpp — Public key parse/serialize/create/tweak
+// shim_pubkey.cpp -- Public key parse/serialize/create/tweak
 // ============================================================================
 #include "secp256k1.h"
 
@@ -12,7 +12,7 @@
 
 using namespace secp256k1::fast;
 
-// ── Internal helpers ─────────────────────────────────────────────────────────
+// -- Internal helpers ---------------------------------------------------------
 // The opaque 64-byte pubkey stores the 65-byte uncompressed form minus prefix.
 // Layout: data[0..31] = X big-endian, data[32..63] = Y big-endian.
 
@@ -49,7 +49,7 @@ int secp256k1_ec_pubkey_parse(
             std::memcpy(xb.data(), input + 1, 32);
             auto x = FieldElement::from_bytes(xb);
 
-            // y² = x³ + 7
+            // y^2 = x^3 + 7
             auto y2 = x * x * x + FieldElement::from_uint64(7);
             auto y = y2.sqrt();
 

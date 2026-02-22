@@ -266,15 +266,15 @@ void mul_4x4_bmi2(const uint64_t a[4], const uint64_t b[4], uint64_t result[8]) 
 }
 
 // ===================================================================
-// Karatsuba Squaring Algorithm for 256-bit (4×64-bit limbs)
+// Karatsuba Squaring Algorithm for 256-bit (4x64-bit limbs)
 // Complexity: ~9 multiplications vs 10 in standard approach
-// Strategy: Recursive decomposition using (a+b)² = a² + 2ab + b²
+// Strategy: Recursive decomposition using (a+b)^2 = a^2 + 2ab + b^2
 // ===================================================================
 
 void square_4_karatsuba(const uint64_t a[4], uint64_t result[8]) {
     // Split into two 128-bit halves: a = a_high*2^128 + a_low
-    // a² = (a_high*2^128 + a_low)²
-    //    = a_high²*2^256 + 2*a_high*a_low*2^128 + a_low²
+    // a^2 = (a_high*2^128 + a_low)^2
+    //    = a_high^2*2^256 + 2*a_high*a_low*2^128 + a_low^2
     
     uint64_t lo, hi;
     uint8_t carry;
@@ -282,13 +282,13 @@ void square_4_karatsuba(const uint64_t a[4], uint64_t result[8]) {
     // Low half: a_low = a[0..1]
     // High half: a_high = a[2..3]
     
-    // Step 1: Compute a_low² (2×2 limb square = 4 limbs)
+    // Step 1: Compute a_low^2 (2x2 limb square = 4 limbs)
     uint64_t low_sq[4] = {0, 0, 0, 0};
     
-    // a[0]²
+    // a[0]^2
     mulx64(a[0], a[0], low_sq[0], low_sq[1]);
     
-    // a[1]²
+    // a[1]^2
     uint64_t t0, t1;
     mulx64(a[1], a[1], t0, t1);
     carry = 0;
@@ -307,13 +307,13 @@ void square_4_karatsuba(const uint64_t a[4], uint64_t result[8]) {
     carry = adcx64(low_sq[2], hi, carry, low_sq[2]);
     adcx64(low_sq[3], 0, carry, low_sq[3]);
     
-    // Step 2: Compute a_high² (2×2 limb square = 4 limbs)
+    // Step 2: Compute a_high^2 (2x2 limb square = 4 limbs)
     uint64_t high_sq[4] = {0, 0, 0, 0};
     
-    // a[2]²
+    // a[2]^2
     mulx64(a[2], a[2], high_sq[0], high_sq[1]);
     
-    // a[3]²
+    // a[3]^2
     mulx64(a[3], a[3], t0, t1);
     carry = 0;
     carry = adcx64(high_sq[2], t0, carry, high_sq[2]);
@@ -331,7 +331,7 @@ void square_4_karatsuba(const uint64_t a[4], uint64_t result[8]) {
     carry = adcx64(high_sq[2], hi, carry, high_sq[2]);
     adcx64(high_sq[3], 0, carry, high_sq[3]);
     
-    // Step 3: Compute (a_low + a_high)²
+    // Step 3: Compute (a_low + a_high)^2
     uint64_t sum[2];
     carry = 0;
     carry = adcx64(a[0], a[2], carry, sum[0]);
@@ -354,7 +354,7 @@ void square_4_karatsuba(const uint64_t a[4], uint64_t result[8]) {
     carry = adcx64(sum_sq[2], hi, carry, sum_sq[2]);
     adcx64(sum_sq[3], 0, carry, sum_sq[3]);
     
-    // Step 4: middle = (a_low + a_high)² - a_low² - a_high²
+    // Step 4: middle = (a_low + a_high)^2 - a_low^2 - a_high^2
     uint64_t middle[4];
     uint8_t borrow = 0;
     
@@ -412,7 +412,7 @@ void square_4_karatsuba(const uint64_t a[4], uint64_t result[8]) {
 void square_4_toomcook(const uint64_t a[4], uint64_t result[8]) {
     // Toom-Cook-3 squaring for 256-bit
     // Split a into 3 parts (each ~85 bits, but we use limb boundaries)
-    // a = a0 + a1*B + a2*B² where B = 2^85 (approximated with limbs)
+    // a = a0 + a1*B + a2*B^2 where B = 2^85 (approximated with limbs)
     
     // For simplicity with 4 limbs, use uneven split:
     // a0 = a[0] (64 bits)
@@ -554,7 +554,7 @@ void square_4_bmi2(const uint64_t a[4], uint64_t result[8]) {
 // ===================================================================
 // Fast reduction modulo secp256k1 prime
 // p = 2^256 - 2^32 - 977
-// For 512-bit t: t ≡ t_low + t_high * (2^32 + 977) (mod p)
+// For 512-bit t: t == t_low + t_high * (2^32 + 977) (mod p)
 // ===================================================================
 
 void montgomery_reduce_bmi2(uint64_t result[8]) {

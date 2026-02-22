@@ -1,5 +1,5 @@
 // ============================================================================
-// Unified Test Runner — UltrafastSecp256k1
+// Unified Test Runner -- UltrafastSecp256k1
 // ============================================================================
 // Single binary that runs the library selftest + all test modules.
 // Build once, run everywhere. Registers as a single ctest target.
@@ -18,7 +18,7 @@
 
 using namespace secp256k1::fast;
 
-// ── Forward declarations — each test module exports a run function ───────────
+// -- Forward declarations -- each test module exports a run function -----------
 // Returns 0 on success, non-zero on failure.
 int test_large_scalar_multiplication_run();
 int test_mul_run();
@@ -37,7 +37,7 @@ int test_hash_accel_run();
 int run_exhaustive_tests();
 int test_comprehensive_run();
 
-// ── Module descriptor ────────────────────────────────────────────────────────
+// -- Module descriptor --------------------------------------------------------
 struct TestModule {
     const char* name;
     int (*run)();
@@ -64,7 +64,7 @@ static const TestModule MODULES[] = {
 
 static constexpr int NUM_MODULES = sizeof(MODULES) / sizeof(MODULES[0]);
 
-// ── Main ─────────────────────────────────────────────────────────────────────
+// -- Main ---------------------------------------------------------------------
 int main(int argc, char* argv[]) {
     // Parse mode
     SelftestMode mode = SelftestMode::ci;
@@ -84,36 +84,36 @@ int main(int argc, char* argv[]) {
                           : "ci";
 
     std::printf("===============================================================\n");
-    std::printf("  UltrafastSecp256k1 — Unified Test Runner (%s)\n", mode_name);
+    std::printf("  UltrafastSecp256k1 -- Unified Test Runner (%s)\n", mode_name);
     std::printf("===============================================================\n\n");
 
-    // ── Phase 1: Library selftest (core arithmetic KAT) ──────────────────────
+    // -- Phase 1: Library selftest (core arithmetic KAT) ----------------------
     std::printf("[Phase 1] Library selftest (%s)...\n", mode_name);
     if (!Selftest(true, mode, seed)) {
-        std::printf("\n*** SELFTEST FAILED — aborting ***\n");
+        std::printf("\n*** SELFTEST FAILED -- aborting ***\n");
         return 1;
     }
     std::printf("[Phase 1] Selftest PASSED\n\n");
 
-    // ── Phase 2: Test modules ────────────────────────────────────────────────
+    // -- Phase 2: Test modules ------------------------------------------------
     std::printf("[Phase 2] Running %d test modules...\n\n", NUM_MODULES);
 
     int modules_passed = 0;
     int modules_failed = 0;
 
     for (int i = 0; i < NUM_MODULES; ++i) {
-        std::printf("── Module %d/%d: %s ──\n", i + 1, NUM_MODULES, MODULES[i].name);
+        std::printf("-- Module %d/%d: %s --\n", i + 1, NUM_MODULES, MODULES[i].name);
         int rc = MODULES[i].run();
         if (rc == 0) {
             ++modules_passed;
-            std::printf("── PASSED ──\n\n");
+            std::printf("-- PASSED --\n\n");
         } else {
             ++modules_failed;
-            std::printf("── FAILED ──\n\n");
+            std::printf("-- FAILED --\n\n");
         }
     }
 
-    // ── Summary ──────────────────────────────────────────────────────────────
+    // -- Summary --------------------------------------------------------------
     std::printf("===============================================================\n");
     std::printf("  Results: %d/%d modules passed (selftest + %d modules)\n",
                 modules_passed, NUM_MODULES, NUM_MODULES);

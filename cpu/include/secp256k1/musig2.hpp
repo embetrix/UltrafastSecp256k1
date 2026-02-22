@@ -5,7 +5,7 @@
 // ============================================================================
 // MuSig2: Two-Round Multi-Signature Scheme for secp256k1
 // ============================================================================
-// Implements MuSig2 (BIP-327) — a Schnorr-based multi-signature protocol
+// Implements MuSig2 (BIP-327) -- a Schnorr-based multi-signature protocol
 // where N signers produce a single signature verifiable against an
 // aggregated public key.
 //
@@ -30,7 +30,7 @@
 
 namespace secp256k1 {
 
-// ── Key Aggregation Context ──────────────────────────────────────────────────
+// -- Key Aggregation Context --------------------------------------------------
 
 struct MuSig2KeyAggCtx {
     fast::Point Q;                              // Aggregated public key
@@ -44,7 +44,7 @@ struct MuSig2KeyAggCtx {
 // Returns aggregation context with combined key and coefficients.
 MuSig2KeyAggCtx musig2_key_agg(const std::vector<std::array<std::uint8_t, 32>>& pubkeys);
 
-// ── Nonce ────────────────────────────────────────────────────────────────────
+// -- Nonce --------------------------------------------------------------------
 
 struct MuSig2SecNonce {
     fast::Scalar k1;  // First secret nonce
@@ -75,7 +75,7 @@ std::pair<MuSig2SecNonce, MuSig2PubNonce> musig2_nonce_gen(
     const std::array<std::uint8_t, 32>& msg,
     const std::uint8_t* extra_input = nullptr);
 
-// ── Nonce Aggregation ────────────────────────────────────────────────────────
+// -- Nonce Aggregation --------------------------------------------------------
 
 struct MuSig2AggNonce {
     fast::Point R1;  // Aggregated first nonce point
@@ -85,7 +85,7 @@ struct MuSig2AggNonce {
 // Aggregate all signers' public nonces.
 MuSig2AggNonce musig2_nonce_agg(const std::vector<MuSig2PubNonce>& pub_nonces);
 
-// ── Session (Signing) ────────────────────────────────────────────────────────
+// -- Session (Signing) --------------------------------------------------------
 
 struct MuSig2Session {
     fast::Point R;                            // Final nonce point
@@ -100,7 +100,7 @@ MuSig2Session musig2_start_sign_session(
     const MuSig2KeyAggCtx& key_agg_ctx,
     const std::array<std::uint8_t, 32>& msg);
 
-// ── Partial Signing ──────────────────────────────────────────────────────────
+// -- Partial Signing ----------------------------------------------------------
 
 // Produce a partial signature.
 // s_i = k1 + b*k2 + e * a_i * d_i  (mod n)
@@ -121,7 +121,7 @@ bool musig2_partial_verify(
     const MuSig2Session& session,
     std::size_t signer_index);
 
-// ── Signature Aggregation ────────────────────────────────────────────────────
+// -- Signature Aggregation ----------------------------------------------------
 
 // Aggregate partial signatures into a final BIP-340 Schnorr signature.
 // Returns {r (32 bytes), s (32 bytes)} = standard 64-byte Schnorr sig.

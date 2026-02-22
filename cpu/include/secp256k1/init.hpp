@@ -23,7 +23,7 @@ inline bool ensure_library_integrity(bool verbose = false) {
         tested = true;
         
         if (!result) {
-            std::cerr << "\n❌ CRITICAL: Library integrity check FAILED!\n";
+            std::cerr << "\n[FAIL] CRITICAL: Library integrity check FAILED!\n";
             std::cerr << "   The secp256k1 library has failed self-validation.\n";
             std::cerr << "   This application cannot continue safely.\n" << std::flush;
             std::abort();

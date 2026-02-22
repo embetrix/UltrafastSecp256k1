@@ -2,8 +2,8 @@
 // Field Operations Microbenchmark
 // ============================================================================
 // Measures cycle-level performance of:
-//   - fe52_mul_inner  (5×52 field multiplication)
-//   - fe52_sqr_inner  (5×52 field squaring)
+//   - fe52_mul_inner  (5x52 field multiplication)
+//   - fe52_sqr_inner  (5x52 field squaring)
 //   - jac52_double_inplace  (point doubling, 2M+5S)
 //   - jac52_add_mixed_inplace  (point mixed add, 7M+4S)
 //   - Full verify (dual_scalar_mul_gen_point)
@@ -34,7 +34,7 @@ __attribute__((noinline)) void consume(const void* p, size_t n) {
     g_sink = acc;
 }
 
-// ── rdtsc for cycle counting ────────────────────────────────────────────
+// -- rdtsc for cycle counting --------------------------------------------
 static inline uint64_t rdtsc() {
     uint32_t lo, hi;
     __asm__ volatile("rdtsc" : "=a"(lo), "=d"(hi));
@@ -66,11 +66,11 @@ uint64_t bench_cycles(F&& fn, int warmup = 2000, int iters = 100000) {
 }
 
 int main() {
-    printf("═══════════════════════════════════════════════════════════════\n");
-    printf("  Field Operations Microbenchmark (5×52 representation)\n");
-    printf("═══════════════════════════════════════════════════════════════\n\n");
+    printf("===============================================================\n");
+    printf("  Field Operations Microbenchmark (5x52 representation)\n");
+    printf("===============================================================\n\n");
 
-    // ── Setup test data ──────────────────────────────────────────────
+    // -- Setup test data ----------------------------------------------
     // Use known values that won't trigger special cases
     FieldElement52 fe_a, fe_b, fe_c;
     fe_a.n[0] = 0xA1B2C3D4E5F67ULL; fe_a.n[1] = 0x1234567890ABCULL;
@@ -81,7 +81,7 @@ int main() {
     fe_b.n[2] = 0x1112223334445ULL; fe_b.n[3] = 0xDEADBEEFCAFEULL;
     fe_b.n[4] = 0xAAAAAAAAAAAAULL;
 
-    // ── 1. Field Multiplication ──────────────────────────────────────
+    // -- 1. Field Multiplication --------------------------------------
     {
         uint64_t r[5];
         uint64_t cyc = bench_cycles([&]{ fe52_mul_inner(r, fe_a.n, fe_b.n); });
@@ -90,7 +90,7 @@ int main() {
         consume(r, sizeof(r));
     }
 
-    // ── 2. Field Squaring ────────────────────────────────────────────
+    // -- 2. Field Squaring --------------------------------------------
     {
         uint64_t r[5];
         uint64_t cyc = bench_cycles([&]{ fe52_sqr_inner(r, fe_a.n); });
@@ -99,7 +99,7 @@ int main() {
         consume(r, sizeof(r));
     }
 
-    // ── 3. Chained multiplication (realistic: mul result feeds next mul) ─
+    // -- 3. Chained multiplication (realistic: mul result feeds next mul) -
     {
         FieldElement52 tmp = fe_a;
         double ns = bench_ns([&]{
@@ -112,7 +112,7 @@ int main() {
         consume(tmp.n, sizeof(tmp.n));
     }
 
-    // ── 4. Chained squaring ──────────────────────────────────────────
+    // -- 4. Chained squaring ------------------------------------------
     {
         FieldElement52 tmp = fe_a;
         double ns = bench_ns([&]{
@@ -125,7 +125,7 @@ int main() {
         consume(tmp.n, sizeof(tmp.n));
     }
 
-    // ── 5. Field inverse (255 sqr + 14 mul) ──────────────────────────
+    // -- 5. Field inverse (255 sqr + 14 mul) --------------------------
     {
         FieldElement52 tmp = fe_a;
         double ns = bench_ns([&]{
@@ -139,7 +139,7 @@ int main() {
 
 
 
-    // ── 6. Point Doubling (2M + 5S + adds) ──────────────────────────
+    // -- 6. Point Doubling (2M + 5S + adds) --------------------------
     {
         Point G = Point::generator();
         auto sk = Scalar::from_bytes({0x01,0x23,0x45,0x67,0x89,0xAB,0xCD,0xEF,
@@ -158,7 +158,7 @@ int main() {
         consume(&P, sizeof(P));
     }
 
-    // ── 7. Point Mixed Add (7M + 4S + adds) ─────────────────────────
+    // -- 7. Point Mixed Add (7M + 4S + adds) -------------------------
     // We need to call the low-level jac52_add_mixed_inplace
     // but it's static. Measure via scalar_mul which uses it.
     // Instead, use Point::add_inplace which calls jac52_add_inplace (12M+5S)
@@ -185,7 +185,7 @@ int main() {
 
     printf("\n");
 
-    // ── 8. Full verify operation (dual_scalar_mul_gen_point) ─────────
+    // -- 8. Full verify operation (dual_scalar_mul_gen_point) ---------
     {
         Point G = Point::generator();
         auto sk = Scalar::from_bytes({0xDE,0xAD,0xBE,0xEF,0xCA,0xFE,0xBA,0xBE,
@@ -210,7 +210,7 @@ int main() {
         printf("dual_scalar_mul_gen_point:     %6.0f ns  (verify kernel: a*G + b*P)\n", ns);
     }
 
-    // ── 9. Breakdown: measure G-table init vs main loop ──────────────
+    // -- 9. Breakdown: measure G-table init vs main loop --------------
     // The first call initializes static tables; measure separately
     {
         Point G = Point::generator();
@@ -250,10 +250,10 @@ int main() {
         printf("dual_scalar_mul (varied):      %6.0f ns\n", ns);
     }
 
-    printf("\n═══════════════════════════════════════════════════════════════\n");
+    printf("\n===============================================================\n");
     
-    // ── Detailed comparison: mul_assign vs operator* ─────────────────
-    printf("\n── Mul variants breakdown ───────────────────────────────────\n");
+    // -- Detailed comparison: mul_assign vs operator* -----------------
+    printf("\n-- Mul variants breakdown -----------------------------------\n");
     {
         // Test 1: mul_assign (in-place with temp buffer, no copy)
         FieldElement52 tmp1 = fe_a;
@@ -292,7 +292,7 @@ int main() {
     }
 
     printf("\n");
-    printf("═══════════════════════════════════════════════════════════════\n");
+    printf("===============================================================\n");
 
     return 0;
 }

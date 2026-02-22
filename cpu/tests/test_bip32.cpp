@@ -30,7 +30,7 @@ static void hex_to_bytes(const char* hex, uint8_t* out, size_t len) {
     }
 }
 
-// ── HMAC-SHA512 Test ─────────────────────────────────────────────────────────
+// -- HMAC-SHA512 Test ---------------------------------------------------------
 
 static void test_hmac_sha512() {
     printf("\n--- HMAC-SHA512 ---\n");
@@ -55,7 +55,7 @@ static void test_hmac_sha512() {
           "HMAC-SHA512 RFC 4231 TC2 matches");
 }
 
-// ── BIP-32 Master Key ────────────────────────────────────────────────────────
+// -- BIP-32 Master Key --------------------------------------------------------
 
 static void test_bip32_master() {
     printf("\n--- BIP-32 Master Key ---\n");
@@ -86,7 +86,7 @@ static void test_bip32_master() {
           "Master private key matches BIP-32 TV1");
 }
 
-// ── BIP-32 Child Derivation ──────────────────────────────────────────────────
+// -- BIP-32 Child Derivation --------------------------------------------------
 
 static void test_bip32_derive() {
     printf("\n--- BIP-32 Child Derivation ---\n");
@@ -120,7 +120,7 @@ static void test_bip32_derive() {
     CHECK(child1.depth == 2, "m/0'/1 depth = 2");
 }
 
-// ── BIP-32 Path Derivation ───────────────────────────────────────────────────
+// -- BIP-32 Path Derivation ---------------------------------------------------
 
 static void test_bip32_path() {
     printf("\n--- BIP-32 Path Derivation ---\n");
@@ -135,7 +135,7 @@ static void test_bip32_path() {
     CHECK(ok2, "Path m/0'/1 succeeds");
     CHECK(key.depth == 2, "Path m/0'/1 depth = 2");
 
-    // Derive m/0'/1/2' — deeper path
+    // Derive m/0'/1/2' -- deeper path
     auto [key3, ok3] = bip32_derive_path(master, "m/0'/1/2'");
     CHECK(ok3, "Path m/0'/1/2' succeeds");
     CHECK(key3.depth == 3, "Path m/0'/1/2' depth = 3");
@@ -147,7 +147,7 @@ static void test_bip32_path() {
     CHECK(!ok_bad2, "Path not starting with 'm' fails");
 }
 
-// ── Serialization ────────────────────────────────────────────────────────────
+// -- Serialization ------------------------------------------------------------
 
 static void test_bip32_serialize() {
     printf("\n--- BIP-32 Serialization ---\n");
@@ -171,7 +171,7 @@ static void test_bip32_serialize() {
     CHECK(fp.size() == 4, "Fingerprint is 4 bytes");
 }
 
-// ── Seed Length Validation ───────────────────────────────────────────────────
+// -- Seed Length Validation ---------------------------------------------------
 
 static void test_bip32_seed_validation() {
     printf("\n--- BIP-32 Seed Validation ---\n");
@@ -192,7 +192,7 @@ static void test_bip32_seed_validation() {
     CHECK(ok_64, "64-byte seed accepted");
 }
 
-// ── Main ─────────────────────────────────────────────────────────────────────
+// -- Main ---------------------------------------------------------------------
 
 int test_bip32_run() {
     printf("=== BIP-32 HD Key Derivation Tests ===\n");

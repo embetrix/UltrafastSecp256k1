@@ -1,21 +1,21 @@
-// ═══════════════════════════════════════════════════════════════════════════
-// 5×52 Field Arithmetic — ARM64 (AArch64) Optimized Assembly v2
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
+// 5x52 Field Arithmetic -- ARM64 (AArch64) Optimized Assembly v2
+// ===========================================================================
 //
-// Hand-scheduled 5×52 field multiplication for Cortex-A76 class cores.
+// Hand-scheduled 5x52 field multiplication for Cortex-A76 class cores.
 //
 // Key optimization: Interleave MUL/UMULH instructions to hide latency.
 // On A76: MUL has 3-cycle latency, UMULH has 4-cycle latency, both
 // 1/cycle throughput on the same M pipeline. By batching independent
 // multiplies before their results are needed, we avoid stalls.
 //
-// The __int128 C version forces serial MUL→UMULH→add chains per product.
+// The __int128 C version forces serial MUL->UMULH->add chains per product.
 // This version computes multiple independent products before accumulating.
 //
 // Also provides NEON-accelerated field add/sub/negate and normalize_weak.
 //
 // Required: AArch64 (ARMv8-A or later), NEON (implicit in ARMv8-A)
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
 
 #if defined(__aarch64__) || defined(_M_ARM64)
 
@@ -33,9 +33,9 @@ static constexpr uint64_t R12 = 0x1000003D10000ULL;  // R << 12
 static constexpr uint64_t M52 = 0xFFFFFFFFFFFFFULL;  // (1<<52)-1
 static constexpr uint64_t M48 = 0xFFFFFFFFFFFFULL;   // (1<<48)-1
 
-// ═══════════════════════════════════════════════════════════════════════════
-// Optimized 5×52 Field Multiply — Interleaved MUL/UMULH scheduling
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
+// Optimized 5x52 Field Multiply -- Interleaved MUL/UMULH scheduling
+// ===========================================================================
 //
 // Total products: 25 MUL + 25 UMULH + ~5 reduction MUL/UMULH
 // Target: ~60-70 cycles on A76 (vs ~156 cycles for __int128 version)
@@ -61,7 +61,7 @@ void fe52_mul_arm64_v2(uint64_t* __restrict r,
     //
     // The full hand-scheduled version uses a single asm block to
     // control register allocation and instruction ordering.
-    // ARM64 has 31 GPRs — enough for all temporaries without spilling.
+    // ARM64 has 31 GPRs -- enough for all temporaries without spilling.
 
     // We use "C with inline asm for individual products" but structured
     // to allow the compiler some freedom while controlling the multiply
@@ -76,10 +76,10 @@ void fe52_mul_arm64_v2(uint64_t* __restrict r,
     uint64_t d_lo, d_hi, c_lo, c_hi;
     uint64_t t3, t4, tx, u0;
 
-    // ══════════════════════════════════════════════════════════════════
+    // ==================================================================
     // Column 3: d = a0*b3 + a1*b2 + a2*b1 + a3*b0  (4 products)
     //         + R * (a4*b4)_lo                       (1 reduction product)
-    // ══════════════════════════════════════════════════════════════════
+    // ==================================================================
 
     // Fire all MULs for column 3 (4 products + 1 reduction)
     __asm__ volatile(
@@ -123,7 +123,7 @@ void fe52_mul_arm64_v2(uint64_t* __restrict r,
         : "cc"
     );
 
-    // c = a4*b4 → c_hi is the carry for column 4
+    // c = a4*b4 -> c_hi is the carry for column 4
     c_lo = p4_lo;
     c_hi = p4_hi;
 
@@ -150,10 +150,10 @@ void fe52_mul_arm64_v2(uint64_t* __restrict r,
     d_lo = (d_lo >> 52) | (d_hi << 12);
     d_hi = d_hi >> 52;
 
-    // ══════════════════════════════════════════════════════════════════
+    // ==================================================================
     // Column 4: d += a0*b4 + a1*b3 + a2*b2 + a3*b1 + a4*b0 (5 products)
     //         + R12 * c_lo                                   (1 reduction)
-    // ══════════════════════════════════════════════════════════════════
+    // ==================================================================
 
     __asm__ volatile(
         "mul  %[p0l], %[a0], %[b4]   \n\t"
@@ -221,18 +221,18 @@ void fe52_mul_arm64_v2(uint64_t* __restrict r,
     tx = t4 >> 48;
     t4 &= (M52 >> 4);
 
-    // ══════════════════════════════════════════════════════════════════
+    // ==================================================================
     // Column 0: c = a0*b0  (1 product)
     //   d += a1*b4 + a2*b3 + a3*b2 + a4*b1  (4 products, column 5 reduced)
-    // ══════════════════════════════════════════════════════════════════
+    // ==================================================================
 
-    // Column 5 products (4 products) — all independent, batch MUL then UMULH
+    // Column 5 products (4 products) -- all independent, batch MUL then UMULH
     __asm__ volatile(
         "mul  %[p0l], %[a1], %[b4]   \n\t"
         "mul  %[p1l], %[a2], %[b3]   \n\t"
         "mul  %[p2l], %[a3], %[b2]   \n\t"
         "mul  %[p3l], %[a4], %[b1]   \n\t"
-        "mul  %[cl],  %[a0], %[b0]   \n\t"  // c = a0*b0 (column 0) — slip in while waiting
+        "mul  %[cl],  %[a0], %[b0]   \n\t"  // c = a0*b0 (column 0) -- slip in while waiting
         : [p0l] "=r"(p0_lo), [p1l] "=r"(p1_lo), [p2l] "=r"(p2_lo),
           [p3l] "=r"(p3_lo), [cl] "=r"(c_lo)
         : [a0] "r"(a0), [a1] "r"(a1), [a2] "r"(a2), [a3] "r"(a3), [a4] "r"(a4),
@@ -293,10 +293,10 @@ void fe52_mul_arm64_v2(uint64_t* __restrict r,
     c_lo = (c_lo >> 52) | (c_hi << 12);
     c_hi = c_hi >> 52;
 
-    // ══════════════════════════════════════════════════════════════════
+    // ==================================================================
     // Column 1: c += a0*b1 + a1*b0  (2 products)
     //   d += a2*b4 + a3*b3 + a4*b2  (3 products, column 6 reduced)
-    // ══════════════════════════════════════════════════════════════════
+    // ==================================================================
 
     // Batch all 5 MULs together
     __asm__ volatile(
@@ -371,10 +371,10 @@ void fe52_mul_arm64_v2(uint64_t* __restrict r,
     c_lo = (c_lo >> 52) | (c_hi << 12);
     c_hi = c_hi >> 52;
 
-    // ══════════════════════════════════════════════════════════════════
+    // ==================================================================
     // Column 2: c += a0*b2 + a1*b1 + a2*b0  (3 products)
     //   d += a3*b4 + a4*b3                   (2 products, column 7 reduced)
-    // ══════════════════════════════════════════════════════════════════
+    // ==================================================================
 
     __asm__ volatile(
         "mul  %[p0l], %[a0], %[b2]   \n\t"   // col 2
@@ -449,9 +449,9 @@ void fe52_mul_arm64_v2(uint64_t* __restrict r,
     c_lo = (c_lo >> 52) | (c_hi << 12);
     c_hi = c_hi >> 52;
 
-    // ══════════════════════════════════════════════════════════════════
+    // ==================================================================
     // Finalize columns 3 and 4
-    // ══════════════════════════════════════════════════════════════════
+    // ==================================================================
 
     // c += R12 * d_lo
     {
@@ -482,9 +482,9 @@ void fe52_mul_arm64_v2(uint64_t* __restrict r,
     r[4] = c_lo;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// Optimized 5×52 Field Square — Symmetry + Interleaved scheduling
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
+// Optimized 5x52 Field Square -- Symmetry + Interleaved scheduling
+// ===========================================================================
 // Uses a[i]*a[j] == a[j]*a[i] symmetry: compute once, double via pre-mul.
 // Only 15 unique products (instead of 25) = 30 instr vs 50.
 
@@ -498,7 +498,7 @@ void fe52_sqr_arm64_v2(uint64_t* __restrict r,
     uint64_t d_lo, d_hi, c_lo, c_hi;
     uint64_t t3, t4, tx, u0;
 
-    // ── Column 3: d = 2*a0*a3 + 2*a1*a2 + R*(a4*a4) ────────────────
+    // -- Column 3: d = 2*a0*a3 + 2*a1*a2 + R*(a4*a4) ----------------
     __asm__ volatile(
         "mul  %[p0l], %[a0_2], %[a3]  \n\t"
         "mul  %[p1l], %[a1_2], %[a2]  \n\t"
@@ -523,7 +523,7 @@ void fe52_sqr_arm64_v2(uint64_t* __restrict r,
         : "cc"
     );
 
-    // c = a4*a4 → d += R * c_lo
+    // c = a4*a4 -> d += R * c_lo
     c_lo = p2_lo; c_hi = p2_hi;
     {
         uint64_t rl, rh;
@@ -544,7 +544,7 @@ void fe52_sqr_arm64_v2(uint64_t* __restrict r,
     d_lo = (d_lo >> 52) | (d_hi << 12);
     d_hi = d_hi >> 52;
 
-    // ── Column 4: d += 2*a0*a4 + 2*a1*a3 + a2*a2 + R12*c_rem ──────
+    // -- Column 4: d += 2*a0*a4 + 2*a1*a3 + a2*a2 + R12*c_rem ------
     __asm__ volatile(
         "mul  %[p0l], %[a0_2], %[a4]  \n\t"
         "mul  %[p1l], %[a1_2], %[a3]  \n\t"
@@ -593,7 +593,7 @@ void fe52_sqr_arm64_v2(uint64_t* __restrict r,
     tx = t4 >> 48;
     t4 &= (M52 >> 4);
 
-    // ── Column 0: c = a0*a0; d += 2*a1*a4 + 2*a2*a3 ──────────────
+    // -- Column 0: c = a0*a0; d += 2*a1*a4 + 2*a2*a3 --------------
     __asm__ volatile(
         "mul  %[p0l], %[a1_2], %[a4]  \n\t"
         "mul  %[p1l], %[a2_2], %[a3]  \n\t"
@@ -642,7 +642,7 @@ void fe52_sqr_arm64_v2(uint64_t* __restrict r,
     c_lo = (c_lo >> 52) | (c_hi << 12);
     c_hi = c_hi >> 52;
 
-    // ── Column 1: c += 2*a0*a1; d += 2*a2*a4 + a3*a3 ──────────────
+    // -- Column 1: c += 2*a0*a1; d += 2*a2*a4 + a3*a3 --------------
     __asm__ volatile(
         "mul  %[p0l], %[a0_2], %[a1]  \n\t"
         "mul  %[p1l], %[a2_2], %[a4]  \n\t"
@@ -697,7 +697,7 @@ void fe52_sqr_arm64_v2(uint64_t* __restrict r,
     c_lo = (c_lo >> 52) | (c_hi << 12);
     c_hi = c_hi >> 52;
 
-    // ── Column 2: c += 2*a0*a2 + a1*a1; d += 2*a3*a4 ──────────────
+    // -- Column 2: c += 2*a0*a2 + a1*a1; d += 2*a3*a4 --------------
     __asm__ volatile(
         "mul  %[p0l], %[a0_2], %[a2]  \n\t"
         "mul  %[p1l], %[a1], %[a1]    \n\t"
@@ -755,7 +755,7 @@ void fe52_sqr_arm64_v2(uint64_t* __restrict r,
     c_lo = (c_lo >> 52) | (c_hi << 12);
     c_hi = c_hi >> 52;
 
-    // ── Finalize columns 3 and 4 ───────────────────────────────────
+    // -- Finalize columns 3 and 4 -----------------------------------
     {
         uint64_t rl, rh;
         __asm__ volatile(

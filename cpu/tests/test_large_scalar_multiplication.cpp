@@ -90,7 +90,7 @@ static const KnownKG KNOWN_KG[] = {
 };
 
 static void test_known_kg_vectors() {
-    std::cout << "── Known k*G Vectors (Bitcoin Reference) ──\n";
+    std::cout << "-- Known k*G Vectors (Bitcoin Reference) --\n";
 
     Point G = Point::generator();
     constexpr int total = sizeof(KNOWN_KG) / sizeof(KNOWN_KG[0]);
@@ -112,7 +112,7 @@ static void test_known_kg_vectors() {
 // 2. Fast (scalar_mul_generator) vs generic (G.scalar_mul) path
 // ================================================================
 static void test_fast_vs_generic() {
-    std::cout << "── Fast kG vs Generic kG ──\n";
+    std::cout << "-- Fast kG vs Generic kG --\n";
 
     Point G = Point::generator();
 
@@ -140,7 +140,7 @@ static void test_fast_vs_generic() {
 // 3. Large scalar values (powers of 2)
 // ================================================================
 static void test_large_scalars() {
-    std::cout << "── Large Scalars (2^32, 2^64, 2^128, 2^252, 2^255-1) ──\n";
+    std::cout << "-- Large Scalars (2^32, 2^64, 2^128, 2^252, 2^255-1) --\n";
 
     Point G = Point::generator();
     const char* large_hex[] = {
@@ -166,7 +166,7 @@ static void test_large_scalars() {
 // 4. Repeated addition: k*G == G+G+...+G (k times)
 // ================================================================
 static void test_repeated_addition() {
-    std::cout << "── Repeated Addition k*G = G+G+...+G ──\n";
+    std::cout << "-- Repeated Addition k*G = G+G+...+G --\n";
 
     Point G = Point::generator();
 
@@ -188,7 +188,7 @@ static void test_repeated_addition() {
 // 5. Doubling chain: 2^k * G via k doublings
 // ================================================================
 static void test_doubling_chain() {
-    std::cout << "── Doubling Chain 2^k * G ──\n";
+    std::cout << "-- Doubling Chain 2^k * G --\n";
 
     Point G = Point::generator();
 
@@ -215,7 +215,7 @@ static void test_doubling_chain() {
 // 6. Point Addition correctness
 // ================================================================
 static void test_point_addition() {
-    std::cout << "── Point Addition ──\n";
+    std::cout << "-- Point Addition --\n";
 
     Point G = Point::generator();
 
@@ -258,7 +258,7 @@ static void test_point_addition() {
 // 7. K*Q for arbitrary point Q (not generator)
 // ================================================================
 static void test_kq_arbitrary() {
-    std::cout << "── K*Q Arbitrary Point ──\n";
+    std::cout << "-- K*Q Arbitrary Point --\n";
 
     Point G = Point::generator();
     Point Q = G.scalar_mul(Scalar::from_uint64(7)); // Q = 7*G
@@ -280,7 +280,7 @@ static void test_kq_arbitrary() {
 // 8. Random k2*(k1*G) = (k1*k2)*G
 // ================================================================
 static void test_kq_random() {
-    std::cout << "── Random K*Q = (k1*k2)*G ──\n";
+    std::cout << "-- Random K*Q = (k1*k2)*G --\n";
 
     Point G = Point::generator();
     std::mt19937_64 rng(222);
@@ -306,7 +306,7 @@ static void test_kq_random() {
 // 9. Distributive: k*(P1+P2) = k*P1 + k*P2
 // ================================================================
 static void test_distributive() {
-    std::cout << "── Distributive k*(P+Q) = kP + kQ ──\n";
+    std::cout << "-- Distributive k*(P+Q) = kP + kQ --\n";
 
     Point G = Point::generator();
     Point P1 = G.scalar_mul(Scalar::from_uint64(2));
@@ -337,7 +337,7 @@ static void test_distributive() {
 // 10. Edge cases: n*G=infinity, (n-1)*G=-G, 0*G=infinity
 // ================================================================
 static void test_edge_cases() {
-    std::cout << "── Edge Cases ──\n";
+    std::cout << "-- Edge Cases --\n";
 
     Point G = Point::generator();
 
@@ -355,7 +355,7 @@ static void test_edge_cases() {
     CHECK(nm1_g.x() == G.x(), "(n-1)*G.x = G.x");
     CHECK(!(nm1_g.y() == G.y()), "(n-1)*G.y != G.y (negation)");
 
-    // n*G = infinity (n ≡ 0 mod n → scalar reduces to 0)
+    // n*G = infinity (n == 0 mod n -> scalar reduces to 0)
     Scalar n_scalar = Scalar::from_hex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141");
     CHECK(n_scalar == Scalar::zero(), "n mod n = 0");
     Point n_g = G.scalar_mul(n_scalar);
@@ -380,9 +380,9 @@ int test_large_scalar_multiplication_run() {
     config.thread_count = 1;
     configure_fixed_base(config);
 
-    std::cout << "\n╔══════════════════════════════════════════════════════════╗\n";
-    std::cout << "║  Comprehensive Point/Scalar Multiplication Tests        ║\n";
-    std::cout << "╚══════════════════════════════════════════════════════════╝\n\n";
+    std::cout << "\n+==========================================================+\n";
+    std::cout << "|  Comprehensive Point/Scalar Multiplication Tests        |\n";
+    std::cout << "+==========================================================+\n\n";
 
     test_known_kg_vectors();
     test_fast_vs_generic();
@@ -395,7 +395,7 @@ int test_large_scalar_multiplication_run() {
     test_distributive();
     test_edge_cases();
 
-    std::cout << "\n══════════════════════════════════════════════════════════\n";
+    std::cout << "\n==========================================================\n";
     std::cout << "Results: " << g_pass << " passed, " << g_fail << " failed\n";
 
     if (g_fail > 0) {

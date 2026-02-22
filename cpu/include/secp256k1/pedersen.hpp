@@ -28,7 +28,7 @@
 
 namespace secp256k1 {
 
-// ── Pedersen Commitment ──────────────────────────────────────────────────────
+// -- Pedersen Commitment ------------------------------------------------------
 
 struct PedersenCommitment {
     fast::Point point;   // The commitment point C = v*H + r*G
@@ -43,13 +43,13 @@ struct PedersenCommitment {
     bool verify(const fast::Scalar& value, const fast::Scalar& blinding) const;
 };
 
-// ── Alternate Generator H ────────────────────────────────────────────────────
+// -- Alternate Generator H ----------------------------------------------------
 
 // Get alternate generator H (nothing-up-my-sleeve: H = lift_x(SHA256("Pedersen_H")))
 // Cached after first call.
 const fast::Point& pedersen_generator_H();
 
-// ── Commit / Open ────────────────────────────────────────────────────────────
+// -- Commit / Open ------------------------------------------------------------
 
 // Create Pedersen commitment: C = v*H + r*G
 // value: the committed value
@@ -63,7 +63,7 @@ bool pedersen_verify(const PedersenCommitment& commitment,
                      const fast::Scalar& value,
                      const fast::Scalar& blinding);
 
-// ── Homomorphic Operations ───────────────────────────────────────────────────
+// -- Homomorphic Operations ---------------------------------------------------
 
 // Verify that commitments sum to zero (for balance proofs):
 // sum(commitments) + excess*G == 0
@@ -83,7 +83,7 @@ fast::Scalar pedersen_blind_sum(const fast::Scalar* blinds_in,
                                 const fast::Scalar* blinds_out,
                                 std::size_t n_out);
 
-// ── Switch Commitment (Mimblewimble) ─────────────────────────────────────────
+// -- Switch Commitment (Mimblewimble) -----------------------------------------
 
 // Create switch commitment: C = v*H + r*G + switch_blind*J
 // J is a third generator for switch commitments

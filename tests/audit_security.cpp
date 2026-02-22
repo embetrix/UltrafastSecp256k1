@@ -60,21 +60,21 @@ static void test_zero_key_handling() {
 
     auto G = Point::generator();
 
-    // ECDSA sign with zero key → failure
+    // ECDSA sign with zero key -> failure
     {
         auto zero = Scalar::from_uint64(0);
         std::array<uint8_t, 32> msg{};
         msg[0] = 0x42;
         auto sig = secp256k1::ecdsa_sign(msg, zero);
-        CHECK(sig.r.is_zero() && sig.s.is_zero(), "ECDSA: sign(k=0) → zero sig");
+        CHECK(sig.r.is_zero() && sig.s.is_zero(), "ECDSA: sign(k=0) -> zero sig");
     }
 
-    // Scalar mul by zero → infinity
+    // Scalar mul by zero -> infinity
     {
         CHECK(G.scalar_mul(Scalar::from_uint64(0)).is_infinity(), "0*G == O");
     }
 
-    // Scalar inverse of zero — should throw or return zero
+    // Scalar inverse of zero -- should throw or return zero
     {
         auto z = Scalar::from_uint64(0);
         bool threw = false;
@@ -88,7 +88,7 @@ static void test_zero_key_handling() {
         CHECK(threw || true, "inv(0) either throws or returns 0");
     }
 
-    // Field inverse of zero — should throw or return zero
+    // Field inverse of zero -- should throw or return zero
     {
         auto z = FieldElement::from_uint64(0);
         bool threw = false;
@@ -216,7 +216,7 @@ static void test_nonce_determinism() {
     g_section = "nonce_det";
     printf("[5] Nonce determinism (RFC 6979)\n");
 
-    // Same key + same message → same signature
+    // Same key + same message -> same signature
     for (int i = 0; i < 100; ++i) {
         auto sk = random_scalar();
         std::array<uint8_t, 32> msg{};
@@ -229,7 +229,7 @@ static void test_nonce_determinism() {
         CHECK(sig1.r == sig2.r && sig1.s == sig2.s, "deterministic nonce");
     }
 
-    // Different messages → different r (overwhelming probability)
+    // Different messages -> different r (overwhelming probability)
     {
         auto sk = random_scalar();
         std::array<uint8_t, 32> msg1{}, msg2{};
@@ -239,7 +239,7 @@ static void test_nonce_determinism() {
         auto sig1 = secp256k1::ecdsa_sign(msg1, sk);
         auto sig2 = secp256k1::ecdsa_sign(msg2, sk);
 
-        CHECK(!(sig1.r == sig2.r && sig1.s == sig2.s), "different msg → different sig");
+        CHECK(!(sig1.r == sig2.r && sig1.s == sig2.s), "different msg -> different sig");
     }
 
     printf("    %d checks\n\n", g_pass);
@@ -416,7 +416,7 @@ static void test_high_s_rejection() {
         auto sig = secp256k1::ecdsa_sign(msg, sk);
 
         // sign always produces low-S
-        CHECK(sig.is_low_s(), "sign → low-S");
+        CHECK(sig.is_low_s(), "sign -> low-S");
 
         // Manually create high-S version
         secp256k1::ECDSASignature high;
@@ -432,9 +432,9 @@ static void test_high_s_rejection() {
 
 // ============================================================================
 int main() {
-    printf("═══════════════════════════════════════════════════════════════\n");
-    printf("  AUDIT V — Security Hardening\n");
-    printf("═══════════════════════════════════════════════════════════════\n\n");
+    printf("===============================================================\n");
+    printf("  AUDIT V -- Security Hardening\n");
+    printf("===============================================================\n\n");
 
     test_zero_key_handling();
     test_zeroization();
@@ -447,9 +447,9 @@ int main() {
     test_cross_algorithm();
     test_high_s_rejection();
 
-    printf("═══════════════════════════════════════════════════════════════\n");
+    printf("===============================================================\n");
     printf("  SECURITY AUDIT: %d passed, %d failed\n", g_pass, g_fail);
-    printf("═══════════════════════════════════════════════════════════════\n");
+    printf("===============================================================\n");
 
     return g_fail > 0 ? 1 : 0;
 }

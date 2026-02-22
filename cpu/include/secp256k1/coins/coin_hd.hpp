@@ -3,16 +3,16 @@
 #pragma once
 
 // ============================================================================
-// Coin HD — BIP-44 Hierarchical Deterministic Derivation per Coin
+// Coin HD -- BIP-44 Hierarchical Deterministic Derivation per Coin
 // ============================================================================
 // Wraps BIP-32 derivation with coin-aware path construction:
 //   m / purpose' / coin_type' / account' / change / address_index
 //
 // Standard purposes:
-//   44' — P2PKH (BIP-44)
-//   49' — P2SH-P2WPKH (BIP-49)
-//   84' — P2WPKH Native SegWit (BIP-84)
-//   86' — P2TR Taproot (BIP-86)
+//   44' -- P2PKH (BIP-44)
+//   49' -- P2SH-P2WPKH (BIP-49)
+//   84' -- P2WPKH Native SegWit (BIP-84)
+//   86' -- P2TR Taproot (BIP-86)
 //
 // Usage:
 //   auto master = bip32_master_key(seed, 64);
@@ -32,7 +32,7 @@
 
 namespace secp256k1::coins {
 
-// ── BIP-44 Purposes ──────────────────────────────────────────────────────────
+// -- BIP-44 Purposes ----------------------------------------------------------
 
 enum class DerivationPurpose : std::uint32_t {
     BIP44 = 44,   // P2PKH (legacy)
@@ -41,11 +41,11 @@ enum class DerivationPurpose : std::uint32_t {
     BIP86 = 86,   // P2TR (Taproot)
 };
 
-// ── Path Construction ────────────────────────────────────────────────────────
+// -- Path Construction --------------------------------------------------------
 
 // Build BIP-44 derivation path string.
-// Example: coin_derive_path(Bitcoin, 0, false, 0) → "m/44'/0'/0'/0/0"
-// Example: coin_derive_path(Ethereum, 0, false, 0, BIP44) → "m/44'/60'/0'/0/0"
+// Example: coin_derive_path(Bitcoin, 0, false, 0) -> "m/44'/0'/0'/0/0"
+// Example: coin_derive_path(Ethereum, 0, false, 0, BIP44) -> "m/44'/60'/0'/0/0"
 std::string coin_derive_path(const CoinParams& coin,
                              std::uint32_t account = 0,
                              bool change = false,
@@ -53,10 +53,10 @@ std::string coin_derive_path(const CoinParams& coin,
                              DerivationPurpose purpose = DerivationPurpose::BIP44);
 
 // Select best derivation purpose for a coin.
-// Bitcoin → BIP84 (native SegWit), Taproot → BIP86, Legacy → BIP44
+// Bitcoin -> BIP84 (native SegWit), Taproot -> BIP86, Legacy -> BIP44
 DerivationPurpose best_purpose(const CoinParams& coin);
 
-// ── Key Derivation ───────────────────────────────────────────────────────────
+// -- Key Derivation -----------------------------------------------------------
 
 // Derive a coin-specific child key from master key.
 // Automatically selects the best purpose for the coin.
@@ -77,9 +77,9 @@ coin_derive_key_with_purpose(const ExtendedKey& master,
                              bool change = false,
                              std::uint32_t address_index = 0);
 
-// ── Convenience: Seed → Address ──────────────────────────────────────────────
+// -- Convenience: Seed -> Address ----------------------------------------------
 
-// Full pipeline: seed bytes → BIP-44 derived address string.
+// Full pipeline: seed bytes -> BIP-44 derived address string.
 // Returns {address, success}
 std::pair<std::string, bool>
 coin_address_from_seed(const std::uint8_t* seed, std::size_t seed_len,

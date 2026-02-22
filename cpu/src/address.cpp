@@ -1,5 +1,5 @@
 // ============================================================================
-// Address Generation + Silent Payments — Implementation
+// Address Generation + Silent Payments -- Implementation
 // ============================================================================
 
 #include "secp256k1/address.hpp"
@@ -15,9 +15,9 @@ using fast::Point;
 using fast::Scalar;
 using fast::FieldElement;
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// ===============================================================================
 // RIPEMD-160 (self-contained, needed for HASH160)
-// ═══════════════════════════════════════════════════════════════════════════════
+// ===============================================================================
 
 namespace {
 
@@ -141,18 +141,18 @@ private:
 
 } // anonymous namespace
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// ===============================================================================
 // HASH160
-// ═══════════════════════════════════════════════════════════════════════════════
+// ===============================================================================
 
 std::array<std::uint8_t, 20> hash160(const std::uint8_t* data, std::size_t len) {
     auto sha = SHA256::hash(data, len);
     return RIPEMD160::hash(sha.data(), 32);
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// ===============================================================================
 // Base58Check
-// ═══════════════════════════════════════════════════════════════════════════════
+// ===============================================================================
 
 static const char BASE58_ALPHABET[] = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 
@@ -257,9 +257,9 @@ base58check_decode(const std::string& encoded) {
     return {payload, true};
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// ===============================================================================
 // Bech32 / Bech32m (BIP-173 / BIP-350)
-// ═══════════════════════════════════════════════════════════════════════════════
+// ===============================================================================
 
 static const char BECH32_CHARSET[] = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
 
@@ -406,9 +406,9 @@ Bech32DecodeResult bech32_decode(const std::string& addr) {
     return result;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// ===============================================================================
 // Address Derivation
-// ═══════════════════════════════════════════════════════════════════════════════
+// ===============================================================================
 
 std::string address_p2pkh(const Point& pubkey, Network net) {
     auto compressed = pubkey.to_compressed();
@@ -444,9 +444,9 @@ std::string address_p2tr_raw(const std::array<std::uint8_t, 32>& output_key_x,
     return bech32_encode(hrp, 1, output_key_x.data(), 32);
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// ===============================================================================
 // WIF (Wallet Import Format)
-// ═══════════════════════════════════════════════════════════════════════════════
+// ===============================================================================
 
 std::string wif_encode(const Scalar& private_key, bool compressed, Network net) {
     auto key_bytes = private_key.to_bytes();
@@ -487,9 +487,9 @@ WIFDecodeResult wif_decode(const std::string& wif) {
     return result;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// ===============================================================================
 // BIP-352 Silent Payments
-// ═══════════════════════════════════════════════════════════════════════════════
+// ===============================================================================
 
 // Helper: lift_x with even y (try-and-increment)
 static Point lift_x_even(const FieldElement& x_in) {
@@ -521,7 +521,7 @@ silent_payment_address(const Scalar& scan_privkey,
 
 std::string SilentPaymentAddress::encode(Network net) const {
     // BIP-352 silent payment address format:
-    // sp1q + scan_pubkey_x(32) + spend_pubkey_x(32) → bech32m
+    // sp1q + scan_pubkey_x(32) + spend_pubkey_x(32) -> bech32m
     auto scan_x = scan_pubkey.x().to_bytes();
     auto spend_x = spend_pubkey.x().to_bytes();
 
@@ -542,7 +542,7 @@ std::pair<Point, Scalar>
 silent_payment_create_output(const std::vector<Scalar>& input_privkeys,
                              const SilentPaymentAddress& recipient,
                              std::uint32_t k) {
-    // Sum of input private keys: a = Σ a_i
+    // Sum of input private keys: a = Sum a_i
     Scalar a_sum = Scalar::zero();
     for (const auto& a : input_privkeys) {
         a_sum = a_sum + a;
@@ -581,7 +581,7 @@ silent_payment_scan(const Scalar& scan_privkey,
                     const std::vector<std::array<std::uint8_t, 32>>& output_pubkeys) {
     std::vector<std::pair<std::uint32_t, Scalar>> results;
 
-    // Sum of input public keys: A = Σ A_i
+    // Sum of input public keys: A = Sum A_i
     Point A_sum = Point::infinity();
     for (const auto& A : input_pubkeys) {
         A_sum = A_sum.add(A);

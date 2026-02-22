@@ -7,8 +7,8 @@ Input:  Raw text output from bench_comprehensive
 Output: JSON file with benchmark entries
 
 Expected input format (lines like):
-  scalar_mul (K*G):          18.45 µs    (54,201 ops/sec)
-  point_add:                  0.87 µs    (1,149,425 ops/sec)
+  scalar_mul (K*G):          18.45 us    (54,201 ops/sec)
+  point_add:                  0.87 us    (1,149,425 ops/sec)
   field_mul:                  8.23 ns    (121,506,682 ops/sec)
 """
 
@@ -24,14 +24,12 @@ def parse_benchmark_output(text: str) -> list[dict]:
 
     # Pattern: "name: value unit (ops/sec)"
     # Examples:
-    #   scalar_mul:     18.45 µs
+    #   scalar_mul:     18.45 us
     #   field_mul:       8.23 ns
-    # NOTE: Match both U+00B5 (MICRO SIGN µ) and U+03BC (GREEK MU μ)
-    # because C++ source emits μ (Greek) while editors may produce µ (micro).
     # Name class includes = for entries like "Batch Inverse (n=100)".
     pattern = re.compile(
         r'^\s*([a-zA-Z0-9_\s\(\)/\*\+\-=]+?):\s+'
-        r'([\d,\.]+)\s*(ns|[µμ]s|us|ms|s)\b',
+        r'([\d,\.]+)\s*(ns|us|ms|s)\b',
         re.MULTILINE
     )
 
@@ -46,11 +44,8 @@ def parse_benchmark_output(text: str) -> list[dict]:
             continue
 
         # Normalize to nanoseconds for consistent comparison
-        # Handle both µ (U+00B5) and μ (U+03BC) for microseconds
         multiplier = {
             'ns': 1.0,
-            'µs': 1000.0,
-            'μs': 1000.0,
             'us': 1000.0,
             'ms': 1_000_000.0,
             's': 1_000_000_000.0,

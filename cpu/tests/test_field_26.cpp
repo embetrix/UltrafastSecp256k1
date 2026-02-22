@@ -1,8 +1,8 @@
 // ============================================================================
-// Tests for FieldElement26 (10×26 Lazy-Reduction Field Arithmetic)
+// Tests for FieldElement26 (10x26 Lazy-Reduction Field Arithmetic)
 // ============================================================================
-// Strategy: Every result is cross-checked against the proven FieldElement (4×64).
-// If 10×26 and 4×64 agree on all operations, the implementation is correct.
+// Strategy: Every result is cross-checked against the proven FieldElement (4x64).
+// If 10x26 and 4x64 agree on all operations, the implementation is correct.
 // ============================================================================
 
 #include "secp256k1/field.hpp"
@@ -65,12 +65,12 @@ const TestVector VECTORS[] = {
 };
 constexpr int NUM_VECTORS = sizeof(VECTORS) / sizeof(VECTORS[0]);
 
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
 // Test Sections
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
 
 void test_conversion_roundtrip() {
-    std::printf("── Conversion Roundtrip (4×64 → 10×26 → 4×64) ──\n");
+    std::printf("-- Conversion Roundtrip (4x64 -> 10x26 -> 4x64) --\n");
     for (int i = 0; i < NUM_VECTORS; ++i) {
         FieldElement fe = FieldElement::from_limbs(VECTORS[i].limbs);
         FieldElement26 fe26 = FieldElement26::from_fe(fe);
@@ -80,7 +80,7 @@ void test_conversion_roundtrip() {
 }
 
 void test_zero_one() {
-    std::printf("── Zero / One ──\n");
+    std::printf("-- Zero / One --\n");
     FieldElement26 z = FieldElement26::zero();
     FieldElement26 o = FieldElement26::one();
     CHECK(fe26_equals_fe64(z, FieldElement::zero()), "zero matches");
@@ -90,7 +90,7 @@ void test_zero_one() {
 }
 
 void test_addition() {
-    std::printf("── Addition ──\n");
+    std::printf("-- Addition --\n");
     for (int i = 0; i < NUM_VECTORS; ++i) {
         for (int j = 0; j < NUM_VECTORS; ++j) {
             FieldElement a = FieldElement::from_limbs(VECTORS[i].limbs);
@@ -116,7 +116,7 @@ void test_addition() {
 }
 
 void test_lazy_chain() {
-    std::printf("── Lazy Addition Chain (accumulate without normalize) ──\n");
+    std::printf("-- Lazy Addition Chain (accumulate without normalize) --\n");
 
     FieldElement a = FieldElement::from_limbs(VECTORS[7].limbs);  // Gx
     FieldElement b = FieldElement::from_limbs(VECTORS[8].limbs);  // Gy
@@ -144,7 +144,7 @@ void test_lazy_chain() {
 }
 
 void test_negate() {
-    std::printf("── Negate ──\n");
+    std::printf("-- Negate --\n");
     for (int i = 0; i < NUM_VECTORS; ++i) {
         FieldElement fe = FieldElement::from_limbs(VECTORS[i].limbs);
         FieldElement neg64 = FieldElement::zero() - fe;
@@ -164,7 +164,7 @@ void test_negate() {
 }
 
 void test_multiplication() {
-    std::printf("── Multiplication ──\n");
+    std::printf("-- Multiplication --\n");
     for (int i = 0; i < NUM_VECTORS; ++i) {
         for (int j = 0; j < NUM_VECTORS; ++j) {
             FieldElement a = FieldElement::from_limbs(VECTORS[i].limbs);
@@ -190,7 +190,7 @@ void test_multiplication() {
 }
 
 void test_squaring() {
-    std::printf("── Squaring ──\n");
+    std::printf("-- Squaring --\n");
     for (int i = 0; i < NUM_VECTORS; ++i) {
         FieldElement a = FieldElement::from_limbs(VECTORS[i].limbs);
         FieldElement sq64 = a.square();
@@ -214,7 +214,7 @@ void test_squaring() {
 }
 
 void test_mul_chain() {
-    std::printf("── Multiplication Chain (repeated squaring) ──\n");
+    std::printf("-- Multiplication Chain (repeated squaring) --\n");
     FieldElement fe = FieldElement::from_limbs(VECTORS[7].limbs);  // Gx
     FieldElement26 fe26 = FieldElement26::from_fe(fe);
 
@@ -234,7 +234,7 @@ void test_mul_chain() {
 }
 
 void test_mixed_operations() {
-    std::printf("── Mixed Operations (add + mul + square chains) ──\n");
+    std::printf("-- Mixed Operations (add + mul + square chains) --\n");
     FieldElement a = FieldElement::from_limbs(VECTORS[7].limbs);  // Gx
     FieldElement b = FieldElement::from_limbs(VECTORS[8].limbs);  // Gy
     FieldElement26 a26 = FieldElement26::from_fe(a);
@@ -266,7 +266,7 @@ void test_mixed_operations() {
 }
 
 void test_half() {
-    std::printf("── Half ──\n");
+    std::printf("-- Half --\n");
     for (int i = 0; i < NUM_VECTORS; ++i) {
         FieldElement a = FieldElement::from_limbs(VECTORS[i].limbs);
         FieldElement26 a26 = FieldElement26::from_fe(a);
@@ -280,7 +280,7 @@ void test_half() {
 }
 
 void test_normalize_edge() {
-    std::printf("── Normalization Edge Cases ──\n");
+    std::printf("-- Normalization Edge Cases --\n");
     using namespace fe26_constants;
 
     // Test value = p (should normalize to 0)
@@ -310,7 +310,7 @@ void test_normalize_edge() {
 }
 
 void test_commutativity_associativity() {
-    std::printf("── Commutativity & Associativity ──\n");
+    std::printf("-- Commutativity & Associativity --\n");
     FieldElement26 a = FieldElement26::from_fe(FieldElement::from_limbs(VECTORS[7].limbs));
     FieldElement26 b = FieldElement26::from_fe(FieldElement::from_limbs(VECTORS[8].limbs));
     FieldElement26 c = FieldElement26::from_fe(FieldElement::from_limbs(VECTORS[9].limbs));
@@ -339,7 +339,7 @@ void test_commutativity_associativity() {
 }
 
 void test_mul_after_lazy_add() {
-    std::printf("── Mul After Lazy Additions ──\n");
+    std::printf("-- Mul After Lazy Additions --\n");
     // Test that mul works correctly on inputs with high magnitude
     // (limb values > 26 bits due to lazy additions)
     FieldElement a = FieldElement::from_limbs(VECTORS[7].limbs);

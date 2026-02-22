@@ -1,5 +1,5 @@
 /* ============================================================================
- * libsecp256k1-compatible Schnorr API — backed by UltrafastSecp256k1
+ * libsecp256k1-compatible Schnorr API -- backed by UltrafastSecp256k1
  * ========================================================================== */
 #ifndef SECP256K1_SCHNORRSIG_H
 #define SECP256K1_SCHNORRSIG_H
@@ -11,7 +11,7 @@
 extern "C" {
 #endif
 
-/* ── Nonce function type for Schnorr ────────────────────────────────────── */
+/* -- Nonce function type for Schnorr -------------------------------------- */
 typedef int (*secp256k1_nonce_function_hardened)(
     unsigned char *nonce32,
     const unsigned char *msg, size_t msglen,
@@ -23,7 +23,7 @@ typedef int (*secp256k1_nonce_function_hardened)(
 
 SECP256K1_API const secp256k1_nonce_function_hardened secp256k1_nonce_function_bip340;
 
-/* ── Extra params ───────────────────────────────────────────────────────── */
+/* -- Extra params --------------------------------------------------------- */
 typedef struct secp256k1_schnorrsig_extraparams {
     unsigned char magic[4];
     secp256k1_nonce_function_hardened noncefp;
@@ -37,7 +37,7 @@ typedef struct secp256k1_schnorrsig_extraparams {
     NULL  \
 }
 
-/* ── Sign / Verify ──────────────────────────────────────────────────────── */
+/* -- Sign / Verify -------------------------------------------------------- */
 SECP256K1_API int secp256k1_schnorrsig_sign32(
     const secp256k1_context *ctx,
     unsigned char *sig64,

@@ -8,7 +8,7 @@
 // Computes: R = s1*P1 + s2*P2 + ... + sN*PN
 //
 // Algorithms:
-//   - Strauss (interleaved wNAF): optimal for N ≤ ~128
+//   - Strauss (interleaved wNAF): optimal for N <= ~128
 //   - Naive (sequential): fallback / reference
 //
 // Also provides Shamir's trick (2-point special case, used by ECDSA verify).
@@ -21,13 +21,13 @@
 
 namespace secp256k1 {
 
-// ── Shamir's Trick (2-point) ─────────────────────────────────────────────────
+// -- Shamir's Trick (2-point) -------------------------------------------------
 // Computes: R = a*P + b*Q  in a single pass (joint double-and-add).
 // ~1.5x faster than two separate scalar_mul + add.
 fast::Point shamir_trick(const fast::Scalar& a, const fast::Point& P,
                          const fast::Scalar& b, const fast::Point& Q);
 
-// ── Multi-Scalar Multiplication (Strauss) ────────────────────────────────────
+// -- Multi-Scalar Multiplication (Strauss) ------------------------------------
 // Computes: R = sum( scalars[i] * points[i] ) for i in [0, n).
 // Uses interleaved wNAF (Strauss' algorithm) for efficiency.
 //
@@ -47,9 +47,9 @@ fast::Point multi_scalar_mul(const fast::Scalar* scalars,
 fast::Point multi_scalar_mul(const std::vector<fast::Scalar>& scalars,
                              const std::vector<fast::Point>& points);
 
-// ── Strauss Window Width Selection ───────────────────────────────────────────
+// -- Strauss Window Width Selection -------------------------------------------
 // Returns optimal wNAF window width for n points.
-// w=4 for n<32, w=5 for n<128, w=6 for n≥128.
+// w=4 for n<32, w=5 for n<128, w=6 for n>=128.
 unsigned strauss_optimal_window(std::size_t n);
 
 } // namespace secp256k1

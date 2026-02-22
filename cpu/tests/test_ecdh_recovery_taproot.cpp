@@ -48,9 +48,9 @@ static std::array<uint8_t, 32> hex32(const char* hex) {
     return out;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// ===============================================================================
 // ECDH Tests
-// ═══════════════════════════════════════════════════════════════════════════════
+// ===============================================================================
 
 static void test_ecdh_basic() {
     std::printf("[ECDH] Basic key exchange...\n");
@@ -133,9 +133,9 @@ static void test_ecdh_infinity() {
     check(secp256k1::ct::ct_is_zero(secret), "ECDH: infinity pubkey returns zero");
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// ===============================================================================
 // ECDSA Recovery Tests
-// ═══════════════════════════════════════════════════════════════════════════════
+// ===============================================================================
 
 static void test_recovery_basic() {
     std::printf("[Recovery] Basic sign + recover...\n");
@@ -211,7 +211,7 @@ static void test_recovery_wrong_recid() {
 
     auto rsig = ecdsa_sign_recoverable(msg, sk);
 
-    // Try wrong recid — should either fail or give wrong key
+    // Try wrong recid -- should either fail or give wrong key
     int wrong_recid = (rsig.recid + 1) % 4;
     auto [wrong_pk, ok] = ecdsa_recover(msg, rsig.sig, wrong_recid);
     // It might succeed but give a different key, or it might fail
@@ -247,9 +247,9 @@ static void test_recovery_invalid_sig() {
     check(!ok4, "Recovery: recid > 3 fails");
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// ===============================================================================
 // Taproot Tests
-// ═══════════════════════════════════════════════════════════════════════════════
+// ===============================================================================
 
 static void test_taproot_tweak_hash() {
     std::printf("[Taproot] TapTweak hash...\n");
@@ -419,9 +419,9 @@ static void test_taproot_full_flow() {
     check(tweaked_pk_x == output_x, "Full flow: tweaked key matches output");
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// ===============================================================================
 // CT Utils Tests
-// ═══════════════════════════════════════════════════════════════════════════════
+// ===============================================================================
 
 static void test_ct_equal() {
     std::printf("[CT Utils] Constant-time equality...\n");
@@ -474,28 +474,28 @@ static void test_ct_conditional_ops() {
     auto orig_a = a;
     auto orig_b = b;
 
-    // Conditional copy (false) — no change
+    // Conditional copy (false) -- no change
     auto dst = a;
     secp256k1::ct::ct_memcpy_if(dst.data(), b.data(), 32, false);
     check(dst == a, "CT memcpy_if: false keeps original");
 
-    // Conditional copy (true) — copies
+    // Conditional copy (true) -- copies
     secp256k1::ct::ct_memcpy_if(dst.data(), b.data(), 32, true);
     check(dst == b, "CT memcpy_if: true copies source");
 
-    // Conditional swap (false) — no change
+    // Conditional swap (false) -- no change
     a = orig_a; b = orig_b;
     secp256k1::ct::ct_memswap_if(a.data(), b.data(), 32, false);
     check(a == orig_a && b == orig_b, "CT memswap_if: false no swap");
 
-    // Conditional swap (true) — swaps
+    // Conditional swap (true) -- swaps
     secp256k1::ct::ct_memswap_if(a.data(), b.data(), 32, true);
     check(a == orig_b && b == orig_a, "CT memswap_if: true swaps");
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// ===============================================================================
 // Wycheproof-Style Edge Case ECDSA Vectors
-// ═══════════════════════════════════════════════════════════════════════════════
+// ===============================================================================
 
 static void test_wycheproof_ecdsa_edge_cases() {
     std::printf("[Wycheproof] ECDSA edge cases...\n");
@@ -572,7 +572,7 @@ static void test_wycheproof_ecdsa_edge_cases() {
     {
         auto msg = hex32("0000000000000000000000000000000000000000000000000000000000000001");
         auto sig = ecdsa_sign(msg, Scalar::zero());
-        check(sig.r.is_zero() && sig.s.is_zero(), "Wycheproof: zero key → zero sig");
+        check(sig.r.is_zero() && sig.s.is_zero(), "Wycheproof: zero key -> zero sig");
     }
 
     // 8. Verify with zero signature rejects
@@ -661,14 +661,14 @@ static void test_wycheproof_recovery_edge_cases() {
     }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// ===============================================================================
 // Main
-// ═══════════════════════════════════════════════════════════════════════════════
+// ===============================================================================
 
 int test_ecdh_recovery_taproot_run() {
-    std::printf("═══════════════════════════════════════════════════════════════\n");
-    std::printf("  UltrafastSecp256k1 — v3.2.0 Feature Tests\n");
-    std::printf("═══════════════════════════════════════════════════════════════\n\n");
+    std::printf("===============================================================\n");
+    std::printf("  UltrafastSecp256k1 -- v3.2.0 Feature Tests\n");
+    std::printf("===============================================================\n\n");
 
     // ECDH
     test_ecdh_basic();
@@ -714,10 +714,10 @@ int test_ecdh_recovery_taproot_run() {
     test_wycheproof_schnorr_edge_cases();
     test_wycheproof_recovery_edge_cases();
 
-    std::printf("\n═══════════════════════════════════════════════════════════════\n");
+    std::printf("\n===============================================================\n");
     std::printf("  Results: %d passed, %d failed (total %d)\n",
                 g_pass, g_fail, g_pass + g_fail);
-    std::printf("═══════════════════════════════════════════════════════════════\n");
+    std::printf("===============================================================\n");
 
     return g_fail > 0 ? 1 : 0;
 }

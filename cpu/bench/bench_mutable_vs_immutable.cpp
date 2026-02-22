@@ -94,12 +94,12 @@ BenchResult bench_mutable_next_inplace(int iterations) {
 void print_comparison(const BenchResult& immutable, const BenchResult& mutable_op, int iterations) {
     double speedup = (immutable.median_ns - mutable_op.median_ns) / immutable.median_ns * 100.0;
     
-    std::cout << "\n" << BOLD << CYAN << "╔══════════════════════════════════════════════════════════╗\n";
-    std::cout << "║  MUTABLE vs IMMUTABLE: Sequential G Additions           ║\n";
-    std::cout << "╚══════════════════════════════════════════════════════════╝" << RESET << "\n\n";
+    std::cout << "\n" << BOLD << CYAN << "+==========================================================+\n";
+    std::cout << "|  MUTABLE vs IMMUTABLE: Sequential G Additions           |\n";
+    std::cout << "+==========================================================+" << RESET << "\n\n";
     
     std::cout << BOLD << "Test Configuration:\n" << RESET;
-    std::cout << "  Sequential operations: " << iterations << " × (P + G)\n";
+    std::cout << "  Sequential operations: " << iterations << " x (P + G)\n";
     std::cout << "  Runs per test: 100\n";
     std::cout << "  CPU: idle (no Turbo Boost)\n\n";
     
@@ -119,22 +119,22 @@ void print_comparison(const BenchResult& immutable, const BenchResult& mutable_o
     // Comparison
     std::cout << BOLD << "Performance Difference:\n" << RESET;
     if (speedup > 0) {
-        std::cout << "  " << GREEN << "✓ Mutable is " << speedup << "% FASTER" << RESET << "\n";
+        std::cout << "  " << GREEN << "[ok] Mutable is " << speedup << "% FASTER" << RESET << "\n";
         std::cout << "    Saved: " << (immutable.median_ns - mutable_op.median_ns) << " ns per operation\n";
     } else {
-        std::cout << "  " << RED << "✗ Mutable is " << (-speedup) << "% SLOWER" << RESET << "\n";
+        std::cout << "  " << RED << "[x] Mutable is " << (-speedup) << "% SLOWER" << RESET << "\n";
         std::cout << "    Cost: " << (mutable_op.median_ns - immutable.median_ns) << " ns per operation\n";
     }
     
     std::cout << "\n" << BOLD << "Analysis:\n" << RESET;
     if (speedup > 5) {
-        std::cout << "  " << GREEN << "✓ Significant improvement! In-place modification pays off." << RESET << "\n";
+        std::cout << "  " << GREEN << "[ok] Significant improvement! In-place modification pays off." << RESET << "\n";
         std::cout << "    Recommendation: Use next_inplace() for sequential operations.\n";
     } else if (speedup > 0) {
-        std::cout << "  " << YELLOW << "⚠ Marginal improvement. Allocation overhead ~= savings." << RESET << "\n";
+        std::cout << "  " << YELLOW << "[!] Marginal improvement. Allocation overhead ~= savings." << RESET << "\n";
         std::cout << "    Recommendation: Keep immutable for thread safety.\n";
     } else {
-        std::cout << "  " << RED << "✗ No benefit. In-place overhead > savings." << RESET << "\n";
+        std::cout << "  " << RED << "[x] No benefit. In-place overhead > savings." << RESET << "\n";
         std::cout << "    Recommendation: Stick with immutable next().\n";
     }
     

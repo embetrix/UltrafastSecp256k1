@@ -201,7 +201,7 @@ static void test_ct_field_differential() {
         CHECK(fast_neg == ct_neg, "CT field_neg == fast negate");
     }
 
-    // inv (1K — slower)
+    // inv (1K -- slower)
     for (int i = 0; i < 1000; ++i) {
         auto a = random_fe();
         auto fast_inv = a.inverse();
@@ -546,11 +546,11 @@ static void test_ct_generator_mul() {
 static void test_timing_variance() {
     g_section = "timing";
     printf("[13] Rudimentary timing variance (CT scalar_mul)\n");
-    printf("    NOTE: Not a formal side-channel test — just sanity check.\n");
+    printf("    NOTE: Not a formal side-channel test -- just sanity check.\n");
 
     auto G = Point::generator();
 
-    // Two structurally different scalars — one with many 0 bits, one with many 1 bits
+    // Two structurally different scalars -- one with many 0 bits, one with many 1 bits
     auto k_low = Scalar::from_uint64(1);  // k = 1 (very sparse bits)
     auto k_high = Scalar::from_hex(
         "fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364140"); // n-1
@@ -580,9 +580,9 @@ static void test_timing_variance() {
 
     printf("    k=1 avg: %.0f ns\n", avg_low);
     printf("    k=n-1 avg: %.0f ns\n", avg_high);
-    printf("    ratio: %.3f (ideal ≈ 1.0, concern > 1.2)\n", ratio);
+    printf("    ratio: %.3f (ideal ~= 1.0, concern > 1.2)\n", ratio);
 
-    // Generous threshold — this is not a definitive test
+    // Generous threshold -- this is not a definitive test
     CHECK(ratio < 1.3, "CT mul timing ratio < 1.3x");
 
     printf("    %d checks\n\n", g_pass);
@@ -590,9 +590,9 @@ static void test_timing_variance() {
 
 // ============================================================================
 int main() {
-    printf("═══════════════════════════════════════════════════════════════\n");
-    printf("  AUDIT II — Constant-Time & Side-Channel\n");
-    printf("═══════════════════════════════════════════════════════════════\n\n");
+    printf("===============================================================\n");
+    printf("  AUDIT II -- Constant-Time & Side-Channel\n");
+    printf("===============================================================\n\n");
 
     test_ct_masks();
     test_ct_cmov_cswap();
@@ -608,9 +608,9 @@ int main() {
     test_ct_generator_mul();
     test_timing_variance();
 
-    printf("═══════════════════════════════════════════════════════════════\n");
+    printf("===============================================================\n");
     printf("  CT AUDIT: %d passed, %d failed\n", g_pass, g_fail);
-    printf("═══════════════════════════════════════════════════════════════\n");
+    printf("===============================================================\n");
 
     return g_fail > 0 ? 1 : 0;
 }

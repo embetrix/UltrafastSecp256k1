@@ -1,5 +1,5 @@
 // ============================================================================
-// 5×52-bit Field Element — Implementation
+// 5x52-bit Field Element -- Implementation
 // ============================================================================
 // Hybrid lazy-reduction field arithmetic for secp256k1.
 //
@@ -7,15 +7,15 @@
 // field_5x52_int128_impl.h (MIT license).
 //
 // Key property: p = 2^256 - 0x1000003D1
-//   → 2^256 ≡ 0x1000003D1 (mod p)
-//   → 2^260 ≡ 0x1000003D10 (mod p)  [since d^5 = 2^(52*5) = 2^260]
+//   -> 2^256 == 0x1000003D1 (mod p)
+//   -> 2^260 == 0x1000003D10 (mod p)  [since d^5 = 2^(52*5) = 2^260]
 // ============================================================================
 
 #include "secp256k1/field_52.hpp"
 #include <cstring>
 
 // Require 128-bit integer support for the mul/sqr kernels.
-// __SIZEOF_INT128__ is the canonical check — defined on 64-bit GCC/Clang,
+// __SIZEOF_INT128__ is the canonical check -- defined on 64-bit GCC/Clang,
 // NOT on 32-bit targets (armv7, i686, ESP32) even though __GNUC__ is set.
 #if defined(__SIZEOF_INT128__)
     using uint128_t = unsigned __int128;
@@ -23,7 +23,7 @@
 #else
     // 32-bit or MSVC: __int128 unavailable.
     // FieldElement52 is unavailable; this TU compiles as empty.
-    // The portable FieldElement (4×64 with carry chains) is used instead.
+    // The portable FieldElement (4x64 with carry chains) is used instead.
 #endif
 
 #ifdef SECP256K1_HAS_UINT128
@@ -32,9 +32,9 @@ namespace secp256k1::fast {
 
 using namespace fe52_constants;
 
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
 // Construction
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
 
 FieldElement52 FieldElement52::zero() noexcept {
     return FieldElement52{{0, 0, 0, 0, 0}};
@@ -44,13 +44,13 @@ FieldElement52 FieldElement52::one() noexcept {
     return FieldElement52{{1, 0, 0, 0, 0}};
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// Conversion: from_fe, to_fe — now inline in field_52_impl.hpp
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
+// Conversion: from_fe, to_fe -- now inline in field_52_impl.hpp
+// ===========================================================================
 
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
 // Normalization (out-of-line: not in inner ECC loops)
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
 // fe52_normalize_weak is now inline in field_52_impl.hpp
 // fe52_normalize (full) is now inline in field_52_impl.hpp
 
@@ -64,17 +64,17 @@ void fe52_normalize(std::uint64_t* r) noexcept {
 
 // operator+, add_assign, negate, negate_assign: now inline in field_52_impl.hpp
 
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
 // All hot-path functions moved to field_52_impl.hpp (inline, zero overhead):
 //   fe52_mul_inner, fe52_sqr_inner, fe52_normalize_weak
 //   operator*, square, mul_assign, square_inplace
 //   operator+, add_assign, negate, negate_assign
 //   normalizes_to_zero, half, normalize_weak
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
 
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
 // Comparison
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
 
 bool FieldElement52::is_zero() const noexcept {
     // Normalize a copy and check
@@ -99,9 +99,9 @@ bool FieldElement52::operator!=(const FieldElement52& rhs) const noexcept {
 
 // half: now inline in field_52_impl.hpp
 
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
 // Inverse: a^(p-2) via Fermat addition chain (255S + 14M in native FE52)
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
 // p-2 = FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2D
 // Shared addition chain with sqrt up to x223; final stage differs.
 
@@ -148,7 +148,7 @@ FieldElement52 FieldElement52::inverse() const noexcept {
     for (int j = 0; j < 3; ++j) x223.square_inplace();
     x223 = x223 * x3;
 
-    // Final: 23S·x22 · 5S·a · 3S·x2 · 2S·a
+    // Final: 23S*x22 * 5S*a * 3S*x2 * 2S*a
     t = x223;
     for (int j = 0; j < 23; ++j) t.square_inplace();
     t = t * x22;
@@ -161,9 +161,9 @@ FieldElement52 FieldElement52::inverse() const noexcept {
     return t;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
 // Square Root: a^((p+1)/4) via addition chain (253S + 13M in native FE52)
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
 // (p+1)/4 for secp256k1 shares the x223 chain with inverse; final stage differs.
 
 FieldElement52 FieldElement52::sqrt() const noexcept {
@@ -209,7 +209,7 @@ FieldElement52 FieldElement52::sqrt() const noexcept {
     for (int j = 0; j < 3; ++j) x223.square_inplace();
     x223 = x223 * x3;
 
-    // Final: 23S·x22 · 6S·x2 · 2S (no trailing mul)
+    // Final: 23S*x22 * 6S*x2 * 2S (no trailing mul)
     t = x223;
     for (int j = 0; j < 23; ++j) t.square_inplace();
     t = t * x22;

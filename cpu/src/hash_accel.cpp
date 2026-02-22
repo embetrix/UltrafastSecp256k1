@@ -1,18 +1,18 @@
 // ============================================================================
-// Accelerated Hashing — SHA-256 / RIPEMD-160 / Hash160
+// Accelerated Hashing -- SHA-256 / RIPEMD-160 / Hash160
 // ============================================================================
 //
 // Implementation tiers:
-//   Tier 0: SCALAR   — Optimized portable C++, unrolled rounds
-//   Tier 1: SHA-NI   — Intel SHA Extensions (hardware SHA-256)
-//   Tier 2: AVX2     — 4-way multi-buffer SHA-256
+//   Tier 0: SCALAR   -- Optimized portable C++, unrolled rounds
+//   Tier 1: SHA-NI   -- Intel SHA Extensions (hardware SHA-256)
+//   Tier 2: AVX2     -- 4-way multi-buffer SHA-256
 //
 // All fixed-length hot-path functions (sha256_33, ripemd160_32, hash160_33)
 // use precomputed padding to eliminate branches and buffer management.
 //
 // SHA-256(33 bytes):
 //   Block = [33 data bytes | 0x80 | 22 zeros | 0x00 0x00 0x01 0x08]
-//   Padding bytes 33..63 are constant → precomputed.
+//   Padding bytes 33..63 are constant -> precomputed.
 //   Only 1 compression call needed (single 64-byte block).
 //
 // RIPEMD-160(32 bytes):
@@ -44,7 +44,7 @@
 namespace secp256k1::hash {
 
 // ============================================================================
-// Feature Detection — cached (CPUID is expensive: ~100+ cycles per call)
+// Feature Detection -- cached (CPUID is expensive: ~100+ cycles per call)
 // ============================================================================
 
 #ifdef SECP256K1_X86_TARGET
@@ -189,7 +189,7 @@ static inline void store_le32(std::uint8_t* p, std::uint32_t v) noexcept {
 }
 
 // ============================================================================
-// SCALAR SHA-256 — Optimized portable C++ with fully unrolled rounds
+// SCALAR SHA-256 -- Optimized portable C++ with fully unrolled rounds
 // ============================================================================
 
 namespace scalar {
@@ -227,7 +227,7 @@ void sha256_compress(const std::uint8_t block[64], std::uint32_t state[8]) noexc
     std::uint32_t a = state[0], b = state[1], c = state[2], d = state[3];
     std::uint32_t e = state[4], f = state[5], g = state[6], h = state[7];
 
-    // 64 rounds — let the compiler unroll
+    // 64 rounds -- let the compiler unroll
     for (int i = 0; i < 64; ++i) {
         std::uint32_t S1 = rotr32(e, 6) ^ rotr32(e, 11) ^ rotr32(e, 25);
         std::uint32_t ch = (e & f) ^ (~e & g);
@@ -286,7 +286,7 @@ void sha256_32(const std::uint8_t* in32, std::uint8_t* out32) noexcept {
     }
 }
 
-// ── RIPEMD-160 Scalar ────────────────────────────────────────────────────────
+// -- RIPEMD-160 Scalar --------------------------------------------------------
 
 // RIPEMD-160 boolean functions
 static inline std::uint32_t rmd_f(int j, std::uint32_t x, std::uint32_t y, std::uint32_t z) noexcept {
@@ -385,7 +385,7 @@ void hash160_33(const std::uint8_t* pubkey33, std::uint8_t* out20) noexcept {
 } // namespace scalar
 
 // ============================================================================
-// SHA-NI (Intel SHA Extensions) — Hardware-accelerated SHA-256
+// SHA-NI (Intel SHA Extensions) -- Hardware-accelerated SHA-256
 // ============================================================================
 
 #ifdef SECP256K1_X86_TARGET
@@ -589,7 +589,7 @@ void hash160_33(const std::uint8_t* pubkey33, std::uint8_t* out20) noexcept {
 #endif // SECP256K1_X86_TARGET
 
 // ============================================================================
-// Public API — auto-dispatch to best available tier
+// Public API -- auto-dispatch to best available tier
 // ============================================================================
 
 // Cached tier detection (initialized on first call)
@@ -601,7 +601,7 @@ static HashTier cached_tier() noexcept {
 
 std::array<std::uint8_t, 32> sha256(const void* data, std::size_t len) noexcept {
     // For arbitrary-length input, use the existing SHA256 class
-    // (this is not the hot path — hot path uses sha256_33)
+    // (this is not the hot path -- hot path uses sha256_33)
     ::secp256k1::SHA256 ctx;
     ctx.update(data, len);
     return ctx.finalize();
@@ -637,7 +637,7 @@ std::array<std::uint8_t, 32> sha256d(const void* data, std::size_t len) noexcept
 std::array<std::uint8_t, 20> ripemd160(const void* data, std::size_t len) noexcept {
     // For arbitrary-length, build padded block(s)
     // Simple: use SHA256 class pattern for RIPEMD160
-    // This is NOT the hot path — hot path uses ripemd160_32
+    // This is NOT the hot path -- hot path uses ripemd160_32
     if (len <= 55) {
         // Single block
         alignas(16) std::uint8_t block[64];
@@ -744,7 +744,7 @@ void hash160_33_batch(
     std::uint8_t* out20s,
     std::size_t count) noexcept
 {
-    // Fused pipeline: SHA256 → RIPEMD160 per element
+    // Fused pipeline: SHA256 -> RIPEMD160 per element
     // SHA-NI handles SHA-256 in hardware
     for (std::size_t i = 0; i < count; ++i) {
         hash160_33(pubkeys + i * 33, out20s + i * 20);

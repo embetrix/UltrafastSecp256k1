@@ -8,7 +8,7 @@ class UltrafastSecp256k1Conan(ConanFile):
     license = "AGPL-3.0"
     author = "shrec"
     url = "https://github.com/shrec/Secp256K1fast"
-    description = ("High-performance secp256k1 elliptic curve library — "
+    description = ("High-performance secp256k1 elliptic curve library -- "
                    "ECDSA, Schnorr (BIP-340), ECDH, Taproot (BIP-341), "
                    "MuSig2 (BIP-327), BIP-32 HD derivation")
     topics = ("secp256k1", "elliptic-curve", "ecdsa", "schnorr", "ecdh",

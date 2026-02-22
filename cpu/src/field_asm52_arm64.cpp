@@ -1,16 +1,16 @@
-// ═══════════════════════════════════════════════════════════════════════════
-// 5×52 Field Arithmetic — ARM64 (AArch64) Inline Assembly
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
+// 5x52 Field Arithmetic -- ARM64 (AArch64) Inline Assembly
+// ===========================================================================
 //
 // Optimized field multiplication and squaring using ARM64 MUL/UMULH
-// instructions for 64×64→128-bit products.
+// instructions for 64x64->128-bit products.
 //
 // ARM64 has 31 GPRs, so register pressure is not an issue.
 // The approach uses MUL for low half, UMULH for high half, and
 // ADDS/ADC pairs for 128-bit accumulation.
 //
 // Required: AArch64 (ARMv8-A or later)
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
 
 #if defined(__aarch64__) || defined(_M_ARM64)
 
@@ -25,7 +25,7 @@ static constexpr uint64_t FE52_R  = 0x1000003D10ULL;
 static constexpr uint64_t FE52_R4 = 0x1000003D1ULL;     // R >> 4
 static constexpr uint64_t FE52_R12= 0x1000003D10000ULL;  // R << 12
 
-// ── Inline assembly helper: 128-bit multiply-accumulate ──────────────────
+// -- Inline assembly helper: 128-bit multiply-accumulate ------------------
 // (d_hi:d_lo) += a * b
 #define MULACCUM128(d_lo, d_hi, a_reg, b_reg, t_lo, t_hi)       \
     __asm__ volatile(                                             \
@@ -59,7 +59,7 @@ void fe52_mul_inner_arm64(uint64_t* __restrict r,
     const uint64_t M = FE52_M;
     const uint64_t R = FE52_R;
 
-    // ── Step 1: d = a0*b3 + a1*b2 + a2*b1 + a3*b0 ──────────────────
+    // -- Step 1: d = a0*b3 + a1*b2 + a2*b1 + a3*b0 ------------------
     MULPROD128(d_lo, d_hi, a0, b[3]);
     MULACCUM128(d_lo, d_hi, a1, b[2], tmp_lo, tmp_hi);
     MULACCUM128(d_lo, d_hi, a2, b[1], tmp_lo, tmp_hi);
@@ -71,7 +71,7 @@ void fe52_mul_inner_arm64(uint64_t* __restrict r,
     // d += R * c_lo
     MULACCUM128(d_lo, d_hi, R, c_lo, tmp_lo, tmp_hi);
 
-    // c >>= 64 → c = c_hi
+    // c >>= 64 -> c = c_hi
     c_lo = c_hi;
 
     // t3 = d_lo & M;  d >>= 52
@@ -79,7 +79,7 @@ void fe52_mul_inner_arm64(uint64_t* __restrict r,
     d_lo = (d_lo >> 52) | (d_hi << 12);
     d_hi = d_hi >> 52;
 
-    // ── Step 2: d += a0*b4 + a1*b3 + a2*b2 + a3*b1 + a4*b0 ────────
+    // -- Step 2: d += a0*b4 + a1*b3 + a2*b2 + a3*b1 + a4*b0 --------
     MULACCUM128(d_lo, d_hi, a0, b[4], tmp_lo, tmp_hi);
     MULACCUM128(d_lo, d_hi, a1, b[3], tmp_lo, tmp_hi);
     MULACCUM128(d_lo, d_hi, a2, b[2], tmp_lo, tmp_hi);
@@ -96,7 +96,7 @@ void fe52_mul_inner_arm64(uint64_t* __restrict r,
     tx = t4 >> 48;
     t4 &= (M >> 4);
 
-    // ── Step 3: col0 + col5 ────────────────────────────────────────
+    // -- Step 3: col0 + col5 ----------------------------------------
     MULACCUM128(d_lo, d_hi, a1, b[4], tmp_lo, tmp_hi);
     MULACCUM128(d_lo, d_hi, a2, b[3], tmp_lo, tmp_hi);
     MULACCUM128(d_lo, d_hi, a3, b[2], tmp_lo, tmp_hi);
@@ -114,7 +114,7 @@ void fe52_mul_inner_arm64(uint64_t* __restrict r,
     c_lo = (c_lo >> 52) | (c_hi << 12);
     c_hi = c_hi >> 52;
 
-    // ── Step 4: col1 + col6 ────────────────────────────────────────
+    // -- Step 4: col1 + col6 ----------------------------------------
     MULACCUM128(c_lo, c_hi, a0, b[1], tmp_lo, tmp_hi);
     MULACCUM128(c_lo, c_hi, a1, b[0], tmp_lo, tmp_hi);
 
@@ -131,7 +131,7 @@ void fe52_mul_inner_arm64(uint64_t* __restrict r,
     c_lo = (c_lo >> 52) | (c_hi << 12);
     c_hi = c_hi >> 52;
 
-    // ── Step 5: col2 + col7 ────────────────────────────────────────
+    // -- Step 5: col2 + col7 ----------------------------------------
     MULACCUM128(c_lo, c_hi, a0, b[2], tmp_lo, tmp_hi);
     MULACCUM128(c_lo, c_hi, a1, b[1], tmp_lo, tmp_hi);
     MULACCUM128(c_lo, c_hi, a2, b[0], tmp_lo, tmp_hi);
@@ -139,7 +139,7 @@ void fe52_mul_inner_arm64(uint64_t* __restrict r,
     MULACCUM128(d_lo, d_hi, a3, b[4], tmp_lo, tmp_hi);
     MULACCUM128(d_lo, d_hi, a4, b[3], tmp_lo, tmp_hi);
 
-    // c += R * (uint64)d  — full 64-bit d_lo!
+    // c += R * (uint64)d  -- full 64-bit d_lo!
     MULACCUM128(c_lo, c_hi, R, d_lo, tmp_lo, tmp_hi);
 
     // d >>= 64
@@ -150,7 +150,7 @@ void fe52_mul_inner_arm64(uint64_t* __restrict r,
     c_lo = (c_lo >> 52) | (c_hi << 12);
     c_hi = c_hi >> 52;
 
-    // ── Step 6: Finalize ───────────────────────────────────────────
+    // -- Step 6: Finalize -------------------------------------------
     MULACCUM128(c_lo, c_hi, FE52_R12, d_lo, tmp_lo, tmp_hi);
 
     // c += t3
@@ -177,7 +177,7 @@ void fe52_sqr_inner_arm64(uint64_t* __restrict r,
     const uint64_t M = FE52_M;
     const uint64_t R = FE52_R;
 
-    // ── Step 1 ──
+    // -- Step 1 --
     MULPROD128(d_lo, d_hi, a0_2, a3);
     MULACCUM128(d_lo, d_hi, a1_2, a2, tmp_lo, tmp_hi);
     MULPROD128(c_lo, c_hi, a4, a4);
@@ -187,7 +187,7 @@ void fe52_sqr_inner_arm64(uint64_t* __restrict r,
     d_lo = (d_lo >> 52) | (d_hi << 12);
     d_hi >>= 52;
 
-    // ── Step 2 ──
+    // -- Step 2 --
     MULACCUM128(d_lo, d_hi, a0_2, a4, tmp_lo, tmp_hi);
     MULACCUM128(d_lo, d_hi, a1_2, a3, tmp_lo, tmp_hi);
     MULACCUM128(d_lo, d_hi, a2, a2, tmp_lo, tmp_hi);
@@ -198,7 +198,7 @@ void fe52_sqr_inner_arm64(uint64_t* __restrict r,
     tx = t4 >> 48;
     t4 &= (M >> 4);
 
-    // ── Step 3 ──
+    // -- Step 3 --
     MULACCUM128(d_lo, d_hi, a1_2, a4, tmp_lo, tmp_hi);
     MULACCUM128(d_lo, d_hi, a2_2, a3, tmp_lo, tmp_hi);
     u0 = d_lo & M;
@@ -211,7 +211,7 @@ void fe52_sqr_inner_arm64(uint64_t* __restrict r,
     c_lo = (c_lo >> 52) | (c_hi << 12);
     c_hi >>= 52;
 
-    // ── Step 4 ──
+    // -- Step 4 --
     MULACCUM128(c_lo, c_hi, a0_2, a1, tmp_lo, tmp_hi);
     MULACCUM128(d_lo, d_hi, a2_2, a4, tmp_lo, tmp_hi);
     MULACCUM128(d_lo, d_hi, a3, a3, tmp_lo, tmp_hi);
@@ -223,7 +223,7 @@ void fe52_sqr_inner_arm64(uint64_t* __restrict r,
     c_lo = (c_lo >> 52) | (c_hi << 12);
     c_hi >>= 52;
 
-    // ── Step 5 ──
+    // -- Step 5 --
     MULACCUM128(c_lo, c_hi, a0_2, a2, tmp_lo, tmp_hi);
     MULACCUM128(c_lo, c_hi, a1, a1, tmp_lo, tmp_hi);
     MULACCUM128(d_lo, d_hi, a3_2, a4, tmp_lo, tmp_hi);
@@ -234,7 +234,7 @@ void fe52_sqr_inner_arm64(uint64_t* __restrict r,
     c_lo = (c_lo >> 52) | (c_hi << 12);
     c_hi >>= 52;
 
-    // ── Step 6 ──
+    // -- Step 6 --
     MULACCUM128(c_lo, c_hi, FE52_R12, d_lo, tmp_lo, tmp_hi);
     __asm__ volatile("adds %[cl], %[cl], %[t]\n\t"
                      "adc  %[ch], %[ch], xzr\n\t"

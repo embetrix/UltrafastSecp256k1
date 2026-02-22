@@ -6,18 +6,18 @@
 // Pippenger Bucket Method for Multi-Scalar Multiplication
 // ============================================================================
 //
-// Computes: R = s₁·P₁ + s₂·P₂ + ... + sₙ·Pₙ
+// Computes: R = s_1*P_1 + s_2*P_2 + ... + s_n*P_n
 //
 // Algorithm (bucket method, a.k.a. Pippenger):
 //   1. Choose window width c = floor(log2(n)) (adaptive).
-//   2. Represent each scalar sᵢ in base-2^c digits.
+//   2. Represent each scalar s in base-2^c digits.
 //   3. For each digit position j (from MSB to LSB):
-//      a. Scatter: place Pᵢ into bucket[digit_j(sᵢ)] for all i.
-//      b. Aggregate: sum buckets as Σⱼ = Σ_{b=1}^{2^c-1} b · bucket[b].
+//      a. Scatter: place P into bucket[digit_j(s)] for all i.
+//      b. Aggregate: sum buckets as Sum = Sum_{b=1}^{2^c-1} b * bucket[b].
 //         Computed bottom-up: running_sum += bucket[b], partial_sum += running_sum.
-//      c. Combine: R = R·2^c + Σⱼ
+//      c. Combine: R = R*2^c + Sum
 //
-// Complexity: O(n/c + 2^c + 256·dbl) vs Strauss O(256 + n·2^(w-1))
+// Complexity: O(n/c + 2^c + 256*dbl) vs Strauss O(256 + n*2^(w-1))
 // Crossover: Pippenger wins for n > ~128 (verified empirically).
 //
 // This implementation:
@@ -37,7 +37,7 @@
 
 namespace secp256k1 {
 
-// ── Pippenger Multi-Scalar Multiplication ────────────────────────────────────
+// -- Pippenger Multi-Scalar Multiplication ------------------------------------
 // Computes: R = sum( scalars[i] * points[i] ) for i in [0, n).
 // Uses bucket method (Pippenger) which is asymptotically optimal.
 //
@@ -46,7 +46,7 @@ namespace secp256k1 {
 //   points   - array of n points
 //   n        - number of scalar-point pairs
 //
-// Performance: O(n/c + 2^c) per window, c ≈ log2(n).
+// Performance: O(n/c + 2^c) per window, c ~= log2(n).
 //   n=256:   ~4x faster than Strauss
 //   n=1024:  ~8x faster than Strauss
 //   n=4096:  ~12x faster than Strauss
@@ -59,13 +59,13 @@ fast::Point pippenger_msm(const fast::Scalar* scalars,
 fast::Point pippenger_msm(const std::vector<fast::Scalar>& scalars,
                           const std::vector<fast::Point>& points);
 
-// ── Optimal Window Width ─────────────────────────────────────────────────────
+// -- Optimal Window Width -----------------------------------------------------
 // Returns the optimal bucket window width c for n points.
 // Minimizes: floor(256/c) * (n + 2^c) total point operations.
 unsigned pippenger_optimal_window(std::size_t n);
 
-// ── Unified MSM (auto-selects best algorithm) ────────────────────────────────
-// Automatically picks Strauss (n ≤ 128) or Pippenger (n > 128).
+// -- Unified MSM (auto-selects best algorithm) --------------------------------
+// Automatically picks Strauss (n <= 128) or Pippenger (n > 128).
 fast::Point msm(const fast::Scalar* scalars,
                 const fast::Point* points,
                 std::size_t n);

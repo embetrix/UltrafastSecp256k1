@@ -480,7 +480,7 @@ static bool test_batch_inverse_expanded(bool verbose) {
 // Tests: (Q+G)*K == Q*K + G*K, (Q-G)*K == Q*K - G*K
 static bool test_bilinearity_K_times_Q(bool verbose) {
     if (verbose) {
-        SELFTEST_PRINT("\nBilinearity: K*(Q±G) vs K*Q ± K*G\n");
+        SELFTEST_PRINT("\nBilinearity: K*(Q+/-G) vs K*Q +/- K*G\n");
     }
     bool ok = true;
     const char* KHEX[] = {
@@ -678,7 +678,7 @@ static bool run_external_vectors(bool verbose) {
                 fail_line();
             }
         } else {
-            // Unknown entry – ignore
+            // Unknown entry - ignore
         }
     }
     if (verbose) {
@@ -688,7 +688,7 @@ static bool run_external_vectors(bool verbose) {
 #endif // ESP32 platform check
 }
 
-// ── Deterministic PRNG for stress tests (no <random> dependency) ──
+// -- Deterministic PRNG for stress tests (no <random> dependency) --
 struct SelftestRng {
     uint64_t state;
     explicit SelftestRng(uint64_t seed) : state(seed ^ 0x6a09e667f3bcc908ULL) {}
@@ -700,7 +700,7 @@ struct SelftestRng {
     }
 };
 
-// ── Boundary scalar KAT: limb boundaries + group order edges ──
+// -- Boundary scalar KAT: limb boundaries + group order edges --
 // These vectors catch carry/normalize/reduce bugs at critical bit positions.
 // Expected values computed from independent Python reference implementation.
 static bool test_boundary_scalar_vectors(bool verbose) {
@@ -775,7 +775,7 @@ static bool test_boundary_scalar_vectors(bool verbose) {
     return ok;
 }
 
-// ── Field element limb boundary tests ──
+// -- Field element limb boundary tests --
 // Values at uint64 limb boundaries to catch carry propagation bugs
 static bool test_field_limb_boundaries(bool verbose) {
     if (verbose) SELFTEST_PRINT("\nField Limb Boundaries:\n");
@@ -812,27 +812,27 @@ static bool test_field_limb_boundaries(bool verbose) {
             FieldElement inv = a.inverse();
             if (!(a * inv == FieldElement::one())) {
                 ok = false;
-                if (verbose) SELFTEST_PRINT("    FAIL: %s — a * a^(-1) != 1\n", t.desc);
+                if (verbose) SELFTEST_PRINT("    FAIL: %s -- a * a^(-1) != 1\n", t.desc);
                 break;
             }
         }
         // (a + c) - c = a
         if (!((a + c) - c == a)) {
             ok = false;
-            if (verbose) SELFTEST_PRINT("    FAIL: %s — (a+c)-c != a\n", t.desc);
+            if (verbose) SELFTEST_PRINT("    FAIL: %s -- (a+c)-c != a\n", t.desc);
             break;
         }
         // a * 1 = a
         if (!(a * FieldElement::one() == a)) {
             ok = false;
-            if (verbose) SELFTEST_PRINT("    FAIL: %s — a*1 != a\n", t.desc);
+            if (verbose) SELFTEST_PRINT("    FAIL: %s -- a*1 != a\n", t.desc);
             break;
         }
         // a^2 = a * a
         FieldElement sq = a; sq.square_inplace();
         if (!(sq == a * a)) {
             ok = false;
-            if (verbose) SELFTEST_PRINT("    FAIL: %s — a^2 != a*a\n", t.desc);
+            if (verbose) SELFTEST_PRINT("    FAIL: %s -- a^2 != a*a\n", t.desc);
             break;
         }
     }
@@ -840,7 +840,7 @@ static bool test_field_limb_boundaries(bool verbose) {
     return ok;
 }
 
-// ── Batch inverse size sweep ──
+// -- Batch inverse size sweep --
 // Various sizes including warp/block boundaries to catch GPU parity bugs
 static bool test_batch_inverse_sweep(bool verbose) {
     if (verbose) SELFTEST_PRINT("\nBatch Inverse Size Sweep:\n");
@@ -877,7 +877,7 @@ static bool test_batch_inverse_sweep(bool verbose) {
 // zero lanes before calling. No zero-input test is needed here;
 // the contract is enforced by documentation, not runtime checks.
 
-// ── Repro bundle: prints environment info for reproducibility ──
+// -- Repro bundle: prints environment info for reproducibility --
 static void print_repro_bundle(SelftestMode mode, uint64_t seed) {
     const char* mode_str = "smoke";
     if (mode == SelftestMode::ci) mode_str = "ci";
@@ -967,7 +967,7 @@ static void print_repro_bundle(SelftestMode mode, uint64_t seed) {
                    mode_str, (unsigned long long)seed);
 }
 
-// ── Extended kG known vectors: 4G..9G, 15G, 255G ──
+// -- Extended kG known vectors: 4G..9G, 15G, 255G --
 static bool test_extended_kg_vectors(bool verbose) {
     if (verbose) SELFTEST_PRINT("\nExtended kG Vectors (4G-9G, 15G, 255G):\n");
     struct KGVec { const char* k; const char* x; const char* y; const char* desc; };
@@ -1011,7 +1011,7 @@ static bool test_extended_kg_vectors(bool verbose) {
     return ok;
 }
 
-// ── Fast kG vs generic kG cross-check ──
+// -- Fast kG vs generic kG cross-check --
 static bool test_fast_vs_generic_kG(bool verbose) {
     if (verbose) SELFTEST_PRINT("\nFast kG vs Generic kG (small 1-20 + 20 random):\n");
     bool ok = true;
@@ -1037,7 +1037,7 @@ static bool test_fast_vs_generic_kG(bool verbose) {
     return ok;
 }
 
-// ── Repeated addition: k*G = G+G+...+G ──
+// -- Repeated addition: k*G = G+G+...+G --
 static bool test_repeated_addition_consistency(bool verbose) {
     if (verbose) SELFTEST_PRINT("\nRepeated Addition Consistency (k=2..10):\n");
     bool ok = true;
@@ -1053,7 +1053,7 @@ static bool test_repeated_addition_consistency(bool verbose) {
     return ok;
 }
 
-// ── Field stress: normalization, commutativity, associativity, distributive ──
+// -- Field stress: normalization, commutativity, associativity, distributive --
 static bool test_field_stress(bool verbose) {
     if (verbose) SELFTEST_PRINT("\nField Stress (normalization + random algebraic laws):\n");
     bool ok = true;
@@ -1098,7 +1098,7 @@ static bool test_field_stress(bool verbose) {
     return ok;
 }
 
-// ── Scalar mul stress: (n-1)^2=1, distributive, associativity ──
+// -- Scalar mul stress: (n-1)^2=1, distributive, associativity --
 static bool test_scalar_stress(bool verbose) {
     if (verbose) SELFTEST_PRINT("\nScalar Stress ((n-1)^2=1 + random algebraic laws):\n");
     bool ok = true;
@@ -1127,7 +1127,7 @@ static bool test_scalar_stress(bool verbose) {
     return ok;
 }
 
-// ── NAF/wNAF encoding validation ──
+// -- NAF/wNAF encoding validation --
 static bool test_naf_wnaf(bool verbose) {
     if (verbose) SELFTEST_PRINT("\nNAF/wNAF Encoding Validation:\n");
     bool ok = true;
@@ -1162,7 +1162,7 @@ static bool test_naf_wnaf(bool verbose) {
     return ok;
 }
 
-// ── Point advanced: commutativity, associativity, mixed_add, distributive, edge ──
+// -- Point advanced: commutativity, associativity, mixed_add, distributive, edge --
 static bool test_point_advanced(bool verbose) {
     if (verbose) SELFTEST_PRINT("\nPoint Advanced (comm/assoc/mixed/dist/edge):\n");
     bool ok = true;
@@ -1205,12 +1205,12 @@ static bool test_point_advanced(bool verbose) {
     return ok;
 }
 
-// Main self-test function (legacy API — delegates to ci mode)
+// Main self-test function (legacy API -- delegates to ci mode)
 bool Selftest(bool verbose) {
     return Selftest(verbose, SelftestMode::ci, 0);
 }
 
-// ── Mode-aware self-test with repro bundle ──
+// -- Mode-aware self-test with repro bundle --
 bool Selftest(bool verbose, SelftestMode mode, uint64_t seed) {
     if (seed == 0) seed = 0x53454350324B3147ULL; // "SECP2K1G" default
 
@@ -1252,10 +1252,10 @@ bool Selftest(bool verbose, SelftestMode mode, uint64_t seed) {
     int passed = 0;
     int total = 0;
     
-    // ═══════════════════════════════════════════════════════════════
-    // TIER 1: SMOKE — Core KAT vectors + basic identities (~1-2s)
+    // ===============================================================
+    // TIER 1: SMOKE -- Core KAT vectors + basic identities (~1-2s)
     // Always run in every mode
-    // ═══════════════════════════════════════════════════════════════
+    // ===============================================================
     
     // Test scalar multiplication (10 known vectors)
     if (verbose) {
@@ -1348,10 +1348,10 @@ bool Selftest(bool verbose, SelftestMode mode, uint64_t seed) {
         return (passed == total);
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // TIER 2: CI — Full coverage (~30-90s)
+    // ===============================================================
+    // TIER 2: CI -- Full coverage (~30-90s)
     // Runs all smoke + cross-checks, stress, sweeps, bilinearity
-    // ═══════════════════════════════════════════════════════════════
+    // ===============================================================
 
     // External vectors (optional, environment-driven)
     total++;
@@ -1423,7 +1423,7 @@ bool Selftest(bool verbose, SelftestMode mode, uint64_t seed) {
     // Expanded batch inverse (32 elements)
     total++; if (test_batch_inverse_expanded(verbose)) passed++;
 
-    // Bilinearity for K*Q with ±G
+    // Bilinearity for K*Q with +/-G
     total++; if (test_bilinearity_K_times_Q(verbose)) passed++;
 
 #if !defined(SECP256K1_PLATFORM_ESP32) && !defined(ESP_PLATFORM) && !defined(IDF_VER) && !defined(SECP256K1_PLATFORM_STM32)
@@ -1454,10 +1454,10 @@ bool Selftest(bool verbose, SelftestMode mode, uint64_t seed) {
     // NAF/wNAF encoding validation
     total++; if (test_naf_wnaf(verbose)) passed++;
 
-    // ═══════════════════════════════════════════════════════════════
-    // TIER 3: STRESS — Extended iterations (~10-60 min)
+    // ===============================================================
+    // TIER 3: STRESS -- Extended iterations (~10-60 min)
     // Large random sweeps with user-provided seed
-    // ═══════════════════════════════════════════════════════════════
+    // ===============================================================
 
     if (is_stress) {
         // Stress: extended fast vs generic kG with many random scalars
@@ -1504,9 +1504,9 @@ bool Selftest(bool verbose, SelftestMode mode, uint64_t seed) {
             total++; if (ok) passed++;
         }
 
-        // Stress: extended bilinearity K*(Q±G) (100 random K,Q pairs)
+        // Stress: extended bilinearity K*(Q+/-G) (100 random K,Q pairs)
         {
-            if (verbose) SELFTEST_PRINT("\n[STRESS] Extended bilinearity K*(Q±G) (100 pairs):\n");
+            if (verbose) SELFTEST_PRINT("\n[STRESS] Extended bilinearity K*(Q+/-G) (100 pairs):\n");
             bool ok = true;
             SelftestRng rng(seed ^ 0xB11FULL);
             Point G = Point::generator();

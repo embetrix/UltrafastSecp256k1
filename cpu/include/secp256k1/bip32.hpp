@@ -23,7 +23,7 @@
 
 namespace secp256k1 {
 
-// ── Extended Key ─────────────────────────────────────────────────────────────
+// -- Extended Key -------------------------------------------------------------
 
 // BIP-32 extended key (private or public)
 struct ExtendedKey {
@@ -65,7 +65,7 @@ struct ExtendedKey {
     std::array<std::uint8_t, 4> fingerprint() const;
 };
 
-// ── Master Key Generation ────────────────────────────────────────────────────
+// -- Master Key Generation ----------------------------------------------------
 
 // Generate master key from seed bytes (BIP-32).
 // Seed should be 16-64 bytes (BIP-39 uses 64).
@@ -73,7 +73,7 @@ struct ExtendedKey {
 std::pair<ExtendedKey, bool> bip32_master_key(const std::uint8_t* seed,
                                                std::size_t seed_len);
 
-// ── Path Derivation ──────────────────────────────────────────────────────────
+// -- Path Derivation ----------------------------------------------------------
 
 // Derive key from path string.
 // Path format: "m/44'/0'/0'/0/0" (apostrophe = hardened)
@@ -81,7 +81,7 @@ std::pair<ExtendedKey, bool> bip32_master_key(const std::uint8_t* seed,
 std::pair<ExtendedKey, bool> bip32_derive_path(const ExtendedKey& master,
                                                 const std::string& path);
 
-// ── HMAC-SHA512 (needed for BIP-32) ──────────────────────────────────────────
+// -- HMAC-SHA512 (needed for BIP-32) ------------------------------------------
 // Exposed for testing. Computes HMAC-SHA512(key, data).
 
 std::array<std::uint8_t, 64> hmac_sha512(const std::uint8_t* key, std::size_t key_len,

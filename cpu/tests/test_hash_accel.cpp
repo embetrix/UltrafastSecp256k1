@@ -1,5 +1,5 @@
 // ============================================================================
-// Test: Accelerated Hashing — SHA-256 / RIPEMD-160 / Hash160
+// Test: Accelerated Hashing -- SHA-256 / RIPEMD-160 / Hash160
 // ============================================================================
 // Validates correctness against known test vectors (NIST, Bitcoin).
 // Benchmarks scalar vs SHA-NI performance.
@@ -32,7 +32,7 @@ static void print_hex(const std::uint8_t* data, std::size_t len) {
         std::printf("%02x", data[i]);
 }
 
-// ── Test 1: Feature detection ────────────────────────────────────────────────
+// -- Test 1: Feature detection ------------------------------------------------
 
 static void test_feature_detection() {
     std::printf("[HashAccel] Feature detection...\n");
@@ -44,7 +44,7 @@ static void test_feature_detection() {
     check(true, "feature detection completed");
 }
 
-// ── Test 2: SHA-256 known vectors ────────────────────────────────────────────
+// -- Test 2: SHA-256 known vectors --------------------------------------------
 
 static void test_sha256_vectors() {
     std::printf("[HashAccel] SHA-256 known vectors...\n");
@@ -74,7 +74,7 @@ static void test_sha256_vectors() {
     }
 }
 
-// ── Test 3: sha256_33 vs reference ───────────────────────────────────────────
+// -- Test 3: sha256_33 vs reference -------------------------------------------
 
 static void test_sha256_33_correctness() {
     std::printf("[HashAccel] sha256_33 correctness...\n");
@@ -110,7 +110,7 @@ static void test_sha256_33_correctness() {
     }
 }
 
-// ── Test 4: sha256_32 correctness ────────────────────────────────────────────
+// -- Test 4: sha256_32 correctness --------------------------------------------
 
 static void test_sha256_32_correctness() {
     std::printf("[HashAccel] sha256_32 correctness...\n");
@@ -125,7 +125,7 @@ static void test_sha256_32_correctness() {
     check(std::memcmp(ref.data(), accel, 32) == 0, "sha256_32 matches reference");
 }
 
-// ── Test 5: RIPEMD-160 known vectors ─────────────────────────────────────────
+// -- Test 5: RIPEMD-160 known vectors -----------------------------------------
 
 static void test_ripemd160_vectors() {
     std::printf("[HashAccel] RIPEMD-160 known vectors...\n");
@@ -165,7 +165,7 @@ static void test_ripemd160_vectors() {
     }
 }
 
-// ── Test 6: ripemd160_32 correctness ─────────────────────────────────────────
+// -- Test 6: ripemd160_32 correctness -----------------------------------------
 
 static void test_ripemd160_32_correctness() {
     std::printf("[HashAccel] ripemd160_32 correctness...\n");
@@ -187,14 +187,14 @@ static void test_ripemd160_32_correctness() {
     check(std::memcmp(ref2.data(), fast_out, 20) == 0, "ripemd160_32(data) matches general API");
 }
 
-// ── Test 7: Hash160 pipeline ─────────────────────────────────────────────────
+// -- Test 7: Hash160 pipeline -------------------------------------------------
 
 static void test_hash160_pipeline() {
     std::printf("[HashAccel] Hash160 pipeline correctness...\n");
 
     // Compute Hash160 of 1*G compressed pubkey via two methods:
     // Method 1: hash::hash160_33
-    // Method 2: SHA256 → RIPEMD160 manually
+    // Method 2: SHA256 -> RIPEMD160 manually
 
     auto gen = fast::Point::generator();
     auto comp = gen.to_compressed();
@@ -228,7 +228,7 @@ static void test_hash160_pipeline() {
     }
 }
 
-// ── Test 8: Batch operations ─────────────────────────────────────────────────
+// -- Test 8: Batch operations -------------------------------------------------
 
 static void test_batch_ops() {
     std::printf("[HashAccel] Batch operations...\n");
@@ -273,7 +273,7 @@ static void test_batch_ops() {
     }
 }
 
-// ── Test 9: SHA-NI vs Scalar cross-check ─────────────────────────────────────
+// -- Test 9: SHA-NI vs Scalar cross-check -------------------------------------
 
 static void test_shani_vs_scalar() {
     std::printf("[HashAccel] SHA-NI vs Scalar cross-check...\n");
@@ -307,7 +307,7 @@ static void test_shani_vs_scalar() {
 #endif
 }
 
-// ── Test 10: Benchmark ───────────────────────────────────────────────────────
+// -- Test 10: Benchmark -------------------------------------------------------
 
 static void test_benchmark() {
     std::printf("[HashAccel] Benchmark...\n");
@@ -405,7 +405,7 @@ static void test_benchmark() {
     check(true, "benchmark complete");
 }
 
-// ── Test 11: Double-SHA256 ───────────────────────────────────────────────────
+// -- Test 11: Double-SHA256 ---------------------------------------------------
 
 static void test_double_sha256() {
     std::printf("[HashAccel] Double-SHA256...\n");
@@ -420,7 +420,7 @@ static void test_double_sha256() {
     check(std::memcmp(ref2.data(), accel.data(), 32) == 0, "sha256d matches SHA256(SHA256(data))");
 }
 
-// ── Entry point ──────────────────────────────────────────────────────────────
+// -- Entry point --------------------------------------------------------------
 
 int test_hash_accel_run() {
     std::printf("\n=== Accelerated Hashing Tests ===\n");

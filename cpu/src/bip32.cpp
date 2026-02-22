@@ -13,7 +13,7 @@ namespace secp256k1 {
 using fast::Scalar;
 using fast::Point;
 
-// ── HMAC-SHA512 ──────────────────────────────────────────────────────────────
+// -- HMAC-SHA512 --------------------------------------------------------------
 
 std::array<std::uint8_t, 64> hmac_sha512(const uint8_t* key, std::size_t key_len,
                                           const uint8_t* data, std::size_t data_len) {
@@ -45,7 +45,7 @@ std::array<std::uint8_t, 64> hmac_sha512(const uint8_t* key, std::size_t key_len
     return outer.finalize();
 }
 
-// ── RIPEMD-160 (minimal) ─────────────────────────────────────────────────────
+// -- RIPEMD-160 (minimal) -----------------------------------------------------
 // Needed for HASH160 = RIPEMD160(SHA256(data))
 
 namespace {
@@ -213,7 +213,7 @@ std::array<uint8_t, 20> hash160(const void* data, std::size_t len) {
 
 } // anonymous namespace
 
-// ── ExtendedKey ──────────────────────────────────────────────────────────────
+// -- ExtendedKey --------------------------------------------------------------
 
 fast::Point ExtendedKey::public_key() const {
     if (is_private) {
@@ -315,7 +315,7 @@ std::pair<ExtendedKey, bool> ExtendedKey::derive_child(uint32_t index) const {
     std::memcpy(IR.data(), I.data() + 32, 32);
 
     auto il_scalar = Scalar::from_bytes(IL);
-    // Check IL is valid (less than curve order — from_bytes handles mod n)
+    // Check IL is valid (less than curve order -- from_bytes handles mod n)
     // But we need to check it wasn't zero after reduction when original was >= n
     // from_bytes already reduces mod n, so just check non-zero
     if (il_scalar.is_zero()) return {ExtendedKey{}, false};
@@ -346,7 +346,7 @@ std::pair<ExtendedKey, bool> ExtendedKey::derive_child(uint32_t index) const {
     return {child, true};
 }
 
-// ── Master Key ───────────────────────────────────────────────────────────────
+// -- Master Key ---------------------------------------------------------------
 
 std::pair<ExtendedKey, bool> bip32_master_key(const uint8_t* seed, std::size_t seed_len) {
     if (seed_len < 16 || seed_len > 64) return {ExtendedKey{}, false};
@@ -374,7 +374,7 @@ std::pair<ExtendedKey, bool> bip32_master_key(const uint8_t* seed, std::size_t s
     return {ext, true};
 }
 
-// ── Path Derivation ──────────────────────────────────────────────────────────
+// -- Path Derivation ----------------------------------------------------------
 
 std::pair<ExtendedKey, bool> bip32_derive_path(const ExtendedKey& master,
                                                 const std::string& path) {

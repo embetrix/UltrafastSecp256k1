@@ -66,15 +66,15 @@ struct BenchResult {
 
 static void print_result(const BenchResult& r) {
     double ops_per_sec = (r.total_us > 0) ? (r.iters / (r.total_us / 1e6)) : 0;
-    printf("  %-30s %8d iters  %10.1f µs  %8.1f ns/op  %10.0f op/s\n",
+    printf("  %-30s %8d iters  %10.1f us  %8.1f ns/op  %10.0f op/s\n",
            r.name, r.iters, r.total_us, r.per_op_ns, ops_per_sec);
 }
 
 // ============================================================================
 int main() {
-    printf("═══════════════════════════════════════════════════════════════\n");
-    printf("  AUDIT IV — Performance Validation\n");
-    printf("═══════════════════════════════════════════════════════════════\n\n");
+    printf("===============================================================\n");
+    printf("  AUDIT IV -- Performance Validation\n");
+    printf("===============================================================\n\n");
 
     // Pre-allocate test data
     constexpr int N_FIELD = 100000;
@@ -85,7 +85,7 @@ int main() {
 
     auto G = Point::generator();
 
-    // ── Field Operations ─────────────────────────────────────────────────
+    // -- Field Operations -------------------------------------------------
 
     printf("[Field Arithmetic]\n");
 
@@ -108,7 +108,7 @@ int main() {
     }));
     printf("\n");
 
-    // ── Scalar Operations ────────────────────────────────────────────────
+    // -- Scalar Operations ------------------------------------------------
 
     printf("[Scalar Arithmetic]\n");
 
@@ -128,7 +128,7 @@ int main() {
     }));
     printf("\n");
 
-    // ── Point Operations ─────────────────────────────────────────────────
+    // -- Point Operations -------------------------------------------------
 
     printf("[Point Operations]\n");
 
@@ -149,7 +149,7 @@ int main() {
     }));
     printf("\n");
 
-    // ── ECDSA ────────────────────────────────────────────────────────────
+    // -- ECDSA ------------------------------------------------------------
 
     printf("[ECDSA]\n");
 
@@ -167,7 +167,7 @@ int main() {
     }));
     printf("\n");
 
-    // ── Schnorr ──────────────────────────────────────────────────────────
+    // -- Schnorr ----------------------------------------------------------
 
     printf("[Schnorr BIP-340]\n");
 
@@ -186,7 +186,7 @@ int main() {
     }));
     printf("\n");
 
-    // ── CT Operations (comparison) ───────────────────────────────────────
+    // -- CT Operations (comparison) ---------------------------------------
 
     printf("[Constant-Time (comparison)]\n");
 
@@ -198,13 +198,13 @@ int main() {
     }));
     printf("\n");
 
-    // ── Summary ──────────────────────────────────────────────────────────
+    // -- Summary ----------------------------------------------------------
 
-    printf("═══════════════════════════════════════════════════════════════\n");
+    printf("===============================================================\n");
     printf("  Performance validation complete.\n");
     printf("  NOTE: This is a profiling benchmark, not a pass/fail test.\n");
     printf("  Compare results against known baselines for regression.\n");
-    printf("═══════════════════════════════════════════════════════════════\n");
+    printf("===============================================================\n");
 
     return 0;
 }

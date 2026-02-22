@@ -1,12 +1,12 @@
 // ============================================================================
-// Benchmark: FieldElement (4×64) vs FieldElement52 (5×52 Lazy-Reduction)
+// Benchmark: FieldElement (4x64) vs FieldElement52 (5x52 Lazy-Reduction)
 // ============================================================================
 //
 // Measures individual field operations and realistic ECC-like chains
-// to quantify the lazy-reduction advantage of the 5×52 representation.
+// to quantify the lazy-reduction advantage of the 5x52 representation.
 //
-// Key hypothesis: 5×52 wins on add-heavy chains (ECC point ops) because
-// additions are 5 plain adds with NO carry propagation, while 4×64 needs
+// Key hypothesis: 5x52 wins on add-heavy chains (ECC point ops) because
+// additions are 5 plain adds with NO carry propagation, while 4x64 needs
 // carry propagation + conditional reduction after every add.
 // ============================================================================
 
@@ -23,7 +23,7 @@ using namespace secp256k1::fast;
 // Unified harness: 500 warmup, 11 passes, RDTSC on x86, IQR outlier removal
 static bench::Harness H(500, 11);
 
-// ── Test Data ────────────────────────────────────────────────────────────────
+// -- Test Data ----------------------------------------------------------------
 
 // Generator point Gx, Gy
 static const uint64_t GX_LIMBS[4] = {
@@ -39,7 +39,7 @@ static FieldElement make_fe(const uint64_t limbs[4]) {
     return FieldElement::from_limbs({limbs[0], limbs[1], limbs[2], limbs[3]});
 }
 
-// ── Individual Operation Benchmarks ──────────────────────────────────────────
+// -- Individual Operation Benchmarks ------------------------------------------
 
 struct BenchResult {
     const char* name;
@@ -54,8 +54,8 @@ static void print_header() {
     std::printf("=================================================================\n");
     H.print_config();
     std::printf("\n%-36s %10s %10s %10s\n", "Operation", "4x64 (ns)", "5x52 (ns)", "Ratio");
-    std::printf("%-36s %10s %10s %10s\n", "────────────────────────────────────",
-                "──────────", "──────────", "──────────");
+    std::printf("%-36s %10s %10s %10s\n", "------------------------------------",
+                "----------", "----------", "----------");
 }
 
 static void print_result(const BenchResult& r) {
@@ -70,9 +70,9 @@ static void print_separator(const char* section) {
     std::printf("\n--- %s ---\n", section);
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 // main
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 int main() {
     std::printf("[bench_field_52] Running arithmetic validation...\n");
@@ -81,7 +81,7 @@ int main() {
 
     bench::pin_thread_and_elevate();
 
-    // ── Prepare test data ────────────────────────────────────────────────────
+    // -- Prepare test data ----------------------------------------------------
     FieldElement fe_a = make_fe(GX_LIMBS);
     FieldElement fe_b = make_fe(GY_LIMBS);
 
@@ -90,7 +90,7 @@ int main() {
 
     print_header();
 
-    // ── 1. Single Addition ───────────────────────────────────────────────────
+    // -- 1. Single Addition ---------------------------------------------------
     print_separator("Single Operations");
     {
         constexpr int ITERS = 500000;
@@ -110,7 +110,7 @@ int main() {
         print_result({"Addition (single)", ns4, ns5});
     }
 
-    // ── 2. Single Multiplication ─────────────────────────────────────────────
+    // -- 2. Single Multiplication ---------------------------------------------
     {
         constexpr int ITERS = 200000;
 
@@ -129,7 +129,7 @@ int main() {
         print_result({"Multiplication (single)", ns4, ns5});
     }
 
-    // ── 3. Single Squaring ───────────────────────────────────────────────────
+    // -- 3. Single Squaring ---------------------------------------------------
     {
         constexpr int ITERS = 200000;
 
@@ -148,11 +148,11 @@ int main() {
         print_result({"Squaring (single)", ns4, ns5});
     }
 
-    // ── 4. Normalization ─────────────────────────────────────────────────────
+    // -- 4. Normalization -----------------------------------------------------
     {
         constexpr int ITERS = 500000;
 
-        // Create slightly un-normalized element for 5×52
+        // Create slightly un-normalized element for 5x52
         FieldElement52 acc52 = fe52_a + fe52_b;
 
         double ns5_weak = H.run(ITERS, [&]() {
@@ -171,7 +171,7 @@ int main() {
         std::printf("%-36s %9s  %9.2f\n", "Normalize (full, 5x52 only)", "N/A", ns5_full);
     }
 
-    // ── 5. Negation ──────────────────────────────────────────────────────────
+    // -- 5. Negation ----------------------------------------------------------
     {
         constexpr int ITERS = 500000;
 
@@ -190,7 +190,7 @@ int main() {
         print_result({"Negation", ns4, ns5});
     }
 
-    // ── 6. Half ──────────────────────────────────────────────────────────────
+    // -- 6. Half --------------------------------------------------------------
     {
         constexpr int ITERS = 500000;
 
@@ -203,7 +203,7 @@ int main() {
         std::printf("%-36s %9s  %9.2f\n", "Half (5x52 only)", "N/A", ns5);
     }
 
-    // ── 7. Conversion cost ───────────────────────────────────────────────────
+    // -- 7. Conversion cost ---------------------------------------------------
     {
         constexpr int ITERS = 500000;
 
@@ -223,17 +223,17 @@ int main() {
         std::printf("%-36s %9.2f  %9s\n", "Convert 5x52 -> 4x64", ns_to4, "N/A");
     }
 
-    // ═════════════════════════════════════════════════════════════════════════
+    // =========================================================================
     // Chained Operations (realistic ECC workload simulation)
-    // ═════════════════════════════════════════════════════════════════════════
+    // =========================================================================
 
     print_separator("Addition Chains (Lazy-Reduction Core Advantage)");
 
-    // ── 8. Chain of N additions (the whole point of lazy reduction) ──────────
+    // -- 8. Chain of N additions (the whole point of lazy reduction) ----------
     for (int chain_len : {4, 8, 16, 32, 64}) {
         constexpr int ITERS = 50000;
 
-        // 4×64: each add does carry + conditional reduction
+        // 4x64: each add does carry + conditional reduction
         double ns4 = H.run(ITERS, [&]() {
             FieldElement acc = fe_a;
             for (int i = 0; i < chain_len; ++i) {
@@ -242,7 +242,7 @@ int main() {
             bench::DoNotOptimize(acc);
         });
 
-        // 5×52: N plain adds, ONE normalize at end
+        // 5x52: N plain adds, ONE normalize at end
         double ns5 = H.run(ITERS, [&]() {
             FieldElement52 acc = fe52_a;
             for (int i = 0; i < chain_len; ++i) {
@@ -257,7 +257,7 @@ int main() {
         print_result({name, ns4, ns5});
     }
 
-    // ── 9. Mixed add+mul chain (simulates point addition field ops) ──────────
+    // -- 9. Mixed add+mul chain (simulates point addition field ops) ----------
     print_separator("Mixed Chains (ECC Point Operation Simulation)");
 
     // ECC point addition has roughly: 12 muls + 4 sqrs + ~7 adds + ~3 subs
@@ -265,7 +265,7 @@ int main() {
     {
         constexpr int ITERS = 50000;
 
-        // 4×64 version
+        // 4x64 version
         double ns4 = H.run(ITERS, [&]() {
             FieldElement t0 = fe_a, t1 = fe_b;
             // Simulate point-add field ops
@@ -284,7 +284,7 @@ int main() {
             bench::DoNotOptimize(out);
         });
 
-        // 5×52 version
+        // 5x52 version
         double ns5 = H.run(ITERS, [&]() {
             FieldElement52 t0 = fe52_a, t1 = fe52_b;
             FieldElement52 u1 = t0 * t1;
@@ -305,7 +305,7 @@ int main() {
         print_result({"Point-Add simulation (12M+4S+7A)", ns4, ns5});
     }
 
-    // ── 10. Repeated squaring chain (scalar field inversion pattern) ─────────
+    // -- 10. Repeated squaring chain (scalar field inversion pattern) ---------
     {
         constexpr int ITERS = 10000;
         constexpr int CHAIN = 256;   // ~256 squarings like in Fermat inverse
@@ -329,7 +329,7 @@ int main() {
         print_result({"Sqr chain (256 squarings)", ns4, ns5});
     }
 
-    // ── 11. Alternating mul+add (mixed pipeline) ────────────────────────────
+    // -- 11. Alternating mul+add (mixed pipeline) ----------------------------
     {
         constexpr int ITERS = 20000;
         constexpr int CHAIN = 32;
@@ -356,7 +356,7 @@ int main() {
         print_result({"Mul+Add alternating (32 iters)", ns4, ns5});
     }
 
-    // ── 12. Pure multiplication chain ────────────────────────────────────────
+    // -- 12. Pure multiplication chain ----------------------------------------
     {
         constexpr int ITERS = 20000;
         constexpr int CHAIN = 32;
@@ -380,9 +380,9 @@ int main() {
         print_result({"Mul chain (32 muls)", ns4, ns5});
     }
 
-    // ═════════════════════════════════════════════════════════════════════════
+    // =========================================================================
     // Throughput (ops/sec)
-    // ═════════════════════════════════════════════════════════════════════════
+    // =========================================================================
 
     print_separator("Throughput Summary");
     {

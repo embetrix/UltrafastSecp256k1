@@ -11,12 +11,12 @@ using fast::Scalar;
 using fast::Point;
 using fast::FieldElement;
 
-// ── Half-order for low-S check ───────────────────────────────────────────────
+// -- Half-order for low-S check -----------------------------------------------
 // n/2 = 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0
 static const Scalar HALF_ORDER = Scalar::from_hex(
     "7fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a0");
 
-// ── Signature Methods ────────────────────────────────────────────────────────
+// -- Signature Methods --------------------------------------------------------
 
 std::pair<std::array<std::uint8_t, 72>, std::size_t> ECDSASignature::to_der() const {
     auto r_bytes = r.to_bytes();
@@ -83,20 +83,20 @@ bool ECDSASignature::is_low_s() const {
     return true; // equal
 }
 
-// ── RFC 6979 Deterministic Nonce ─────────────────────────────────────────────
+// -- RFC 6979 Deterministic Nonce ---------------------------------------------
 // Optimized RFC 6979 using HMAC-SHA256 with precomputed ipad/opad midstates.
-// Calls sha256_compress_dispatch() directly — no SHA256 object overhead,
+// Calls sha256_compress_dispatch() directly -- no SHA256 object overhead,
 // no per-byte finalize() padding. Saves ~4 compress calls via midstate reuse.
 
 namespace {
 
-// ── SHA-256 IV ───────────────────────────────────────────────────────────────
+// -- SHA-256 IV ---------------------------------------------------------------
 static constexpr std::uint32_t SHA256_IV[8] = {
     0x6a09e667u, 0xbb67ae85u, 0x3c6ef372u, 0xa54ff53au,
     0x510e527fu, 0x9b05688cu, 0x1f83d9abu, 0x5be0cd19u
 };
 
-// ── Serialize 8×uint32 state → 32 bytes (big-endian) ─────────────────────────
+// -- Serialize 8xuint32 state -> 32 bytes (big-endian) -------------------------
 static inline void state_to_bytes(const std::uint32_t st[8], std::uint8_t out[32]) {
     for (int i = 0; i < 8; i++) {
         out[i*4+0] = static_cast<uint8_t>(st[i] >> 24);
@@ -106,7 +106,7 @@ static inline void state_to_bytes(const std::uint32_t st[8], std::uint8_t out[32
     }
 }
 
-// ── Write big-endian 64-bit length at block[56..63] ──────────────────────────
+// -- Write big-endian 64-bit length at block[56..63] --------------------------
 static inline void write_be_len(std::uint8_t block[64], std::uint64_t bits) {
     block[56] = static_cast<uint8_t>(bits >> 56);
     block[57] = static_cast<uint8_t>(bits >> 48);
@@ -118,7 +118,7 @@ static inline void write_be_len(std::uint8_t block[64], std::uint64_t bits) {
     block[63] = static_cast<uint8_t>(bits);
 }
 
-// ── HMAC-SHA256 with precomputed ipad/opad midstates ─────────────────────────
+// -- HMAC-SHA256 with precomputed ipad/opad midstates -------------------------
 // Key is always 32 bytes in RFC-6979.
 // Midstates are computed once per key and can be reused across multiple
 // HMAC calls with the same key (e.g. steps e+f share K, steps g+h share K).
@@ -141,7 +141,7 @@ struct HMAC_Ctx {
         detail::sha256_compress_dispatch(pad, outer_mid);
     }
 
-    // HMAC for short messages (msg_len ≤ 55): 1 inner compress + 1 outer
+    // HMAC for short messages (msg_len <= 55): 1 inner compress + 1 outer
     // Total inner input: 64 (ipad midstate) + msg_len
     void compute_short(const std::uint8_t* msg, std::size_t msg_len,
                        std::uint8_t out[32]) const noexcept {
@@ -173,7 +173,7 @@ struct HMAC_Ctx {
         state_to_bytes(st, out);
     }
 
-    // HMAC for medium messages (55 < msg_len ≤ 119): 2 inner compress + 1 outer
+    // HMAC for medium messages (55 < msg_len <= 119): 2 inner compress + 1 outer
     void compute_two_block(const std::uint8_t* msg, std::size_t msg_len,
                            std::uint8_t out[32]) const noexcept {
         std::uint32_t st[8];
@@ -212,7 +212,7 @@ struct HMAC_Ctx {
 
 Scalar rfc6979_nonce(const Scalar& private_key,
                      const std::array<uint8_t, 32>& msg_hash) {
-    // RFC 6979 Section 3.2 — optimized with HMAC midstate caching.
+    // RFC 6979 Section 3.2 -- optimized with HMAC midstate caching.
     auto x_bytes = private_key.to_bytes();
 
     // Step b: V = 0x01 * 32
@@ -236,22 +236,22 @@ Scalar rfc6979_nonce(const Scalar& private_key,
     std::memcpy(buf97 + 65, msg_hash.data(), 32);
     hmac.compute_two_block(buf97, 97, K);  // K = HMAC(K0, V||0||x||h1)
 
-    // Steps e+f share the same K — precompute midstate once
+    // Steps e+f share the same K -- precompute midstate once
     hmac.init_key32(K);
     hmac.compute_short(V, 32, V);          // V = HMAC(K1, V)
 
-    // Step f: K = HMAC(K1, V||0x01||x||h1) — reuses K1 midstate!
+    // Step f: K = HMAC(K1, V||0x01||x||h1) -- reuses K1 midstate!
     std::memcpy(buf97, V, 32);
     buf97[32] = 0x01;
     std::memcpy(buf97 + 33, x_bytes.data(), 32);
     std::memcpy(buf97 + 65, msg_hash.data(), 32);
     hmac.compute_two_block(buf97, 97, K);  // K = HMAC(K1, V||1||x||h1)
 
-    // Steps g+h share the same K — precompute midstate once
+    // Steps g+h share the same K -- precompute midstate once
     hmac.init_key32(K);
     hmac.compute_short(V, 32, V);          // V = HMAC(K2, V)
 
-    // Step h: generate candidate — reuses K2 midstate!
+    // Step h: generate candidate -- reuses K2 midstate!
     for (int attempt = 0; attempt < 100; ++attempt) {
         hmac.compute_short(V, 32, V);      // V = HMAC(K2, V)
 
@@ -274,7 +274,7 @@ Scalar rfc6979_nonce(const Scalar& private_key,
     return Scalar::zero(); // should never reach
 }
 
-// ── ECDSA Sign ───────────────────────────────────────────────────────────────
+// -- ECDSA Sign ---------------------------------------------------------------
 
 ECDSASignature ecdsa_sign(const std::array<uint8_t, 32>& msg_hash,
                           const Scalar& private_key) {
@@ -307,7 +307,7 @@ ECDSASignature ecdsa_sign(const std::array<uint8_t, 32>& msg_hash,
     return sig.normalize();
 }
 
-// ── ECDSA Verify ─────────────────────────────────────────────────────────────
+// -- ECDSA Verify -------------------------------------------------------------
 
 bool ecdsa_verify(const std::array<uint8_t, 32>& msg_hash,
                   const Point& public_key,
@@ -327,23 +327,23 @@ bool ecdsa_verify(const std::array<uint8_t, 32>& msg_hash,
     // u2 = r * w mod n
     auto u2 = sig.r * w;
 
-    // R' = u1 * G + u2 * Q  (4-stream GLV Strauss — single interleaved loop)
+    // R' = u1 * G + u2 * Q  (4-stream GLV Strauss -- single interleaved loop)
     auto R_prime = Point::dual_scalar_mul_gen_point(u1, u2, public_key);
 
     if (R_prime.is_infinity()) return false;
 
-    // ── Fast Z²-based x-coordinate check (avoids field inverse) ──────
-    // Check: R'.x/R'.z² mod n == sig.r
-    // Equivalent: sig.r * R'.z² == R'.x (mod p)
-    // This saves ~3μs by avoiding the field inversion in Point::x().
+    // -- Fast Z^2-based x-coordinate check (avoids field inverse) ------
+    // Check: R'.x/R'.z^2 mod n == sig.r
+    // Equivalent: sig.r * R'.z^2 == R'.x (mod p)
+    // This saves ~3us by avoiding the field inversion in Point::x().
 #if defined(SECP256K1_FAST_52BIT)
     using FE52 = fast::FieldElement52;
 
-    // Direct Scalar→FE52: sig.r limbs are 4×64 LE, same layout as FieldElement.
-    // Since sig.r < n < p, the raw limbs are a valid field element — no reduction needed.
+    // Direct Scalar->FE52: sig.r limbs are 4x64 LE, same layout as FieldElement.
+    // Since sig.r < n < p, the raw limbs are a valid field element -- no reduction needed.
     FE52 r52 = FE52::from_4x64_limbs(sig.r.limbs().data());
-    FE52 z2 = R_prime.Z52().square();    // Z²  [1S] mag=1
-    FE52 lhs = r52 * z2;                 // r·Z² [1M] mag=1
+    FE52 z2 = R_prime.Z52().square();    // Z^2  [1S] mag=1
+    FE52 lhs = r52 * z2;                 // r*Z^2 [1M] mag=1
     lhs.normalize();
 
     FE52 rx = R_prime.X52();
@@ -351,17 +351,17 @@ bool ecdsa_verify(const std::array<uint8_t, 32>& msg_hash,
 
     if (lhs == rx) return true;
 
-    // Rare case: x_R mod p ∈ [n, p), so x_R mod n = x_R - n = sig.r
-    // → need to check (sig.r + n) · Z² == X.  Probability ~2^-128.
-    // n = order, p - n ≈ 2^129.  sig.r < n, so sig.r + n < p iff sig.r < p - n.
+    // Rare case: x_R mod p in [n, p), so x_R mod n = x_R - n = sig.r
+    // -> need to check (sig.r + n) * Z^2 == X.  Probability ~2^-128.
+    // n = order, p - n ~= 2^129.  sig.r < n, so sig.r + n < p iff sig.r < p - n.
     //
-    // p - n as 4×64 LE limbs:
+    // p - n as 4x64 LE limbs:
     // 0x000000000000000145512319_50b75fc4_402da173_2fc9bebf
     static constexpr std::uint64_t PMN_0 = 0x402da1732fc9bebfULL;
     static constexpr std::uint64_t PMN_1 = 0x14551231950b75fcULL;  // top nibble = 1
-    // PMN limbs [2] = 0, [3] = 0  → sig.r < p-n iff sig.r fits in ~129 bits
-    // Since sig.r < n ≈ 2^256, upper limbs are always >= PMN upper limbs (0).
-    // Quick check: r[3]==0 && r[2]==0 → r < 2^128, definitely < p-n.
+    // PMN limbs [2] = 0, [3] = 0  -> sig.r < p-n iff sig.r fits in ~129 bits
+    // Since sig.r < n ~= 2^256, upper limbs are always >= PMN upper limbs (0).
+    // Quick check: r[3]==0 && r[2]==0 -> r < 2^128, definitely < p-n.
     // Otherwise compare lexicographically.
     const auto& rl = sig.r.limbs();
     bool r_less_than_pmn;
@@ -397,20 +397,20 @@ bool ecdsa_verify(const std::array<uint8_t, 32>& msg_hash,
 
     return false;
 #else
-    // ── Z²-based x-coordinate check for 4×64 path (ESP32/MSVC/generic) ──
-    // Avoids field inverse: sig.r * Z² == X (mod p)
+    // -- Z^2-based x-coordinate check for 4x64 path (ESP32/MSVC/generic) --
+    // Avoids field inverse: sig.r * Z^2 == X (mod p)
     // Since sig.r < n < p, raw scalar limbs are a valid field element.
     auto r_fe = FieldElement::from_limbs(sig.r.limbs());
-    auto z2   = R_prime.z_raw().square();     // Z²
-    auto lhs  = r_fe * z2;                    // r·Z²
+    auto z2   = R_prime.z_raw().square();     // Z^2
+    auto lhs  = r_fe * z2;                    // r*Z^2
     auto rx   = R_prime.x_raw();              // Jacobian X
 
     if (lhs == rx) return true;
 
-    // Rare case (probability ~2^-128): x_R mod p ∈ [n, p),
-    // so x_R mod n == sig.r means we need to check (sig.r + n)·Z² == X.
+    // Rare case (probability ~2^-128): x_R mod p in [n, p),
+    // so x_R mod n == sig.r means we need to check (sig.r + n)*Z^2 == X.
     // sig.r + n < p  iff  sig.r < p - n.
-    // p - n ≈ 2^129:  0x14551231950b75fc4402da1732fc9bebf
+    // p - n ~= 2^129:  0x14551231950b75fc4402da1732fc9bebf
     static constexpr std::uint64_t PMN_0 = 0x402da1732fc9bebfULL;
     static constexpr std::uint64_t PMN_1 = 0x14551231950b75fcULL;
     const auto& rl = sig.r.limbs();

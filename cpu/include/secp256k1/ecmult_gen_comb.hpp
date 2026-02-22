@@ -6,28 +6,28 @@
 // ecmult_gen: Lim-Lee Comb Method for Generator Multiplication
 // ============================================================================
 //
-// Computes k·G using the comb method (Lim & Lee, 1994).
+// Computes k*G using the comb method (Lim & Lee, 1994).
 // This is the algorithm used by bitcoin-core/secp256k1's ecmult_gen.
 //
 // Key advantage over windowed methods:
 //   - Table is precomputed ONCE for G (at init time or from cache)
-//   - No runtime GLV decomposition (saves ~14μs overhead per mul)
+//   - No runtime GLV decomposition (saves ~14us overhead per mul)
 //   - Table fits in L1/L2 cache for reasonable tooth counts
 //   - Exactly 256/teeth doublings + 256/teeth additions (fixed cost)
 //
 // Algorithm:
 //   Given teeth t and spacing d = ceil(256/t):
-//   1. Pre-compute table[i][j] = (2^(j*d)) · G for i=0..d-1, j=0..t-1
+//   1. Pre-compute table[i][j] = (2^(j*d)) * G for i=0..d-1, j=0..t-1
 //      Actually stored per-comb: table[comb][entry] where entry is t-bit index
 //   2. For each bit position b from d-1 down to 0:
-//      a. R = 2·R (double)
+//      a. R = 2*R (double)
 //      b. For each comb c, look up bits at positions b, b+d, b+2d, ...
-//         forming a t-bit index → add table[c][index] to R
+//         forming a t-bit index -> add table[c][index] to R
 //
 // Table size: d * 2^t affine points
-//   teeth=15, d=17: 17 * 2^15 = 557K points ≈ 35 MB
-//   teeth=11, d=24: 24 * 2^11 = 49K points  ≈ 3 MB (L2-friendly)
-//   teeth= 6, d=43: 43 * 2^6  = 2752 points ≈ 176 KB (L1-friendly)
+//   teeth=15, d=17: 17 * 2^15 = 557K points ~= 35 MB
+//   teeth=11, d=24: 24 * 2^11 = 49K points  ~= 3 MB (L2-friendly)
+//   teeth= 6, d=43: 43 * 2^6  = 2752 points ~= 176 KB (L1-friendly)
 //
 // Cost: d doublings + d*combs additions = d*(1 + combs) point ops
 //   teeth=15: 17 dbl + 17 add  = 34 ops  (fastest, but big table)
@@ -51,14 +51,14 @@
 
 namespace secp256k1::fast {
 
-// ── Stored affine point (compact, cache-friendly) ────────────────────────────
+// -- Stored affine point (compact, cache-friendly) ----------------------------
 struct CombAffinePoint {
     FieldElement x;
     FieldElement y;
     bool infinity = true;
 };
 
-// ── Comb Generator Context ───────────────────────────────────────────────────
+// -- Comb Generator Context ---------------------------------------------------
 class CombGenContext {
 public:
     CombGenContext() = default;
@@ -71,15 +71,15 @@ public:
     CombGenContext& operator=(CombGenContext&&) = default;
 
     // Initialize with given number of teeth (comb width).
-    // teeth=15 → libsecp256k1 default (fastest, 35MB table)
-    // teeth=11 → good balance (3MB, fits L2)
-    // teeth=6  → compact (176KB, fits L1)
+    // teeth=15 -> libsecp256k1 default (fastest, 35MB table)
+    // teeth=11 -> good balance (3MB, fits L2)
+    // teeth=6  -> compact (176KB, fits L1)
     void init(unsigned teeth = 15);
 
     // Is context initialized?
     bool ready() const noexcept { return teeth_ > 0; }
 
-    // Generator multiplication: R = k·G
+    // Generator multiplication: R = k*G
     // Fixed-cost: spacing_ doublings + spacing_ additions.
     Point mul(const Scalar& k) const;
 
@@ -112,7 +112,7 @@ private:
     uint32_t extract_comb_index(const Scalar& k, unsigned b) const;
 };
 
-// ── Global comb context (singleton, like libsecp256k1's secp256k1_ecmult_gen_context) ──
+// -- Global comb context (singleton, like libsecp256k1's secp256k1_ecmult_gen_context) --
 void init_comb_gen(unsigned teeth = 15);
 bool comb_gen_ready();
 Point comb_gen_mul(const Scalar& k);

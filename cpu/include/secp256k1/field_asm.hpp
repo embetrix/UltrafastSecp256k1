@@ -106,7 +106,7 @@ FieldElement field_negate_bmi2(const FieldElement& a);
 
 namespace detail {
 
-// 64x64 → 128-bit multiplication using MULX
+// 64x64 -> 128-bit multiplication using MULX
 // MULX: multiplicand in RDX, result in two registers (no flag updates!)
 inline void mulx64(uint64_t a, uint64_t b, uint64_t& lo, uint64_t& hi) {
     #if defined(_MSC_VER)
@@ -208,7 +208,7 @@ inline uint8_t adox64(uint64_t a, uint64_t b, uint8_t overflow, uint64_t& result
     return adcx64(a, b, overflow, result);
 }
 
-// Full 4x4 limb multiplication (256-bit × 256-bit → 512-bit)
+// Full 4x4 limb multiplication (256-bit x 256-bit -> 512-bit)
 // Fully unrolled, using MULX/ADCX/ADOX in parallel
 void mul_4x4_bmi2(
     const uint64_t a[4], 

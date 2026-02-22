@@ -89,7 +89,7 @@ struct alignas(64) AffinePoint {
     FieldElement y;
 };
 
-// Jacobian point (X, Y, Z) where affine (x, y) = (X/Z², Y/Z³)
+// Jacobian point (X, Y, Z) where affine (x, y) = (X/Z^2, Y/Z^3)
 struct alignas(128) JacobianPoint {
     FieldElement x;
     FieldElement y;

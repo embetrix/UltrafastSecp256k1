@@ -1,18 +1,18 @@
 // =============================================================================
-// UltrafastSecp256k1 Metal — Hash160 (SHA-256 → RIPEMD-160)
+// UltrafastSecp256k1 Metal -- Hash160 (SHA-256 -> RIPEMD-160)
 // =============================================================================
 // Self-contained one-shot SHA-256 + RIPEMD-160 for public key hashing.
 // Matches CUDA hash160.cuh output byte-for-byte.
 //
 // Functions:
-//   sha256_oneshot  — One-shot SHA-256 (up to 128 bytes input)
-//   ripemd_f        — RIPEMD-160 round function selector (5 variants)
-//   ripemd160_32    — RIPEMD-160 optimized for exactly 32-byte input
-//   hash160_pubkey  — SHA-256 then RIPEMD-160 (Bitcoin Hash160)
+//   sha256_oneshot  -- One-shot SHA-256 (up to 128 bytes input)
+//   ripemd_f        -- RIPEMD-160 round function selector (5 variants)
+//   ripemd160_32    -- RIPEMD-160 optimized for exactly 32-byte input
+//   hash160_pubkey  -- SHA-256 then RIPEMD-160 (Bitcoin Hash160)
 //
-// Uses 32-bit ops only — fully compatible with Apple Silicon (no 64-bit int).
+// Uses 32-bit ops only -- fully compatible with Apple Silicon (no 64-bit int).
 // NOTE: Uses its own one-shot SHA-256 (not the streaming SHA256Ctx from
-//       secp256k1_extended.h) — more efficient for fixed-size inputs.
+//       secp256k1_extended.h) -- more efficient for fixed-size inputs.
 // =============================================================================
 
 #pragma once
@@ -184,7 +184,7 @@ inline uint ripemd_f(int j, uint x, uint y, uint z) {
 }
 
 // =============================================================================
-// RIPEMD-160 — Optimized for exactly 32-byte input (single block)
+// RIPEMD-160 -- Optimized for exactly 32-byte input (single block)
 // =============================================================================
 
 inline void ripemd160_32(thread const uchar data[32], thread uchar out[20]) {
@@ -192,7 +192,7 @@ inline void ripemd160_32(thread const uchar data[32], thread uchar out[20]) {
     for (int i = 0; i < 64; ++i) block[i] = 0;
     for (int i = 0; i < 32; ++i) block[i] = data[i];
     block[32] = 0x80;
-    // bit_len = 256 = 0x100 → LE encoding
+    // bit_len = 256 = 0x100 -> LE encoding
     const uint bit_len_lo = 32u * 8u;  // = 256
     block[56] = (uchar)(bit_len_lo);
     block[57] = (uchar)(bit_len_lo >> 8);
@@ -247,7 +247,7 @@ inline void ripemd160_32(thread const uchar data[32], thread uchar out[20]) {
 }
 
 // =============================================================================
-// Hash160 — SHA-256 then RIPEMD-160 (Bitcoin public key hash)
+// Hash160 -- SHA-256 then RIPEMD-160 (Bitcoin public key hash)
 // =============================================================================
 
 inline void hash160_pubkey(thread const uchar* pubkey, uint pubkey_len, thread uchar out[20]) {

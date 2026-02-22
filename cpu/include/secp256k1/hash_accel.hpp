@@ -3,23 +3,23 @@
 #pragma once
 
 // ============================================================================
-// Accelerated Hashing — SHA-256 / RIPEMD-160 / Hash160
+// Accelerated Hashing -- SHA-256 / RIPEMD-160 / Hash160
 // ============================================================================
 //
 // ## Three tiers of acceleration (runtime-detected):
 //
-//   Tier 0: SCALAR   — Portable C++ (baseline, always available)
-//   Tier 1: SHA-NI   — Intel SHA Extensions (single-message HW accel, ~3-5×)
-//   Tier 2: AVX2     — 4-way multi-buffer SHA-256 (interleaved, ~8-12×)
+//   Tier 0: SCALAR   -- Portable C++ (baseline, always available)
+//   Tier 1: SHA-NI   -- Intel SHA Extensions (single-message HW accel, ~3-5x)
+//   Tier 2: AVX2     -- 4-way multi-buffer SHA-256 (interleaved, ~8-12x)
 //                       + optimized RIPEMD-160 with BMI/BMI2
-//   Tier 3: AVX-512  — 8-way multi-buffer SHA-256 (if available, ~16×)
+//   Tier 3: AVX-512  -- 8-way multi-buffer SHA-256 (if available, ~16x)
 //
 // ## Hot-path API for search pipeline:
 //
-//   Compressed pubkey (33 bytes) → SHA-256 → RIPEMD-160 = Hash160 (20 bytes)
+//   Compressed pubkey (33 bytes) -> SHA-256 -> RIPEMD-160 = Hash160 (20 bytes)
 //
-//   - hash160_single():       single pubkey → 20 bytes
-//   - hash160_batch():        N pubkeys → N×20 bytes (multi-buffer SIMD)
+//   - hash160_single():       single pubkey -> 20 bytes
+//   - hash160_batch():        N pubkeys -> Nx20 bytes (multi-buffer SIMD)
 //   - sha256_33():            SHA-256 of exactly 33 bytes (pubkey-optimized)
 //   - ripemd160_32():         RIPEMD-160 of exactly 32 bytes (SHA output)
 //
@@ -44,7 +44,7 @@
 
 namespace secp256k1::hash {
 
-// ── Feature Detection ────────────────────────────────────────────────────────
+// -- Feature Detection --------------------------------------------------------
 
 enum class HashTier : int {
     SCALAR  = 0,
@@ -64,13 +64,13 @@ bool sha_ni_available() noexcept;
 bool avx2_available() noexcept;
 bool avx512_available() noexcept;
 
-// ── Single-message SHA-256 ───────────────────────────────────────────────────
+// -- Single-message SHA-256 ---------------------------------------------------
 
 /// SHA-256 of arbitrary data (auto-selects best implementation).
 std::array<std::uint8_t, 32> sha256(const void* data, std::size_t len) noexcept;
 
 /// SHA-256 of exactly 33 bytes (compressed pubkey hot path).
-/// Precomputed padding — no branches, no buffer management.
+/// Precomputed padding -- no branches, no buffer management.
 void sha256_33(const std::uint8_t* pubkey33, std::uint8_t* out32) noexcept;
 
 /// SHA-256 of exactly 32 bytes (e.g. second hash in double-SHA256)
@@ -79,16 +79,16 @@ void sha256_32(const std::uint8_t* in32, std::uint8_t* out32) noexcept;
 /// Double-SHA256: SHA256(SHA256(data)) for arbitrary data.
 std::array<std::uint8_t, 32> sha256d(const void* data, std::size_t len) noexcept;
 
-// ── Single-message RIPEMD-160 ────────────────────────────────────────────────
+// -- Single-message RIPEMD-160 ------------------------------------------------
 
 /// RIPEMD-160 of arbitrary data (auto-selects best implementation).
 std::array<std::uint8_t, 20> ripemd160(const void* data, std::size_t len) noexcept;
 
-/// RIPEMD-160 of exactly 32 bytes (SHA-256 output → Hash160 hot path).
-/// Precomputed padding — no branches, no buffer management.
+/// RIPEMD-160 of exactly 32 bytes (SHA-256 output -> Hash160 hot path).
+/// Precomputed padding -- no branches, no buffer management.
 void ripemd160_32(const std::uint8_t* in32, std::uint8_t* out20) noexcept;
 
-// ── Hash160 — RIPEMD160(SHA256(data)) ────────────────────────────────────────
+// -- Hash160 -- RIPEMD160(SHA256(data)) ----------------------------------------
 
 /// Hash160 of arbitrary data.
 std::array<std::uint8_t, 20> hash160(const void* data, std::size_t len) noexcept;
@@ -97,7 +97,7 @@ std::array<std::uint8_t, 20> hash160(const void* data, std::size_t len) noexcept
 /// Fused SHA256(33) + RIPEMD160(32) with minimal intermediary overhead.
 void hash160_33(const std::uint8_t* pubkey33, std::uint8_t* out20) noexcept;
 
-// ── Batch operations (multi-buffer SIMD) ─────────────────────────────────────
+// -- Batch operations (multi-buffer SIMD) -------------------------------------
 //
 // Process multiple independent messages simultaneously using SIMD lanes.
 // AVX2: 4 messages per cycle, AVX-512: 8 messages per cycle.
@@ -109,29 +109,29 @@ void hash160_33(const std::uint8_t* pubkey33, std::uint8_t* out20) noexcept;
 //
 // Hot-path contract: No heap allocation if scratch is pre-sized.
 
-/// Batch SHA-256 of N×33-byte compressed pubkeys.
-/// out32s: caller-allocated, at least count×32 bytes.
+/// Batch SHA-256 of Nx33-byte compressed pubkeys.
+/// out32s: caller-allocated, at least countx32 bytes.
 void sha256_33_batch(
-    const std::uint8_t* pubkeys,    // count × 33 bytes (packed)
-    std::uint8_t* out32s,           // count × 32 bytes output
+    const std::uint8_t* pubkeys,    // count x 33 bytes (packed)
+    std::uint8_t* out32s,           // count x 32 bytes output
     std::size_t count) noexcept;
 
-/// Batch RIPEMD-160 of N×32-byte SHA-256 digests.
-/// out20s: caller-allocated, at least count×20 bytes.
+/// Batch RIPEMD-160 of Nx32-byte SHA-256 digests.
+/// out20s: caller-allocated, at least countx20 bytes.
 void ripemd160_32_batch(
-    const std::uint8_t* in32s,      // count × 32 bytes
-    std::uint8_t* out20s,           // count × 20 bytes output
+    const std::uint8_t* in32s,      // count x 32 bytes
+    std::uint8_t* out20s,           // count x 20 bytes output
     std::size_t count) noexcept;
 
-/// Batch Hash160 of N×33-byte compressed pubkeys.
-/// Fused pipeline: strides of 4/8 messages through SHA256→RIPEMD160.
-/// out20s: caller-allocated, at least count×20 bytes.
+/// Batch Hash160 of Nx33-byte compressed pubkeys.
+/// Fused pipeline: strides of 4/8 messages through SHA256->RIPEMD160.
+/// out20s: caller-allocated, at least countx20 bytes.
 void hash160_33_batch(
-    const std::uint8_t* pubkeys,    // count × 33 bytes (packed)
-    std::uint8_t* out20s,           // count × 20 bytes output
+    const std::uint8_t* pubkeys,    // count x 33 bytes (packed)
+    std::uint8_t* out20s,           // count x 20 bytes output
     std::size_t count) noexcept;
 
-// ── Implementation selectors (for benchmarking / testing) ────────────────────
+// -- Implementation selectors (for benchmarking / testing) --------------------
 // These bypass auto-detection to force a specific tier.
 
 namespace scalar {

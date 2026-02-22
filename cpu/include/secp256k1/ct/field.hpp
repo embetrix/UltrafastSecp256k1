@@ -5,7 +5,7 @@
 // Constant-Time Field Arithmetic
 // ============================================================================
 // Side-channel resistant field operations for secp256k1.
-// Operates on secp256k1::fast::FieldElement — same data type, CT execution.
+// Operates on secp256k1::fast::FieldElement -- same data type, CT execution.
 //
 // Guarantees:
 //   - No secret-dependent branches
@@ -32,7 +32,7 @@ namespace secp256k1::ct {
 
 using FieldElement = secp256k1::fast::FieldElement;
 
-// ─── CT Modular Arithmetic ───────────────────────────────────────────────────
+// --- CT Modular Arithmetic ---------------------------------------------------
 // mul and square are inherently constant-time (fixed mul count).
 // add/sub/normalize need CT reduction.
 
@@ -47,7 +47,7 @@ FieldElement field_sub(const FieldElement& a, const FieldElement& b) noexcept;
 // This wrapper ensures CT reduction.
 FieldElement field_mul(const FieldElement& a, const FieldElement& b) noexcept;
 
-// CT modular squaring: r = a² mod p
+// CT modular squaring: r = a^2 mod p
 FieldElement field_sqr(const FieldElement& a) noexcept;
 
 // CT modular negation: r = -a mod p = p - a (if a != 0), 0 (if a == 0)
@@ -57,11 +57,11 @@ FieldElement field_neg(const FieldElement& a) noexcept;
 // If a is odd: r = (a + p) / 2; if even: r = a / 2. Branchless.
 FieldElement field_half(const FieldElement& a) noexcept;
 
-// CT modular inverse: r = a⁻¹ mod p  (via Fermat: a^(p-2))
+// CT modular inverse: r = a^-^1 mod p  (via Fermat: a^(p-2))
 // Fixed add-chain: always same number of mul+sqr regardless of input
 FieldElement field_inv(const FieldElement& a) noexcept;
 
-// ─── CT Conditional Operations ───────────────────────────────────────────────
+// --- CT Conditional Operations -----------------------------------------------
 
 // CT conditional move: if (mask == all-ones) r = a; else r unchanged
 // mask MUST be 0x0000000000000000 or 0xFFFFFFFFFFFFFFFF
@@ -79,7 +79,7 @@ FieldElement field_select(const FieldElement& a, const FieldElement& b,
 // CT conditional negate: if (mask == all-ones) r = -a; else r = a
 FieldElement field_cneg(const FieldElement& a, std::uint64_t mask) noexcept;
 
-// ─── CT Comparison ───────────────────────────────────────────────────────────
+// --- CT Comparison -----------------------------------------------------------
 
 // Returns all-ones mask if a == 0, else 0. CT (no branch).
 std::uint64_t field_is_zero(const FieldElement& a) noexcept;
@@ -87,7 +87,7 @@ std::uint64_t field_is_zero(const FieldElement& a) noexcept;
 // Returns all-ones mask if a == b, else 0. CT (no branch).
 std::uint64_t field_eq(const FieldElement& a, const FieldElement& b) noexcept;
 
-// ─── CT Normalize ────────────────────────────────────────────────────────────
+// --- CT Normalize ------------------------------------------------------------
 // Reduces a field element to canonical form [0, p) without branches.
 FieldElement field_normalize(const FieldElement& a) noexcept;
 

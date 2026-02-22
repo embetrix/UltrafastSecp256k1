@@ -14,28 +14,28 @@ void print_fe(const char* label, const FieldElement& fe) {
 }
 
 int main(int argc, char** argv) {
-    Selftest(true);  // ✅ Validate arithmetic before benchmarking
+    Selftest(true);  // [OK] Validate arithmetic before benchmarking
     
     std::cout << "\n";
-    std::cout << "═══════════════════════════════════════════════════════════\n";
+    std::cout << "===========================================================\n";
     std::cout << "  Phase 1 GPU Optimizations - Montgomery & MidFieldElement\n";
-    std::cout << "═══════════════════════════════════════════════════════════\n";
+    std::cout << "===========================================================\n";
     std::cout << "\n";
     
     // Test 1: Montgomery constants
-    std::cout << "1️⃣  Montgomery Domain Constants:\n";
-    std::cout << "─────────────────────────────────────────────────\n";
+    std::cout << "1  Montgomery Domain Constants:\n";
+    std::cout << "-------------------------------------------------\n";
     print_fe("   R (2^256 mod p)", montgomery::R());
-    print_fe("   R² mod p", montgomery::R2());
-    print_fe("   R³ mod p", montgomery::R3());
-    print_fe("   R⁻¹ mod p", montgomery::R_inv());
+    print_fe("   R^2 mod p", montgomery::R2());
+    print_fe("   R^3 mod p", montgomery::R3());
+    print_fe("   R^-^1 mod p", montgomery::R_inv());
     std::cout << "   K_MOD = 0x" << std::hex << montgomery::K_MOD << std::dec << "\n";
-    std::cout << "   ✅ All constants initialized\n";
+    std::cout << "   [OK] All constants initialized\n";
     std::cout << "\n";
     
     // Test 2: MidFieldElement zero-cost conversion
-    std::cout << "2️⃣  MidFieldElement (32/64-bit hybrid):\n";
-    std::cout << "─────────────────────────────────────────────────\n";
+    std::cout << "2  MidFieldElement (32/64-bit hybrid):\n";
+    std::cout << "-------------------------------------------------\n";
     FieldElement a = FieldElement::from_uint64(0x123456789ABCDEF0ULL);
     MidFieldElement* mid_ptr = toMid(&a);
     
@@ -54,14 +54,14 @@ int main(int argc, char** argv) {
     // Verify zero-cost conversion
     FieldElement* back = mid_ptr->ToFieldElement();
     bool conversion_ok = (back == &a) && (*back == a);
-    std::cout << "   Zero-cost roundtrip: " << (conversion_ok ? "✅ PASS" : "❌ FAIL") << "\n";
+    std::cout << "   Zero-cost roundtrip: " << (conversion_ok ? "[OK] PASS" : "[FAIL] FAIL") << "\n";
     std::cout << "   sizeof(FieldElement) = " << sizeof(FieldElement) << " bytes\n";
     std::cout << "   sizeof(MidFieldElement) = " << sizeof(MidFieldElement) << " bytes\n";
     std::cout << "\n";
     
     // Test 3: Branchless operations
-    std::cout << "3️⃣  Branchless Operations:\n";
-    std::cout << "─────────────────────────────────────────────────\n";
+    std::cout << "3  Branchless Operations:\n";
+    std::cout << "-------------------------------------------------\n";
     FieldElement x = FieldElement::from_uint64(42);
     FieldElement y = FieldElement::from_uint64(100);
     FieldElement z;
@@ -71,30 +71,30 @@ int main(int argc, char** argv) {
     bool cmov_true = (z == x);
     field_cmov(&z, &x, &y, false); // Select y
     bool cmov_false = (z == y);
-    std::cout << "   field_cmov(true):  " << (cmov_true ? "✅ PASS" : "❌ FAIL") << "\n";
-    std::cout << "   field_cmov(false): " << (cmov_false ? "✅ PASS" : "❌ FAIL") << "\n";
+    std::cout << "   field_cmov(true):  " << (cmov_true ? "[OK] PASS" : "[FAIL] FAIL") << "\n";
+    std::cout << "   field_cmov(false): " << (cmov_false ? "[OK] PASS" : "[FAIL] FAIL") << "\n";
     
     // Test field_select
     FieldElement selected_true = field_select(x, y, true);
     FieldElement selected_false = field_select(x, y, false);
-    std::cout << "   field_select(true):  " << (selected_true == x ? "✅ PASS" : "❌ FAIL") << "\n";
-    std::cout << "   field_select(false): " << (selected_false == y ? "✅ PASS" : "❌ FAIL") << "\n";
+    std::cout << "   field_select(true):  " << (selected_true == x ? "[OK] PASS" : "[FAIL] FAIL") << "\n";
+    std::cout << "   field_select(false): " << (selected_false == y ? "[OK] PASS" : "[FAIL] FAIL") << "\n";
     
     // Test field_is_zero
     FieldElement zero = FieldElement::zero();
     FieldElement nonzero = FieldElement::one();
-    std::cout << "   field_is_zero(0): " << (field_is_zero(zero) == 1 ? "✅ PASS" : "❌ FAIL") << "\n";
-    std::cout << "   field_is_zero(1): " << (field_is_zero(nonzero) == 0 ? "✅ PASS" : "❌ FAIL") << "\n";
+    std::cout << "   field_is_zero(0): " << (field_is_zero(zero) == 1 ? "[OK] PASS" : "[FAIL] FAIL") << "\n";
+    std::cout << "   field_is_zero(1): " << (field_is_zero(nonzero) == 0 ? "[OK] PASS" : "[FAIL] FAIL") << "\n";
     
     // Test field_eq
     FieldElement equal = FieldElement::one();
-    std::cout << "   field_eq(1, 1): " << (field_eq(nonzero, equal) == 1 ? "✅ PASS" : "❌ FAIL") << "\n";
-    std::cout << "   field_eq(1, 0): " << (field_eq(nonzero, zero) == 0 ? "✅ PASS" : "❌ FAIL") << "\n";
+    std::cout << "   field_eq(1, 1): " << (field_eq(nonzero, equal) == 1 ? "[OK] PASS" : "[FAIL] FAIL") << "\n";
+    std::cout << "   field_eq(1, 0): " << (field_eq(nonzero, zero) == 0 ? "[OK] PASS" : "[FAIL] FAIL") << "\n";
     std::cout << "\n";
     
     // Benchmark: field_cmov vs branched selection
-    std::cout << "4️⃣  Performance Comparison:\n";
-    std::cout << "─────────────────────────────────────────────────\n";
+    std::cout << "4  Performance Comparison:\n";
+    std::cout << "-------------------------------------------------\n";
     
     std::mt19937_64 rng(12345);
     std::uniform_int_distribution<uint64_t> dist;
@@ -133,18 +133,18 @@ int main(int argc, char** argv) {
     
     double speedup = ns_branched / ns_branchless;
     if (speedup >= 1.05) {
-        std::cout << "   🚀 Speedup: " << speedup << "× faster\n";
+        std::cout << "   >> Speedup: " << speedup << "x faster\n";
     } else if (speedup <= 0.95) {
-        std::cout << "   ⚠️  Slowdown: " << (1.0/speedup) << "× slower (unexpected)\n";
+        std::cout << "   [!]  Slowdown: " << (1.0/speedup) << "x slower (unexpected)\n";
     } else {
-        std::cout << "   ➡️  Similar performance (~" << speedup << "×)\n";
+        std::cout << "   ->  Similar performance (~" << speedup << "x)\n";
     }
     
     std::cout << "\n";
-    std::cout << "═══════════════════════════════════════════════════════════\n";
-    std::cout << "  Phase 1 Complete: Core infrastructure ready ✅\n";
+    std::cout << "===========================================================\n";
+    std::cout << "  Phase 1 Complete: Core infrastructure ready [OK]\n";
     std::cout << "  Next: H-based serial inversion & Montgomery mul (Phase 2)\n";
-    std::cout << "═══════════════════════════════════════════════════════════\n";
+    std::cout << "===========================================================\n";
     
     return 0;
 }

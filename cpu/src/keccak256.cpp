@@ -12,7 +12,7 @@
 
 namespace secp256k1::coins {
 
-// ── Keccak-f[1600] Round Constants ───────────────────────────────────────────
+// -- Keccak-f[1600] Round Constants -------------------------------------------
 
 static constexpr std::uint64_t KECCAK_RC[24] = {
     0x0000000000000001ULL, 0x0000000000008082ULL,
@@ -29,7 +29,7 @@ static constexpr std::uint64_t KECCAK_RC[24] = {
     0x0000000080000001ULL, 0x8000000080008008ULL,
 };
 
-// ── Rotation offsets ─────────────────────────────────────────────────────────
+// -- Rotation offsets ---------------------------------------------------------
 
 static constexpr int KECCAK_ROT[25] = {
      0,  1, 62, 28, 27,
@@ -39,18 +39,18 @@ static constexpr int KECCAK_ROT[25] = {
     18,  2, 61, 56, 14,
 };
 
-// ── Helper ───────────────────────────────────────────────────────────────────
+// -- Helper -------------------------------------------------------------------
 
 static inline std::uint64_t rotl64(std::uint64_t x, int n) {
-    // Mask shift counts to avoid UB when n=0 (KECCAK_ROT[0]=0 → x>>64 is UB)
+    // Mask shift counts to avoid UB when n=0 (KECCAK_ROT[0]=0 -> x>>64 is UB)
     return (x << (n & 63)) | (x >> ((64 - n) & 63));
 }
 
-// ── Keccak-f[1600] Permutation ───────────────────────────────────────────────
+// -- Keccak-f[1600] Permutation -----------------------------------------------
 
 static void keccak_f1600(std::uint64_t state[25]) {
     for (int round = 0; round < 24; ++round) {
-        // θ (theta)
+        // theta (theta)
         std::uint64_t C[5];
         for (int x = 0; x < 5; ++x)
             C[x] = state[x] ^ state[x + 5] ^ state[x + 10] ^ state[x + 15] ^ state[x + 20];
@@ -63,23 +63,23 @@ static void keccak_f1600(std::uint64_t state[25]) {
             for (int y = 0; y < 5; ++y)
                 state[x + 5 * y] ^= D[x];
 
-        // ρ (rho) + π (pi)
+        // rho (rho) + pi (pi)
         std::uint64_t B[25];
         for (int x = 0; x < 5; ++x)
             for (int y = 0; y < 5; ++y)
                 B[y + 5 * ((2 * x + 3 * y) % 5)] = rotl64(state[x + 5 * y], KECCAK_ROT[x + 5 * y]);
 
-        // χ (chi)
+        //  (chi)
         for (int x = 0; x < 5; ++x)
             for (int y = 0; y < 5; ++y)
                 state[x + 5 * y] = B[x + 5 * y] ^ ((~B[((x + 1) % 5) + 5 * y]) & B[((x + 2) % 5) + 5 * y]);
 
-        // ι (iota)
+        //  (iota)
         state[0] ^= KECCAK_RC[round];
     }
 }
 
-// ── Keccak256State ───────────────────────────────────────────────────────────
+// -- Keccak256State -----------------------------------------------------------
 
 Keccak256State::Keccak256State() : buf_pos(0) {
     std::memset(state, 0, sizeof(state));
@@ -136,7 +136,7 @@ std::array<std::uint8_t, 32> Keccak256State::finalize() {
     return output;
 }
 
-// ── One-Shot ─────────────────────────────────────────────────────────────────
+// -- One-Shot -----------------------------------------------------------------
 
 std::array<std::uint8_t, 32> keccak256(const std::uint8_t* data, std::size_t len) {
     Keccak256State ctx;

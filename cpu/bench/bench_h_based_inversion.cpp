@@ -43,7 +43,7 @@ std::vector<FieldElement> simulate_jacobian_walk_h_values(const FieldElement& z0
     for (size_t i = 0; i < steps; i++) {
         // Simulate point addition: Z_next = Z_current * some_factor
         // For testing, use deterministic H values
-        FieldElement h = FieldElement::from_uint64(2 + (i % 7));  // H ∈ {2, 3, 4, 5, 6, 7, 8}
+        FieldElement h = FieldElement::from_uint64(2 + (i % 7));  // H in {2, 3, 4, 5, 6, 7, 8}
         h_values.push_back(h);
         
         z_current *= h;
@@ -53,16 +53,16 @@ std::vector<FieldElement> simulate_jacobian_walk_h_values(const FieldElement& z0
 }
 
 int main() {
-    Selftest(true);  // ✅ Validate arithmetic
+    Selftest(true);  // [OK] Validate arithmetic
     
     std::cout << "\n";
-    std::cout << "═══════════════════════════════════════════════════════════════════\n";
+    std::cout << "===================================================================\n";
     std::cout << "  H-Based Serial Inversion vs Standard Montgomery Batch Inversion\n";
-    std::cout << "═══════════════════════════════════════════════════════════════════\n";
+    std::cout << "===================================================================\n";
     std::cout << "\n";
     
     std::cout << "Testing batch inversion performance with different batch sizes...\n";
-    std::cout << "GPU showed 7.75× speedup with H-based method. What about CPU?\n\n";
+    std::cout << "GPU showed 7.75x speedup with H-based method. What about CPU?\n\n";
     
     // Test different batch sizes
     const std::vector<size_t> batch_sizes = {10, 32, 64, 128, 224, 256, 512, 1024};
@@ -170,38 +170,38 @@ int main() {
         std::cout << std::left << std::setw(12) << batch_size
                   << std::setw(18) << std::fixed << std::setprecision(3) << montgomery_us
                   << std::setw(18) << hbased_us
-                  << std::setw(15) << std::fixed << std::setprecision(2) << speedup << "×"
+                  << std::setw(15) << std::fixed << std::setprecision(2) << speedup << "x"
                   << std::setw(20) << winner << "\n";
     }
     
     std::cout << "\n";
-    std::cout << "═══════════════════════════════════════════════════════════════════\n";
+    std::cout << "===================================================================\n";
     std::cout << "  Analysis\n";
-    std::cout << "═══════════════════════════════════════════════════════════════════\n";
+    std::cout << "===================================================================\n";
     std::cout << "\n";
     std::cout << "Montgomery Batch Inversion:\n";
-    std::cout << "  • Cost: N multiplications + 1 inversion\n";
-    std::cout << "  • Memory: O(N) temporary storage (prefix products)\n";
-    std::cout << "  • Memory access: Random (prefix array)\n";
-    std::cout << "  • Best for: Independent inversions\n\n";
+    std::cout << "  * Cost: N multiplications + 1 inversion\n";
+    std::cout << "  * Memory: O(N) temporary storage (prefix products)\n";
+    std::cout << "  * Memory access: Random (prefix array)\n";
+    std::cout << "  * Best for: Independent inversions\n\n";
     
     std::cout << "H-Based Serial Inversion:\n";
-    std::cout << "  • Cost: 2N multiplications + 1 inversion + N squares\n";
-    std::cout << "  • Memory: O(1) temporary storage\n";
-    std::cout << "  • Memory access: Sequential (cache-friendly)\n";
-    std::cout << "  • Best for: Fixed-step Jacobian walks\n";
-    std::cout << "  • GPU speedup: 7.75× (measured on RTX 4090)\n\n";
+    std::cout << "  * Cost: 2N multiplications + 1 inversion + N squares\n";
+    std::cout << "  * Memory: O(1) temporary storage\n";
+    std::cout << "  * Memory access: Sequential (cache-friendly)\n";
+    std::cout << "  * Best for: Fixed-step Jacobian walks\n";
+    std::cout << "  * GPU speedup: 7.75x (measured on RTX 4090)\n\n";
     
     std::cout << "Why H-based can be faster despite more operations?\n";
-    std::cout << "  1. Sequential memory access → better cache utilization\n";
+    std::cout << "  1. Sequential memory access -> better cache utilization\n";
     std::cout << "  2. No temporary array allocation\n";
     std::cout << "  3. Field multiplication (~18ns) << Field inversion (~350ns)\n";
     std::cout << "  4. Modern CPUs love predictable access patterns\n\n";
     
     std::cout << "Expected behavior:\n";
-    std::cout << "  • Small batches (N < 64): Montgomery may win (less work)\n";
-    std::cout << "  • Large batches (N > 128): H-based should win (cache matters)\n";
-    std::cout << "  • GPU: H-based dominates at all sizes (memory bandwidth limited)\n";
+    std::cout << "  * Small batches (N < 64): Montgomery may win (less work)\n";
+    std::cout << "  * Large batches (N > 128): H-based should win (cache matters)\n";
+    std::cout << "  * GPU: H-based dominates at all sizes (memory bandwidth limited)\n";
     std::cout << "\n";
     
     return 0;

@@ -106,17 +106,17 @@ BenchResult benchmark_kq_current(const std::vector<Scalar>& scalars, const Point
 }
 
 void print_box_top() {
-    std::cout << "╔════════════════════════════════════════════════════════════╗\n";
+    std::cout << "+============================================================+\n";
 }
 
 void print_box_bottom() {
-    std::cout << "╚════════════════════════════════════════════════════════════╝\n";
+    std::cout << "+============================================================+\n";
 }
 
 void print_centered(const std::string& text) {
     int padding = (60 - text.length()) / 2;
-    std::cout << "║" << std::string(padding, ' ') << text 
-              << std::string(60 - padding - text.length(), ' ') << "║\n";
+    std::cout << "|" << std::string(padding, ' ') << text 
+              << std::string(60 - padding - text.length(), ' ') << "|\n";
 }
 
 int main() {
@@ -212,14 +212,14 @@ int main() {
     if (kg_result.median_ns < 1000) {
         std::cout << "\n";
     } else if (kg_result.median_ns < 1000000) {
-        std::cout << " (" << (kg_result.median_ns / 1000.0) << " μs)\n";
+        std::cout << " (" << (kg_result.median_ns / 1000.0) << " us)\n";
     }
     
     std::cout << "K*Q (Arbitrary Point):  " << std::setw(8) << kq_result.median_ns << " ns";
     if (kq_result.median_ns < 1000) {
         std::cout << "\n";
     } else if (kq_result.median_ns < 1000000) {
-        std::cout << " (" << (kq_result.median_ns / 1000.0) << " μs)\n";
+        std::cout << " (" << (kq_result.median_ns / 1000.0) << " us)\n";
     }
     
     std::cout << "\n";
@@ -229,17 +229,17 @@ int main() {
     std::cout << "\n";
     
     std::cout << "Current implementation uses:\n";
-    std::cout << "  • wNAF-5 (window size 5) for K*G\n";
-    std::cout << "  • wNAF-5 (window size 5) for K*Q\n";
-    std::cout << "  • GLV endomorphism for K*G (built-in tables)\n";
-    std::cout << "  • Runtime precomputation for K*Q\n\n";
+    std::cout << "  * wNAF-5 (window size 5) for K*G\n";
+    std::cout << "  * wNAF-5 (window size 5) for K*Q\n";
+    std::cout << "  * GLV endomorphism for K*G (built-in tables)\n";
+    std::cout << "  * Runtime precomputation for K*Q\n\n";
     
     std::cout << "Available optimizations with cache files:\n";
-    std::cout << "  • Load larger precomputed tables (w10-w24)\n";
-    std::cout << "  • Trade memory for speed\n";
-    std::cout << "  • w20: ~2x faster (845 MB cache)\n";
-    std::cout << "  • w22: ~3x faster (3.1 GB cache)\n";
-    std::cout << "  • w24: ~4x faster (11 GB cache)\n\n";
+    std::cout << "  * Load larger precomputed tables (w10-w24)\n";
+    std::cout << "  * Trade memory for speed\n";
+    std::cout << "  * w20: ~2x faster (845 MB cache)\n";
+    std::cout << "  * w22: ~3x faster (3.1 GB cache)\n";
+    std::cout << "  * w24: ~4x faster (11 GB cache)\n\n";
     
     std::cout << "Note: These cache files are for external testing.\n";
     std::cout << "To use them, implement cache loading functionality.\n\n";

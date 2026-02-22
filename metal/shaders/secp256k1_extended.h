@@ -1,5 +1,5 @@
 // =============================================================================
-// UltrafastSecp256k1 Metal — Extended Scalar, Crypto & MSM Operations
+// UltrafastSecp256k1 Metal -- Extended Scalar, Crypto & MSM Operations
 // =============================================================================
 // This file extends the Metal shaders with all missing functionality:
 //
@@ -12,7 +12,7 @@
 // Layer 5: Schnorr BIP-340 + ECDH + Key Recovery + MSM/Pippenger
 //
 // Depends on: secp256k1_point.h (which includes secp256k1_field.h)
-// Uses 8×32-bit limbs (uint) — matching existing Metal convention.
+// Uses 8x32-bit limbs (uint) -- matching existing Metal convention.
 // Apple Silicon GPU-optimized: no 64-bit int in hot loops.
 // =============================================================================
 
@@ -21,7 +21,7 @@
 #include "secp256k1_point.h"
 
 // =============================================================================
-// Constants — 8×32 little-endian
+// Constants -- 8x32 little-endian
 // =============================================================================
 
 // secp256k1 order n
@@ -66,7 +66,7 @@ constant uint K256[64] = {
 // LAYER 1: Serialization + field_sqrt
 // =============================================================================
 
-// Big-endian 32 bytes → Scalar256 (8×32 LE limbs) with branchless mod-n
+// Big-endian 32 bytes -> Scalar256 (8x32 LE limbs) with branchless mod-n
 inline Scalar256 scalar_from_bytes(thread const uchar bytes[32]) {
     Scalar256 s;
     for (int i = 0; i < 8; i++) {
@@ -82,14 +82,14 @@ inline Scalar256 scalar_from_bytes(thread const uchar bytes[32]) {
         tmp[i] = uint(d);
         borrow = (d >> 63);
     }
-    uint mask = -(uint(borrow == 0)); // if no borrow → s >= n → use subtracted
+    uint mask = -(uint(borrow == 0)); // if no borrow -> s >= n -> use subtracted
     uint nmask = ~mask;
     for (int i = 0; i < 8; i++)
         s.limbs[i] = (tmp[i] & mask) | (s.limbs[i] & nmask);
     return s;
 }
 
-// Scalar256 → big-endian 32 bytes
+// Scalar256 -> big-endian 32 bytes
 inline void scalar_to_bytes(thread const Scalar256 &s, thread uchar out[32]) {
     for (int i = 0; i < 8; i++) {
         uint limb = s.limbs[7 - i];
@@ -100,10 +100,10 @@ inline void scalar_to_bytes(thread const Scalar256 &s, thread uchar out[32]) {
     }
 }
 
-// FieldElement → big-endian 32 bytes (normalizes mod p before serialization)
+// FieldElement -> big-endian 32 bytes (normalizes mod p before serialization)
 inline void field_to_bytes(thread const FieldElement &f, thread uchar out[32]) {
     // p = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F
-    // In 8×32-bit limbs (little-endian limb order):
+    // In 8x32-bit limbs (little-endian limb order):
     // limbs[0..7] = {0xFFFFFC2F, 0xFFFFFFFE, 0xFFFFFFFF, 0xFFFFFFFF,
     //                0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF}
     const uint P[8] = {
@@ -192,7 +192,7 @@ inline FieldElement field_sqrt(thread const FieldElement &a) {
 }
 
 // =============================================================================
-// LAYER 2: Scalar mod-n Algebra (8×32-bit limbs)
+// LAYER 2: Scalar mod-n Algebra (8x32-bit limbs)
 // =============================================================================
 
 // Scalar negate: r = n - a (if a != 0)
@@ -254,9 +254,9 @@ inline Scalar256 scalar_sub_mod_n(thread const Scalar256 &a, thread const Scalar
     return r;
 }
 
-// Scalar multiply mod n (256×256→512 via 8×8 schoolbook with Barrett reduction)
+// Scalar multiply mod n (256x256->512 via 8x8 schoolbook with Barrett reduction)
 inline Scalar256 scalar_mul_mod_n(thread const Scalar256 &a, thread const Scalar256 &b) {
-    // Full 512-bit product in 16 × 32-bit limbs
+    // Full 512-bit product in 16 x 32-bit limbs
     uint prod[16];
     for (int i = 0; i < 16; i++) prod[i] = 0;
 
@@ -271,7 +271,7 @@ inline Scalar256 scalar_mul_mod_n(thread const Scalar256 &a, thread const Scalar
         prod[i+8] = uint(carry);
     }
 
-    // Simple reduction: subtract q*n where q ≈ prod[8..15]
+    // Simple reduction: subtract q*n where q ~= prod[8..15]
     // (Barrett approximation for 32-bit limb representation)
     Scalar256 r;
     for (int i = 0; i < 8; i++) r.limbs[i] = prod[i];
@@ -676,7 +676,7 @@ inline bool lift_x(thread const uchar x_bytes[32], thread JacobianPoint &p) {
     FieldElement y2 = field_add(x3, seven);
     FieldElement y = field_sqrt(y2);
 
-    // Verify: y² == y2 (compare via normalized bytes to handle unreduced limbs)
+    // Verify: y^2 == y2 (compare via normalized bytes to handle unreduced limbs)
     FieldElement y_check = field_sqr(y);
     uchar yc_bytes[32], y2_bytes[32];
     field_to_bytes(y_check, yc_bytes);
@@ -855,7 +855,7 @@ inline bool lift_x_field(thread const FieldElement &x_fe, int parity, thread Jac
     FieldElement y2 = field_add(x3, seven);
     FieldElement y = field_sqrt(y2);
 
-    // Verify: y² == y2 (compare via normalized bytes to handle unreduced limbs)
+    // Verify: y^2 == y2 (compare via normalized bytes to handle unreduced limbs)
     FieldElement y_check = field_sqr(y);
     uchar yc_bytes2[32], y2_bytes2[32];
     field_to_bytes(y_check, yc_bytes2);
@@ -1065,7 +1065,7 @@ inline bool ecdsa_verify(thread const Scalar256 &msg_scalar, thread const Affine
     return ecdsa_verify(msg_hash, pub_jac, sig);
 }
 
-// schnorr_sign: Scalar256 msg + priv → separated Scalar256 r/s
+// schnorr_sign: Scalar256 msg + priv -> separated Scalar256 r/s
 inline bool schnorr_sign(thread const Scalar256 &msg_scalar, thread const Scalar256 &priv,
                           thread Scalar256 &sig_rx, thread Scalar256 &sig_s) {
     uchar msg_hash[32], aux[32];
@@ -1100,7 +1100,7 @@ inline FieldElement ecdh_shared_secret_xonly(thread const Scalar256 &priv,
     return shared_aff.x;
 }
 
-// ecdsa_recover: separated Scalar256 r/s + recid → AffinePoint output
+// ecdsa_recover: separated Scalar256 r/s + recid -> AffinePoint output
 inline bool ecdsa_recover(thread const Scalar256 &msg_scalar, thread const Scalar256 &r,
                            thread const Scalar256 &s, uint recid,
                            thread AffinePoint &recovered) {
@@ -1115,7 +1115,7 @@ inline bool ecdsa_recover(thread const Scalar256 &msg_scalar, thread const Scala
 }
 
 // =============================================================================
-// Metal Compute Kernels — Extended Operations
+// Metal Compute Kernels -- Extended Operations
 // =============================================================================
 
 kernel void ecdsa_sign_kernel(

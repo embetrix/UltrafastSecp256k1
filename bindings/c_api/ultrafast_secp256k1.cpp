@@ -1,5 +1,5 @@
 /* ============================================================================
- * UltrafastSecp256k1 — C API Implementation
+ * UltrafastSecp256k1 -- C API Implementation
  * ============================================================================
  * Wraps the C++ UltrafastSecp256k1 library into a stable C ABI.
  * All functions convert between opaque byte arrays and internal C++ types.
@@ -32,7 +32,7 @@
 using Scalar = secp256k1::fast::Scalar;
 using Point  = secp256k1::fast::Point;
 
-/* ── Helpers ─────────────────────────────────────────────────────────────── */
+/* -- Helpers --------------------------------------------------------------- */
 
 static inline Scalar scalar_from_bytes(const uint8_t b[32]) {
     std::array<uint8_t, 32> arr;
@@ -47,60 +47,60 @@ static inline void scalar_to_bytes(const Scalar& s, uint8_t out[32]) {
 
 static inline Point point_from_compressed(const uint8_t pub[33]) {
     // Parse compressed: 0x02/0x03 prefix + 32-byte x
-    // Recover y from x using curve equation y² = x³ + 7
+    // Recover y from x using curve equation y^2 = x^3 + 7
     std::array<uint8_t, 32> x_bytes;
     std::memcpy(x_bytes.data(), pub + 1, 32);
     auto x = secp256k1::fast::FieldElement::from_bytes(x_bytes);
 
-    // y² = x³ + 7
+    // y^2 = x^3 + 7
     auto x2 = x * x;
     auto x3 = x2 * x;
     auto seven = secp256k1::fast::FieldElement::from_uint64(7);
     auto y2 = x3 + seven;
 
     // sqrt via Fermat: y = y2^((p+1)/4)
-    // secp256k1 p ≡ 3 (mod 4), so (p+1)/4 = 0x3fffffffffffffffffffffffffffffffffffffffffffffffffffffffbfffff0c
+    // secp256k1 p == 3 (mod 4), so (p+1)/4 = 0x3fffffffffffffffffffffffffffffffffffffffffffffffffffffffbfffff0c
     // We compute this using the addition chain: repeated squarings then multiplies.
-    // pow((p+1)/4) = pow(2^254 - 2^30 - 2^4 - ... ) — use simple binary approach:
+    // pow((p+1)/4) = pow(2^254 - 2^30 - 2^4 - ... ) -- use simple binary approach:
     //   (p+1)/4 in binary is 254 bits; we use the standard secp256k1 square chain.
     //
     // Simple method: y = y2^((p+1)/4) using the identity:
-    //   y2^((p-1)/2) = ±1 (Euler criterion)
+    //   y2^((p-1)/2) = +/-1 (Euler criterion)
     //   y = y2^((p+1)/4)
     //
     // Compute via: e2 = y2^(2^2-1), e4 = y2^(2^4-1), etc. reusing inverse's chain.
     auto t = y2;
-    // x2 = t^(2^1) * t  →  t^3 = t^(2^2-1)
+    // x2 = t^(2^1) * t  ->  t^3 = t^(2^2-1)
     auto a = t.square() * t;
-    // x3 = a^(2^1) * t  →  t^(2^3-1)
+    // x3 = a^(2^1) * t  ->  t^(2^3-1)
     auto b = a.square() * t;
-    // x6 = b^(2^3) * b  →  t^(2^6-1)
+    // x6 = b^(2^3) * b  ->  t^(2^6-1)
     auto c = b.square().square().square() * b;
-    // x9 = c^(2^3) * b  →  t^(2^9-1)
+    // x9 = c^(2^3) * b  ->  t^(2^9-1)
     auto d = c.square().square().square() * b;
-    // x11 = d^(2^2) * a  →  t^(2^11-1)
+    // x11 = d^(2^2) * a  ->  t^(2^11-1)
     auto e = d.square().square() * a;
-    // x22 = e^(2^11) * e  →  t^(2^22-1)
+    // x22 = e^(2^11) * e  ->  t^(2^22-1)
     auto f = e;
     for (int i = 0; i < 11; ++i) f = f.square();
     f = f * e;
-    // x44 = f^(2^22) * f  →  t^(2^44-1)
+    // x44 = f^(2^22) * f  ->  t^(2^44-1)
     auto g = f;
     for (int i = 0; i < 22; ++i) g = g.square();
     g = g * f;
-    // x88 = g^(2^44) * g  →  t^(2^88-1)
+    // x88 = g^(2^44) * g  ->  t^(2^88-1)
     auto h = g;
     for (int i = 0; i < 44; ++i) h = h.square();
     h = h * g;
-    // x176 = h^(2^88) * h  →  t^(2^176-1)
+    // x176 = h^(2^88) * h  ->  t^(2^176-1)
     auto j = h;
     for (int i = 0; i < 88; ++i) j = j.square();
     j = j * h;
-    // x220 = j^(2^44) * g  →  t^(2^220-1)
+    // x220 = j^(2^44) * g  ->  t^(2^220-1)
     auto k = j;
     for (int i = 0; i < 44; ++i) k = k.square();
     k = k * g;
-    // x223 = k^(2^3) * b  →  t^(2^223-1)
+    // x223 = k^(2^3) * b  ->  t^(2^223-1)
     auto m = k.square().square().square() * b;
     // result = m^(2^23) * e * t^(2^6) ...
     // Following secp256k1 (p+1)/4 addition chain:
@@ -115,7 +115,7 @@ static inline Point point_from_compressed(const uint8_t pub[33]) {
     y = y.square();
     y = y.square(); // two more squares to reach bit 0
 
-    // Check parity — 0x02 = even, 0x03 = odd
+    // Check parity -- 0x02 = even, 0x03 = odd
     auto y_bytes = y.to_bytes();
     bool y_is_odd = (y_bytes[31] & 1) != 0;
     bool want_odd = (pub[0] == 0x03);
@@ -131,19 +131,19 @@ static inline void point_to_compressed(const Point& p, uint8_t out[33]) {
     std::memcpy(out, comp.data(), 33);
 }
 
-/* ── Version ─────────────────────────────────────────────────────────────── */
+/* -- Version --------------------------------------------------------------- */
 
 const char* secp256k1_version(void) {
     return "1.0.0";
 }
 
-/* ── Library Lifecycle ───────────────────────────────────────────────────── */
+/* -- Library Lifecycle ----------------------------------------------------- */
 
 int secp256k1_init(void) {
     return secp256k1::fast::ensure_library_integrity(false) ? 0 : 1;
 }
 
-/* ── Key Operations ──────────────────────────────────────────────────────── */
+/* -- Key Operations -------------------------------------------------------- */
 
 int secp256k1_ec_pubkey_create(const uint8_t privkey[32], uint8_t pubkey_out[33]) {
     auto sk = scalar_from_bytes(privkey);
@@ -215,7 +215,7 @@ int secp256k1_ec_privkey_tweak_mul(uint8_t privkey[32], const uint8_t tweak[32])
     return 0;
 }
 
-/* ── ECDSA ───────────────────────────────────────────────────────────────── */
+/* -- ECDSA ----------------------------------------------------------------- */
 
 int secp256k1_ecdsa_sign(const uint8_t msg_hash[32], const uint8_t privkey[32],
                          uint8_t sig_out[64]) {
@@ -257,7 +257,7 @@ int secp256k1_ecdsa_signature_serialize_der(const uint8_t sig[64],
     return 0;
 }
 
-/* ── ECDSA Recovery ──────────────────────────────────────────────────────── */
+/* -- ECDSA Recovery -------------------------------------------------------- */
 
 int secp256k1_ecdsa_sign_recoverable(const uint8_t msg_hash[32],
                                      const uint8_t privkey[32],
@@ -290,7 +290,7 @@ int secp256k1_ecdsa_recover(const uint8_t msg_hash[32], const uint8_t sig[64],
     return 0;
 }
 
-/* ── Schnorr (BIP-340) ──────────────────────────────────────────────────── */
+/* -- Schnorr (BIP-340) ---------------------------------------------------- */
 
 int secp256k1_schnorr_sign(const uint8_t msg[32], const uint8_t privkey[32],
                            const uint8_t aux_rand[32], uint8_t sig_out[64]) {
@@ -329,7 +329,7 @@ int secp256k1_schnorr_pubkey(const uint8_t privkey[32], uint8_t pubkey_x_out[32]
     return 0;
 }
 
-/* ── ECDH ────────────────────────────────────────────────────────────────── */
+/* -- ECDH ------------------------------------------------------------------ */
 
 int secp256k1_ecdh(const uint8_t privkey[32], const uint8_t pubkey[33],
                    uint8_t secret_out[32]) {
@@ -358,7 +358,7 @@ int secp256k1_ecdh_raw(const uint8_t privkey[32], const uint8_t pubkey[33],
     return 0;
 }
 
-/* ── Hashing ─────────────────────────────────────────────────────────────── */
+/* -- Hashing --------------------------------------------------------------- */
 
 void secp256k1_sha256(const uint8_t* data, size_t data_len, uint8_t digest_out[32]) {
     secp256k1::SHA256 hasher;
@@ -378,7 +378,7 @@ void secp256k1_tagged_hash(const char* tag, const uint8_t* data, size_t data_len
     std::memcpy(digest_out, h.data(), 32);
 }
 
-/* ── Bitcoin Addresses ───────────────────────────────────────────────────── */
+/* -- Bitcoin Addresses ----------------------------------------------------- */
 
 static secp256k1::Network to_network(int n) {
     return n == SECP256K1_NETWORK_TESTNET ? secp256k1::Network::Testnet
@@ -419,7 +419,7 @@ int secp256k1_address_p2tr(const uint8_t internal_key_x[32], int network,
     return 0;
 }
 
-/* ── WIF ─────────────────────────────────────────────────────────────────── */
+/* -- WIF ------------------------------------------------------------------- */
 
 int secp256k1_wif_encode(const uint8_t privkey[32], int compressed, int network,
                          char* wif_out, size_t* wif_len) {
@@ -444,7 +444,7 @@ int secp256k1_wif_decode(const char* wif, uint8_t privkey_out[32],
     return 0;
 }
 
-/* ── BIP-32 ──────────────────────────────────────────────────────────────── */
+/* -- BIP-32 ---------------------------------------------------------------- */
 
 static void extkey_to_c(const secp256k1::ExtendedKey& ek, secp256k1_bip32_key* out) {
     auto serialized = ek.serialize();
@@ -469,7 +469,7 @@ static secp256k1::ExtendedKey extkey_from_c(const secp256k1_bip32_key* k) {
         std::memcpy(ek.key.data(), k->data + 46, 32);
         ek.is_private = true;
     } else {
-        // Public: 33-byte compressed pubkey — store x-coordinate
+        // Public: 33-byte compressed pubkey -- store x-coordinate
         std::memcpy(ek.key.data(), k->data + 46, 32);
         ek.is_private = false;
     }
@@ -517,7 +517,7 @@ int secp256k1_bip32_get_pubkey(const secp256k1_bip32_key* key, uint8_t pubkey_ou
     return 0;
 }
 
-/* ── Taproot ─────────────────────────────────────────────────────────────── */
+/* -- Taproot --------------------------------------------------------------- */
 
 int secp256k1_taproot_output_key(const uint8_t internal_key_x[32],
                                  const uint8_t* merkle_root,

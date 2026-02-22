@@ -120,9 +120,9 @@ double bench_single_mul(const std::vector<FieldElement>& elems, size_t iteration
 }
 
 void print_header() {
-    std::cout << "╔════════════════════════════════════════════════════════╗\n";
-    std::cout << "║     Lazy vs Eager Reduction Benchmark                 ║\n";
-    std::cout << "╚════════════════════════════════════════════════════════╝\n\n";
+    std::cout << "+========================================================+\n";
+    std::cout << "|     Lazy vs Eager Reduction Benchmark                 |\n";
+    std::cout << "+========================================================+\n\n";
 }
 
 void print_result(const std::string& name, double ns_per_op) {
@@ -146,7 +146,7 @@ int main() {
     bench_lazy_chain(elements, WARMUP);
     
     std::cout << "\nRunning benchmarks (" << ITERATIONS << " iterations each)...\n\n";
-    std::cout << "═══════════════════════════════════════════════════════\n";
+    std::cout << "=======================================================\n";
     
     // Baseline: single multiply
     double single_mul_time = bench_single_mul(elements, ITERATIONS);
@@ -162,32 +162,32 @@ int main() {
     double lazy_time = bench_lazy_chain(elements, ITERATIONS);
     print_result("Lazy (1 reduction)", lazy_time);
     
-    std::cout << "═══════════════════════════════════════════════════════\n\n";
+    std::cout << "=======================================================\n\n";
     
     // Analysis
     std::cout << "Analysis:\n";
     
     double speedup = ((eager_time - lazy_time) / eager_time) * 100.0;
-    std::cout << "  • Lazy Reduction Speedup: ";
+    std::cout << "  * Lazy Reduction Speedup: ";
     std::cout << std::fixed << std::setprecision(1) << speedup << "%\n";
     
     double reduction_cost = (eager_time - 3 * single_mul_time) / 5.0;
-    std::cout << "  • Estimated reduction cost: ";
+    std::cout << "  * Estimated reduction cost: ";
     std::cout << std::fixed << std::setprecision(2) << reduction_cost << " ns\n";
     
     double saved_reductions = eager_time - lazy_time;
-    std::cout << "  • Time saved (4 reductions): ";
+    std::cout << "  * Time saved (4 reductions): ";
     std::cout << std::fixed << std::setprecision(2) << saved_reductions << " ns\n";
     
     std::cout << "\nConclusion:\n";
     if (speedup > 5.0) {
-        std::cout << "  ✓ Lazy reduction provides significant benefit!\n";
+        std::cout << "  [ok] Lazy reduction provides significant benefit!\n";
         std::cout << "    Consider enabling in hot paths (jacobian_add_mixed)\n";
     } else if (speedup > 0.0) {
-        std::cout << "  ⚠ Lazy reduction provides marginal benefit\n";
+        std::cout << "  [!] Lazy reduction provides marginal benefit\n";
         std::cout << "    Overhead may outweigh savings in practice\n";
     } else {
-        std::cout << "  ✗ Lazy reduction slower than eager\n";
+        std::cout << "  [x] Lazy reduction slower than eager\n";
         std::cout << "    Overhead exceeds savings - keep eager reduction\n";
     }
     

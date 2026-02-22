@@ -17,15 +17,15 @@ permissions:
 env:
   CMAKE_BUILD_TYPE: Release
 
-# ────────────────────────────────────────────────────────────────────────────
-# Global: version is always derived from the git tag (e.g. v3.9.0 → 3.9.0)
+# ----------------------------------------------------------------------------
+# Global: version is always derived from the git tag (e.g. v3.9.0 -> 3.9.0)
 # All binding configs use 0.0.0-dev as placeholder; CI overrides at build time.
-# ────────────────────────────────────────────────────────────────────────────
+# ----------------------------------------------------------------------------
 
 jobs:
-  # ══════════════════════════════════════════════════════════════════════════
+  # ==========================================================================
   # 1) Desktop native binaries (Linux x64, macOS ARM64, Windows x64)
-  # ══════════════════════════════════════════════════════════════════════════
+  # ==========================================================================
   build-desktop:
     strategy:
       fail-fast: false
@@ -54,33 +54,33 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # ── Linux: install compiler ──
+      # -- Linux: install compiler --
       - name: Install deps (Linux)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y clang-17 lld-17 ninja-build
 
-      # ── Windows: set up MSVC env + Ninja ──
+      # -- Windows: set up MSVC env + Ninja --
       - name: Setup MSVC (Windows)
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: x64
 
-      # ── macOS: install Ninja ──
+      # -- macOS: install Ninja --
       - name: Install Ninja (macOS)
         if: runner.os == 'macOS'
         run: brew install ninja
 
-      # ── Inject version from tag into VERSION.txt file ──
-      # NOTE: must use .txt suffix — plain "VERSION" clashes with C++20
+      # -- Inject version from tag into VERSION.txt file --
+      # NOTE: must use .txt suffix -- plain "VERSION" clashes with C++20
       # <version> header on macOS's case-insensitive filesystem.
       - name: Set version from tag
         run: echo "${GITHUB_REF_NAME#v}" > VERSION.txt
         shell: bash
 
-      # ── Configure ──
+      # -- Configure --
       - name: Configure
         run: |
           cmake -S . -B build -G "${{ matrix.generator }}" \
@@ -91,19 +91,19 @@ jobs:
             ${{ matrix.cc && format('-DCMAKE_C_COMPILER={0} -DCMAKE_CXX_COMPILER={1}', matrix.cc, matrix.cxx) || '' }}
         shell: bash
 
-      # ── Build ──
+      # -- Build --
       - name: Build
         run: cmake --build build -j
 
-      # ── Test ──
+      # -- Test --
       - name: Test
         run: ctest --test-dir build --output-on-failure -j4
 
-      # ── Install into staging dir ──
+      # -- Install into staging dir --
       - name: Install
         run: cmake --install build --prefix staging
 
-      # ── Collect ufsecp artifacts ──
+      # -- Collect ufsecp artifacts --
       - name: Collect release artifacts
         shell: bash
         run: |
@@ -136,7 +136,7 @@ jobs:
 
           echo "PKG_NAME=${PKG_NAME}" >> "$GITHUB_ENV"
 
-      # ── Archive ──
+      # -- Archive --
       - name: Archive (tar.gz)
         if: matrix.ext == 'tar.gz'
         run: tar czf "${{ env.PKG_NAME }}.tar.gz" "${{ env.PKG_NAME }}"
@@ -146,7 +146,7 @@ jobs:
         shell: bash
         run: 7z a -tzip "${{ env.PKG_NAME }}.zip" "${{ env.PKG_NAME }}"
 
-      # ── Upload artifact ──
+      # -- Upload artifact --
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
@@ -154,9 +154,9 @@ jobs:
           path: ${{ env.PKG_NAME }}.${{ matrix.ext }}
           retention-days: 5
 
-  # ══════════════════════════════════════════════════════════════════════════
+  # ==========================================================================
   # 2) Linux ARM64 (cross-compile on Ubuntu x64)
-  # ══════════════════════════════════════════════════════════════════════════
+  # ==========================================================================
   build-linux-arm64:
     runs-on: ubuntu-24.04
     steps:
@@ -220,9 +220,9 @@ jobs:
           path: ${{ env.PKG_NAME }}.tar.gz
           retention-days: 5
 
-  # ══════════════════════════════════════════════════════════════════════════
-  # 3) Android (NDK arm64-v8a — .so + JNI .so + static .a)
-  # ══════════════════════════════════════════════════════════════════════════
+  # ==========================================================================
+  # 3) Android (NDK arm64-v8a -- .so + JNI .so + static .a)
+  # ==========================================================================
   build-android:
     runs-on: ubuntu-24.04
     strategy:
@@ -298,9 +298,9 @@ jobs:
           path: ${{ env.PKG_NAME }}.tar.gz
           retention-days: 5
 
-  # ══════════════════════════════════════════════════════════════════════════
+  # ==========================================================================
   # 4) iOS XCFramework (Device arm64 + Simulator arm64)
-  # ══════════════════════════════════════════════════════════════════════════
+  # ==========================================================================
   build-ios:
     runs-on: macos-14
     steps:
@@ -342,9 +342,9 @@ jobs:
           path: ${{ env.PKG_NAME }}.tar.gz
           retention-days: 5
 
-  # ══════════════════════════════════════════════════════════════════════════
-  # 5) WebAssembly (Emscripten — .wasm + .js + .mjs + .d.ts)
-  # ══════════════════════════════════════════════════════════════════════════
+  # ==========================================================================
+  # 5) WebAssembly (Emscripten -- .wasm + .js + .mjs + .d.ts)
+  # ==========================================================================
   build-wasm:
     runs-on: ubuntu-24.04
     steps:
@@ -406,9 +406,9 @@ jobs:
           path: ${{ env.PKG_NAME }}.tar.gz
           retention-days: 5
 
-  # ══════════════════════════════════════════════════════════════════════════
-  # 6) Package bindings — Python wheels (per-platform, bundled native lib)
-  # ══════════════════════════════════════════════════════════════════════════
+  # ==========================================================================
+  # 6) Package bindings -- Python wheels (per-platform, bundled native lib)
+  # ==========================================================================
   pack-python:
     needs: [build-desktop, build-linux-arm64]
     runs-on: ubuntu-24.04
@@ -432,7 +432,7 @@ jobs:
           # Inject version from git tag
           sed -i "s/^version = .*/version = \"${VERSION}\"/" pyproject.toml
 
-          # Platform → wheel platform tag mapping
+          # Platform -> wheel platform tag mapping
           declare -A WHEEL_TAGS=(
             ["linux-x64"]="manylinux_2_17_x86_64"
             ["linux-arm64"]="manylinux_2_17_aarch64"
@@ -493,9 +493,9 @@ jobs:
           path: bindings/python/wheelhouse/
           retention-days: 5
 
-  # ══════════════════════════════════════════════════════════════════════════
-  # 7) Package bindings — npm (prebuilds per platform)
-  # ══════════════════════════════════════════════════════════════════════════
+  # ==========================================================================
+  # 7) Package bindings -- npm (prebuilds per platform)
+  # ==========================================================================
   pack-npm:
     needs: [build-desktop, build-linux-arm64]
     if: ${{ !cancelled() }}
@@ -532,7 +532,7 @@ jobs:
           for PLAT in linux-x64 linux-arm64 macos-arm64 win-x64; do
             NPM_DIR="${NPM_PLATS[$PLAT]}"
             ARTIFACT_DIR="../../native-dist/UltrafastSecp256k1-${{ github.ref_name }}-${PLAT}"
-            echo "=== Copying prebuilds for: ${PLAT} → prebuilds/${NPM_DIR} ==="
+            echo "=== Copying prebuilds for: ${PLAT} -> prebuilds/${NPM_DIR} ==="
 
             if [ ! -d "$ARTIFACT_DIR" ]; then
               echo "  SKIP: artifact dir not found"
@@ -600,9 +600,9 @@ jobs:
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-  # ══════════════════════════════════════════════════════════════════════════
-  # 8) Package bindings — NuGet (.nupkg with multi-RID runtimes)
-  # ══════════════════════════════════════════════════════════════════════════
+  # ==========================================================================
+  # 8) Package bindings -- NuGet (.nupkg with multi-RID runtimes)
+  # ==========================================================================
   pack-nuget:
     needs: [build-desktop, build-linux-arm64]
     if: ${{ !cancelled() }}
@@ -629,7 +629,7 @@ jobs:
           # Inject version from git tag
           sed -i "s|<Version>[^<]*</Version>|<Version>${VERSION}</Version>|" Ufsecp.csproj
 
-          # Platform → .NET RID mapping
+          # Platform -> .NET RID mapping
           declare -A RIDS=(
             ["linux-x64"]="linux-x64"
             ["linux-arm64"]="linux-arm64"
@@ -698,9 +698,9 @@ jobs:
             --api-key "${{ secrets.NUGET_TOKEN }}" \
             --skip-duplicate
 
-  # ══════════════════════════════════════════════════════════════════════════
-  # 9) Package bindings — Ruby gem
-  # ══════════════════════════════════════════════════════════════════════════
+  # ==========================================================================
+  # 9) Package bindings -- Ruby gem
+  # ==========================================================================
   pack-gem:
     needs: [build-desktop, build-linux-arm64]
     runs-on: ubuntu-24.04
@@ -778,9 +778,9 @@ jobs:
         env:
           GEM_HOST_API_KEY: ${{ secrets.GITHUB_TOKEN }}
 
-  # ══════════════════════════════════════════════════════════════════════════
-  # 10) Package bindings — Java JNI JAR (multi-platform native libs)
-  # ══════════════════════════════════════════════════════════════════════════
+  # ==========================================================================
+  # 10) Package bindings -- Java JNI JAR (multi-platform native libs)
+  # ==========================================================================
   pack-java:
     needs: [build-desktop, build-linux-arm64, build-android]
     runs-on: ubuntu-24.04
@@ -919,9 +919,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  # ══════════════════════════════════════════════════════════════════════════
-  # 11) Package bindings — Go (source + native libs)
-  # ══════════════════════════════════════════════════════════════════════════
+  # ==========================================================================
+  # 11) Package bindings -- Go (source + native libs)
+  # ==========================================================================
   pack-go:
     needs: [build-desktop, build-linux-arm64]
     runs-on: ubuntu-24.04
@@ -986,9 +986,9 @@ jobs:
           path: ufsecp-go-*.tar.gz
           retention-days: 5
 
-  # ══════════════════════════════════════════════════════════════════════════
-  # 12) Package bindings — Rust crate (source + native libs)
-  # ══════════════════════════════════════════════════════════════════════════
+  # ==========================================================================
+  # 12) Package bindings -- Rust crate (source + native libs)
+  # ==========================================================================
   pack-rust:
     needs: [build-desktop, build-linux-arm64]
     runs-on: ubuntu-24.04
@@ -1054,9 +1054,9 @@ jobs:
           path: ufsecp-rust-*.tar.gz
           retention-days: 5
 
-  # ══════════════════════════════════════════════════════════════════════════
-  # 13) Package bindings — Dart/Flutter (source + native libs)
-  # ══════════════════════════════════════════════════════════════════════════
+  # ==========================================================================
+  # 13) Package bindings -- Dart/Flutter (source + native libs)
+  # ==========================================================================
   pack-dart:
     needs: [build-desktop, build-linux-arm64, build-android, build-ios]
     runs-on: ubuntu-24.04
@@ -1126,9 +1126,9 @@ jobs:
           path: ufsecp-dart-*.tar.gz
           retention-days: 5
 
-  # ══════════════════════════════════════════════════════════════════════════
-  # 14) Package bindings — PHP Composer (source + native libs)
-  # ══════════════════════════════════════════════════════════════════════════
+  # ==========================================================================
+  # 14) Package bindings -- PHP Composer (source + native libs)
+  # ==========================================================================
   pack-php:
     needs: [build-desktop, build-linux-arm64]
     runs-on: ubuntu-24.04
@@ -1191,9 +1191,9 @@ jobs:
           path: ufsecp-php-*.tar.gz
           retention-days: 5
 
-  # ══════════════════════════════════════════════════════════════════════════
-  # 15) Package bindings — React Native (npm + Android/iOS native libs)
-  # ══════════════════════════════════════════════════════════════════════════
+  # ==========================================================================
+  # 15) Package bindings -- React Native (npm + Android/iOS native libs)
+  # ==========================================================================
   pack-react-native:
     needs: [build-desktop, build-android, build-ios]
     runs-on: ubuntu-24.04
@@ -1267,7 +1267,7 @@ jobs:
           path: bindings/react-native/react-native-ufsecp-*.tgz
           retention-days: 5
 
-      - name: Publish to GitHub Packages (npm — React Native)
+      - name: Publish to GitHub Packages (npm -- React Native)
         continue-on-error: true
         run: |
           cd bindings/react-native
@@ -1278,7 +1278,7 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Publish to npmjs.com (public registry — React Native)
+      - name: Publish to npmjs.com (public registry -- React Native)
         continue-on-error: true
         run: |
           cd bindings/react-native
@@ -1289,9 +1289,9 @@ jobs:
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-  # ══════════════════════════════════════════════════════════════════════════
-  # 16) Package bindings — Swift (Package.swift + sources + native libs)
-  # ══════════════════════════════════════════════════════════════════════════
+  # ==========================================================================
+  # 16) Package bindings -- Swift (Package.swift + sources + native libs)
+  # ==========================================================================
   pack-swift:
     needs: [build-desktop, build-ios]
     runs-on: ubuntu-24.04
@@ -1356,9 +1356,9 @@ jobs:
           path: ufsecp-swift-*.tar.gz
           retention-days: 5
 
-  # ══════════════════════════════════════════════════════════════════════════
-  # 17) Package — C/C++ headers + native libs (all platforms)
-  # ══════════════════════════════════════════════════════════════════════════
+  # ==========================================================================
+  # 17) Package -- C/C++ headers + native libs (all platforms)
+  # ==========================================================================
   pack-c-headers:
     needs: [build-desktop, build-linux-arm64]
     runs-on: ubuntu-24.04
@@ -1423,9 +1423,9 @@ jobs:
           path: ufsecp-c-*.tar.gz
           retention-days: 5
 
-  # ══════════════════════════════════════════════════════════════════════════
+  # ==========================================================================
   # 18) Create GitHub Release (collects ALL artifacts)
-  # ══════════════════════════════════════════════════════════════════════════
+  # ==========================================================================
   release:
     needs: [build-desktop, build-linux-arm64, build-android, build-ios, build-wasm, pack-python, pack-npm, pack-nuget, pack-gem, pack-java, pack-go, pack-rust, pack-dart, pack-php, pack-react-native, pack-swift, pack-c-headers]
     if: ${{ always() && !cancelled() }}

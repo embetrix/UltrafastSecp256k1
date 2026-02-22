@@ -127,7 +127,7 @@ std::string format_time(double ns) {
     if (ns < 1000) {
         return std::to_string((int)ns) + " ns";
     } else if (ns < 1000000) {
-        return std::to_string((int)(ns / 1000)) + " μs";
+        return std::to_string((int)(ns / 1000)) + " us";
     } else {
         return std::to_string((int)(ns / 1000000)) + " ms";
     }
@@ -228,7 +228,7 @@ static void warmup_benchmark(const std::vector<FieldElement>& fields,
 }
 
 // ============================================================
-// FIELD OPERATION BENCHMARKS (uses OptimalFieldElement — what point ops actually use)
+// FIELD OPERATION BENCHMARKS (uses OptimalFieldElement -- what point ops actually use)
 // ============================================================
 
 double bench_field_mul(const std::vector<OFE>& elements, size_t iterations) {

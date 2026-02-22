@@ -1,5 +1,5 @@
 /* ============================================================================
- * UltrafastSecp256k1 — WebAssembly C API
+ * UltrafastSecp256k1 -- WebAssembly C API
  * ============================================================================
  * Flat C interface suitable for Emscripten export and JS/TS interop.
  * All buffers are caller-owned, fixed-size, and use big-endian byte order
@@ -20,7 +20,7 @@
 extern "C" {
 #endif
 
-/* ── Library Info ─────────────────────────────────────────────────────────── */
+/* -- Library Info ----------------------------------------------------------- */
 
 /** Run built-in self-test. Returns 1 on success, 0 on failure. */
 int secp256k1_wasm_selftest(void);
@@ -28,7 +28,7 @@ int secp256k1_wasm_selftest(void);
 /** Return library version as a static string (e.g. "3.0.0"). */
 const char* secp256k1_wasm_version(void);
 
-/* ── Key Generation ───────────────────────────────────────────────────────── */
+/* -- Key Generation --------------------------------------------------------- */
 
 /**
  * Compute public key from private key: P = privkey * G.
@@ -42,10 +42,10 @@ int secp256k1_wasm_pubkey_create(const uint8_t* seckey32,
                                   uint8_t* pubkey_x32,
                                   uint8_t* pubkey_y32);
 
-/* ── Point Arithmetic ─────────────────────────────────────────────────────── */
+/* -- Point Arithmetic ------------------------------------------------------- */
 
 /**
- * Scalar × Point multiplication: R = scalar * P.
+ * Scalar x Point multiplication: R = scalar * P.
  *
  * @param point_x32  [in]  32-byte X of point P (big-endian)
  * @param point_y32  [in]  32-byte Y of point P (big-endian)
@@ -75,7 +75,7 @@ int secp256k1_wasm_point_add(const uint8_t* p_x32, const uint8_t* p_y32,
                               const uint8_t* q_x32, const uint8_t* q_y32,
                               uint8_t* out_x32, uint8_t* out_y32);
 
-/* ── ECDSA ────────────────────────────────────────────────────────────────── */
+/* -- ECDSA ------------------------------------------------------------------ */
 
 /**
  * ECDSA sign (RFC 6979 deterministic nonce, low-S normalized).
@@ -103,7 +103,7 @@ int secp256k1_wasm_ecdsa_verify(const uint8_t* msg32,
                                  const uint8_t* pubkey_y32,
                                  const uint8_t* sig64);
 
-/* ── Schnorr BIP-340 ──────────────────────────────────────────────────────── */
+/* -- Schnorr BIP-340 -------------------------------------------------------- */
 
 /**
  * Schnorr BIP-340 sign.
@@ -141,7 +141,7 @@ int secp256k1_wasm_schnorr_verify(const uint8_t* pubkey_x32,
 int secp256k1_wasm_schnorr_pubkey(const uint8_t* seckey32,
                                    uint8_t* pubkey_x32);
 
-/* ── SHA-256 ──────────────────────────────────────────────────────────────── */
+/* -- SHA-256 ---------------------------------------------------------------- */
 
 /**
  * SHA-256 hash.

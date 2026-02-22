@@ -2,7 +2,7 @@
 #define SECP256K1_RECOVERY_HPP
 
 // ============================================================================
-// ECDSA Public Key Recovery — secp256k1
+// ECDSA Public Key Recovery -- secp256k1
 // ============================================================================
 // Given an ECDSA signature (r, s) and the message hash, recover the public key
 // that was used to create the signature. Up to 4 candidates exist; the
@@ -32,14 +32,14 @@ namespace secp256k1 {
 using fast::Scalar;
 using fast::Point;
 
-// ── Recoverable Signature ────────────────────────────────────────────────────
+// -- Recoverable Signature ----------------------------------------------------
 
 struct RecoverableSignature {
     ECDSASignature sig;
     int recid;  // 0-3: recovery ID
 };
 
-// ── Sign with Recovery ID ────────────────────────────────────────────────────
+// -- Sign with Recovery ID ----------------------------------------------------
 // Like ecdsa_sign() but also returns the recovery ID needed for recovery.
 // recid encodes:
 //   bit 0: parity of R.y (0 = even, 1 = odd)
@@ -49,7 +49,7 @@ RecoverableSignature ecdsa_sign_recoverable(
     const std::array<std::uint8_t, 32>& msg_hash,
     const Scalar& private_key);
 
-// ── Public Key Recovery ──────────────────────────────────────────────────────
+// -- Public Key Recovery ------------------------------------------------------
 // Recovers the public key from a signature and message hash.
 // Returns {Point, bool} where bool indicates success.
 // Fails if:
@@ -61,7 +61,7 @@ std::pair<Point, bool> ecdsa_recover(
     const ECDSASignature& sig,
     int recid);
 
-// ── Compact Recovery Serialization ───────────────────────────────────────────
+// -- Compact Recovery Serialization -------------------------------------------
 // 65-byte format: [recid_byte] [r: 32 bytes] [s: 32 bytes]
 // recid_byte = 27 + recid + (compressed ? 4 : 0)
 std::array<std::uint8_t, 65> recoverable_to_compact(

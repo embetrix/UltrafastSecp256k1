@@ -1,5 +1,5 @@
 // =============================================================================
-// UltrafastSecp256k1 OpenCL — Extended + Hash160 Test & Benchmark Suite
+// UltrafastSecp256k1 OpenCL -- Extended + Hash160 Test & Benchmark Suite
 // =============================================================================
 // Tests ALL operations: scalar, ECDSA, Schnorr, ECDH, Recovery, Hash160, MSM
 // Uses known test vectors for cross-platform verification (CUDA/OpenCL/Metal).
@@ -178,7 +178,7 @@ static int test_hash160(CLCtx& ctx, bool verbose) {
         auto input = hex_to_bytes(SHA256_INPUT);
         uint8_t output[32] = {};
 
-        // We test via the hash160_batch kernel (which internally does SHA-256 → RIPEMD-160)
+        // We test via the hash160_batch kernel (which internally does SHA-256 -> RIPEMD-160)
         // but for pure SHA-256, we need a separate approach.
         // Since we don't have a dedicated SHA-256 kernel, we verify SHA-256 via Hash160
         // correctness: if Hash160(pubkey) matches, SHA-256 must be correct.
@@ -309,7 +309,7 @@ static int test_hash160(CLCtx& ctx, bool verbose) {
         };
         const char* hash160_expected[5] = {
             "751e76e8199196d454941c45d1b3a323f1433bd6",
-            "0660a20b6170a5a2085da52341dc4688bae23c89",  // Placeholder — verify on Linux
+            "0660a20b6170a5a2085da52341dc4688bae23c89",  // Placeholder -- verify on Linux
             "7dd65592d0ab2fe0d0092d510d4935e2740e4a20",  // Placeholder
             "d1914384f3ab0de4c6bb5e3f0f21d4e0de4f9030",  // Placeholder
             "e5f25e048fae03d6eb8ce8a3e42fd7c3f3c3dbba",  // Placeholder
@@ -469,7 +469,7 @@ int main(int argc, char** argv) {
     CLCtx ctx;
     if (!init_cl(ctx, verbose)) return 1;
 
-    // Load kernel sources — concatenate all .cl files
+    // Load kernel sources -- concatenate all .cl files
     // Paths relative to executable; adjust as needed
     std::vector<std::string> kernel_paths = {
         "secp256k1_field.cl",
@@ -490,7 +490,7 @@ int main(int argc, char** argv) {
         if (src.empty()) {
             fprintf(stderr, "WARNING: Could not load %s\n", path.c_str());
         }
-        // Don't concatenate — OpenCL includes handle it. Just use the last file.
+        // Don't concatenate -- OpenCL includes handle it. Just use the last file.
     }
 
     // Actually, since files use #include, we just need to compile the top-level ones

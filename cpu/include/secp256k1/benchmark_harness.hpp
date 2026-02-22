@@ -1,17 +1,17 @@
 // ============================================================================
-// benchmark_harness.hpp — Production-Grade Benchmark Infrastructure
+// benchmark_harness.hpp -- Production-Grade Benchmark Infrastructure
 // ============================================================================
 //
 // Standards:
-//   • RDTSC cycle counter on x86/x64 (sub-ns precision)
-//   • std::chrono::high_resolution_clock fallback (RISC-V, ARM, etc.)
-//   • Configurable warm-up iterations
-//   • Multi-pass measurement (default: 11)
-//   • Median filtering
-//   • IQR-based outlier removal
-//   • Min/Avg/Median/StdDev tracking
-//   • DoNotOptimize / ClobberMemory compiler barriers
-//   • Optional thread pinning + priority elevation (Windows)
+//   * RDTSC cycle counter on x86/x64 (sub-ns precision)
+//   * std::chrono::high_resolution_clock fallback (RISC-V, ARM, etc.)
+//   * Configurable warm-up iterations
+//   * Multi-pass measurement (default: 11)
+//   * Median filtering
+//   * IQR-based outlier removal
+//   * Min/Avg/Median/StdDev tracking
+//   * DoNotOptimize / ClobberMemory compiler barriers
+//   * Optional thread pinning + priority elevation (Windows)
 //
 // Usage:
 //   #include "secp256k1/benchmark_harness.hpp"
@@ -40,7 +40,7 @@
 
 namespace bench {
 
-// ── DoNotOptimize / ClobberMemory ────────────────────────────────────────────
+// -- DoNotOptimize / ClobberMemory --------------------------------------------
 // Prevents the compiler from optimizing away benchmark payloads.
 
 #if defined(__GNUC__) || defined(__clang__)
@@ -98,7 +98,7 @@ inline void ClobberMemory() {}
 
 #endif
 
-// ── High-Resolution Timer ────────────────────────────────────────────────────
+// -- High-Resolution Timer ----------------------------------------------------
 
 #if (defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86))
 #  define BENCH_HAS_RDTSC 1
@@ -133,7 +133,7 @@ struct Timer {
 #endif
     }
 
-    // Ticks → nanoseconds conversion.
+    // Ticks -> nanoseconds conversion.
     // On x86 with RDTSC: calibrates TSC frequency at first call.
     // On non-x86: ticks ARE nanoseconds (chrono).
     static double ticks_to_ns(uint64_t ticks) noexcept {
@@ -141,7 +141,7 @@ struct Timer {
         static const double ns_per_tick = calibrate_tsc();
         return static_cast<double>(ticks) * ns_per_tick;
 #else
-        // chrono ticks — convert to nanoseconds using the clock's period
+        // chrono ticks -- convert to nanoseconds using the clock's period
         using Period = std::chrono::high_resolution_clock::period;
         constexpr double ratio = static_cast<double>(Period::num) / static_cast<double>(Period::den) * 1e9;
         return static_cast<double>(ticks) * ratio;
@@ -189,7 +189,7 @@ private:
 #endif
 };
 
-// ── Statistics ───────────────────────────────────────────────────────────────
+// -- Statistics ---------------------------------------------------------------
 
 struct Stats {
     double min_ns    = 0.0;
@@ -211,7 +211,7 @@ inline Stats compute_stats(std::vector<double>& data) {
     const int n = static_cast<int>(data.size());
 
     if (n < 4) {
-        // Too few samples for IQR — use all
+        // Too few samples for IQR -- use all
         s.min_ns = data.front();
         s.max_ns = data.back();
         s.median_ns = data[n / 2];
@@ -264,7 +264,7 @@ inline Stats compute_stats(std::vector<double>& data) {
     return s;
 }
 
-// ── Platform Setup ───────────────────────────────────────────────────────────
+// -- Platform Setup -----------------------------------------------------------
 
 inline void pin_thread_and_elevate() {
 #if defined(_WIN32)
@@ -280,7 +280,7 @@ inline void pin_thread_and_elevate() {
 #endif
 }
 
-// ── Main Harness ─────────────────────────────────────────────────────────────
+// -- Main Harness -------------------------------------------------------------
 
 class Harness {
 public:
@@ -366,7 +366,7 @@ public:
     }
 };
 
-// ── Formatting helpers ───────────────────────────────────────────────────────
+// -- Formatting helpers -------------------------------------------------------
 
 inline const char* format_ns(double ns, char* buf, int buflen) {
     if (ns < 1000.0) {

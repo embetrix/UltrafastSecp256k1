@@ -29,7 +29,7 @@ static double bench_us(Func&& f, int iters) {
     return H.run(iters, std::forward<Func>(f)) / 1000.0;
 }
 
-// ── main ─────────────────────────────────────────────────────────────────────
+// -- main ---------------------------------------------------------------------
 
 int main() {
     bench::pin_thread_and_elevate();
@@ -40,7 +40,7 @@ int main() {
     H.print_config();
     printf("\n");
 
-    // Fixed test data — all 256-bit, representative of real workloads
+    // Fixed test data -- all 256-bit, representative of real workloads
     auto G  = Point::generator();
     auto k  = Scalar::from_hex(
         "e8f32e723decf4051aefac8e2c93c9c5b214313817cdb01a1494b917c8436b35");
@@ -77,7 +77,7 @@ int main() {
 
     printf("  Pool size: %d random 256-bit scalars\n\n", POOL);
 
-    // ── Field operations ─────────────────────────────────────────────────────
+    // -- Field operations -----------------------------------------------------
 
     printf("--- Field Arithmetic ---\n");
 
@@ -120,7 +120,7 @@ int main() {
     printf("  field_inv    fast: %8.3f us   ct: %8.3f us   ratio: %.2fx\n\n",
            fast_field_inv, ct_field_inv, ct_field_inv / fast_field_inv);
 
-    // ── Scalar operations ────────────────────────────────────────────────────
+    // -- Scalar operations ----------------------------------------------------
 
     printf("--- Scalar Arithmetic ---\n");
 
@@ -150,7 +150,7 @@ int main() {
     printf("  scalar_sub   fast: %8.3f us   ct: %8.3f us   ratio: %.2fx\n\n",
            fast_scalar_sub, ct_scalar_sub, ct_scalar_sub / fast_scalar_sub);
 
-    // ── Point operations ─────────────────────────────────────────────────────
+    // -- Point operations -----------------------------------------------------
 
     printf("--- Point Operations ---\n");
 
@@ -170,7 +170,7 @@ int main() {
     printf("  point_add    fast: %8.3f us   ct: %8.3f us   ratio: %.2fx\n",
            fast_point_add, ct_point_add, ct_point_add / fast_point_add);
 
-    // Mixed add (J+A) — comparable to libsecp's group_add_affine
+    // Mixed add (J+A) -- comparable to libsecp's group_add_affine
     auto ct_aff_g = ct::CTAffinePoint::from_point(G);
 
     double ct_mixed_add = bench_us([&]() {
@@ -194,7 +194,7 @@ int main() {
     printf("  point_dbl    fast: %8.3f us   ct: %8.3f us   ratio: %.2fx\n\n",
            fast_point_dbl, ct_point_dbl, ct_point_dbl / fast_point_dbl);
 
-    // ── Scalar multiplication ────────────────────────────────────────────────
+    // -- Scalar multiplication ------------------------------------------------
 
     printf("--- Scalar Multiplication (k * P) ---\n");
 
@@ -215,7 +215,7 @@ int main() {
     printf("  scalar_mul   fast: %8.1f us   ct: %8.1f us   ratio: %.2fx\n\n",
            fast_mul, ct_mul, ct_mul / fast_mul);
 
-    // ── Generator multiplication ─────────────────────────────────────────────
+    // -- Generator multiplication ---------------------------------------------
 
     printf("--- Generator Multiplication (k * G) ---\n");
 

@@ -1,5 +1,5 @@
 // ============================================================================
-// shim_seckey.cpp — Secret key verification and tweaking
+// shim_seckey.cpp -- Secret key verification and tweaking
 // ============================================================================
 #include "secp256k1.h"
 

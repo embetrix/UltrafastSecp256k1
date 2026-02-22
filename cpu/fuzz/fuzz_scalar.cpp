@@ -25,30 +25,30 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
     auto b = Scalar::from_bytes(buf_b);
     auto zero = Scalar::zero();
 
-    // ── Closure: add/sub round-trip ──────────────────────────────────────────
+    // -- Closure: add/sub round-trip ------------------------------------------
     auto c = a + b;
     auto d = c - b;
     if (d != a) __builtin_trap();
 
-    // ── Closure: mul by 1 = identity ─────────────────────────────────────────
+    // -- Closure: mul by 1 = identity -----------------------------------------
     auto one = Scalar::one();
     auto e = a * one;
     if (e != a) __builtin_trap();
 
-    // ── Closure: a - a = 0 ───────────────────────────────────────────────────
+    // -- Closure: a - a = 0 ---------------------------------------------------
     auto f = a - a;
     if (!f.is_zero()) __builtin_trap();
 
-    // ── Closure: a + 0 = a ───────────────────────────────────────────────────
+    // -- Closure: a + 0 = a ---------------------------------------------------
     auto g = a + zero;
     if (g != a) __builtin_trap();
 
-    // ── Closure: (a * b) * 1 = a * b ─────────────────────────────────────────
+    // -- Closure: (a * b) * 1 = a * b -----------------------------------------
     auto h = a * b;
     auto i = h * one;
     if (i != h) __builtin_trap();
 
-    // ── Closure: distributive: a*(b+1) = a*b + a ─────────────────────────────
+    // -- Closure: distributive: a*(b+1) = a*b + a -----------------------------
     auto b_plus_1 = b + one;
     auto lhs = a * b_plus_1;
     auto rhs = (a * b) + a;

@@ -63,7 +63,7 @@ public:
     std::string to_hex() const;
     const limbs_type& limbs() const noexcept { return limbs_; }
 
-    // Raw limb setter (no normalization) — for use when caller guarantees canonical form.
+    // Raw limb setter (no normalization) -- for use when caller guarantees canonical form.
     // Used by FieldElement52::to_fe() which already normalizes via fe52_normalize_inline.
     static FieldElement from_limbs_raw(const limbs_type& limbs) noexcept {
         FieldElement fe;
@@ -77,9 +77,9 @@ public:
     FieldElement square() const;
     FieldElement inverse() const;
 
-    // Square root: a^((p+1)/4) mod p.  Valid since p ≡ 3 (mod 4).
+    // Square root: a^((p+1)/4) mod p.  Valid since p == 3 (mod 4).
     // Uses an optimized addition chain (~255 sqr + 13 mul).
-    // Returns a root r such that r² ≡ a (mod p). Caller must verify r²==a.
+    // Returns a root r such that r^2 == a (mod p). Caller must verify r^2==a.
     FieldElement sqrt() const;
 
     FieldElement& operator+=(const FieldElement& rhs);
@@ -98,8 +98,8 @@ public:
 
     // In-place mutable versions (modify this object directly)
     // ~10-15% faster than immutable versions due to no memory allocation
-    void square_inplace();    // this = this² (modifies this)
-    void inverse_inplace();   // this = this⁻¹ (modifies this)
+    void square_inplace();    // this = this^2 (modifies this)
+    void inverse_inplace();   // this = this^-^1 (modifies this)
 
     bool operator==(const FieldElement& rhs) const noexcept;
     bool operator!=(const FieldElement& rhs) const noexcept { return !(*this == rhs); }
@@ -149,9 +149,9 @@ static_assert(sizeof(FieldElement) == 32, "Must be 256 bits");
 // For secp256k1, p = 2^256 - 0x1000003D1, so R = 0x1000003D1
 //
 // Usage:
-//   - to_mont(a) = (a * R²) mod p  // Convert a → a*R
-//   - from_mont(aR) = (aR * R⁻¹) mod p  // Convert a*R → a
-//   - mont_mul(aR, bR) = (aR * bR * R⁻¹) mod p = (ab)R  // Stays in Montgomery
+//   - to_mont(a) = (a * R^2) mod p  // Convert a -> a*R
+//   - from_mont(aR) = (aR * R^-^1) mod p  // Convert a*R -> a
+//   - mont_mul(aR, bR) = (aR * bR * R^-^1) mod p = (ab)R  // Stays in Montgomery
 //
 // Benefits:
 //   - Modular reduction uses cheap multiplication instead of division
@@ -165,21 +165,21 @@ namespace montgomery {
         return r;
     }
     
-    // R² mod p = (2^256)² mod p = 0x000007A2000E90A1
+    // R^2 mod p = (2^256)^2 mod p = 0x000007A2000E90A1
     inline const FieldElement& R2() {
         static const FieldElement r2 = FieldElement::from_limbs(
             {0x000007A2000E90A1ULL, 0x0000000000000001ULL, 0ULL, 0ULL});
         return r2;
     }
     
-    // R³ mod p = (2^256)³ mod p
+    // R^3 mod p = (2^256)^3 mod p
     inline const FieldElement& R3() {
         static const FieldElement r3 = FieldElement::from_limbs(
             {0x002BB1E33795F671ULL, 0x0000000100000B73ULL, 0ULL, 0ULL});
         return r3;
     }
     
-    // R⁻¹ mod p = (2^256)⁻¹ mod p
+    // R^-^1 mod p = (2^256)^-^1 mod p
     inline const FieldElement& R_inv() {
         static const FieldElement r_inv = FieldElement::from_limbs(
             {0xD838091D0868192AULL, 0xBCB223FEDC24A059ULL, 
@@ -270,9 +270,9 @@ FieldElement fe_inverse_double_base(const FieldElement& value);
 FieldElement fe_inverse_compact_table(const FieldElement& value);
 
 // Montgomery batch inversion - invert N field elements simultaneously
-// Uses Montgomery's trick: (a*b*c)^-1 → compute individual a^-1, b^-1, c^-1
+// Uses Montgomery's trick: (a*b*c)^-1 -> compute individual a^-1, b^-1, c^-1
 // Cost: 1 inverse + 3*(N-1) multiplications instead of N inverses
-// For N=8: ~8 μs instead of 28 μs (3.5x speedup!)
+// For N=8: ~8 us instead of 28 us (3.5x speedup!)
 void fe_batch_inverse(FieldElement* elements, size_t count);
 
 // Zero-allocation version: uses provided scratch buffer

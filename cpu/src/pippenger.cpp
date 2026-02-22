@@ -1,5 +1,5 @@
 // ============================================================================
-// Pippenger Bucket Method — Multi-Scalar Multiplication
+// Pippenger Bucket Method -- Multi-Scalar Multiplication
 // ============================================================================
 // Reference: Bernstein et al. "Faster batch forgery identification" (2012)
 //
@@ -17,9 +17,9 @@ namespace secp256k1 {
 using fast::Scalar;
 using fast::Point;
 
-// ── Optimal Window Width ─────────────────────────────────────────────────────
-// Minimizes total cost ≈ floor(256/c) * (n + 2^c)
-// Standard heuristic: c ≈ max(1, floor(log2(n)))
+// -- Optimal Window Width -----------------------------------------------------
+// Minimizes total cost ~= floor(256/c) * (n + 2^c)
+// Standard heuristic: c ~= max(1, floor(log2(n)))
 
 unsigned pippenger_optimal_window(std::size_t n) {
     if (n <= 1)    return 1;
@@ -37,7 +37,7 @@ unsigned pippenger_optimal_window(std::size_t n) {
     return 16;
 }
 
-// ── Extract c-bit digit at position `bit_offset` from scalar ─────────────────
+// -- Extract c-bit digit at position `bit_offset` from scalar -----------------
 // Extracts bits [bit_offset, bit_offset+width) from the scalar.
 // Returns unsigned digit in [0, 2^width).
 static inline uint32_t extract_digit(const Scalar& s, unsigned bit_offset, unsigned width) {
@@ -51,7 +51,7 @@ static inline uint32_t extract_digit(const Scalar& s, unsigned bit_offset, unsig
     return digit;
 }
 
-// ── Pippenger Core ───────────────────────────────────────────────────────────
+// -- Pippenger Core -----------------------------------------------------------
 Point pippenger_msm(const Scalar* scalars,
                     const Point* points,
                     std::size_t n) {
@@ -90,18 +90,18 @@ Point pippenger_msm(const Scalar* scalars,
             buckets[b] = Point::infinity();
         }
 
-        // ── Scatter: distribute points into buckets ──
+        // -- Scatter: distribute points into buckets --
         for (std::size_t i = 0; i < n; ++i) {
             uint32_t digit = extract_digit(scalars[i], bit_offset, c);
             if (digit == 0) continue;  // bucket[0] is unused (identity)
             buckets[digit] = buckets[digit].add(points[i]);
         }
 
-        // ── Aggregate buckets (running-sum trick) ──
+        // -- Aggregate buckets (running-sum trick) --
         // Computes sum_{b=1}^{2^c-1} b * bucket[b] efficiently:
         //   running_sum starts at bucket[2^c-1]
         //   partial_sum accumulates running_sum at each step
-        //   This gives: partial_sum = 1*bucket[1] + 2*bucket[2] + ... = Σ b*bucket[b]
+        //   This gives: partial_sum = 1*bucket[1] + 2*bucket[2] + ... = Sum b*bucket[b]
         Point running_sum = Point::infinity();
         Point partial_sum = Point::infinity();
 
@@ -117,15 +117,15 @@ Point pippenger_msm(const Scalar* scalars,
     return result;
 }
 
-// ── Signed-digit Pippenger (halved bucket count) ─────────────────────────────
+// -- Signed-digit Pippenger (halved bucket count) -----------------------------
 // Uses signed digits [-2^(c-1), ..., -1, 0, 1, ..., 2^(c-1)]
 // This halves the number of buckets (2^(c-1) instead of 2^c) at the cost
 // of a carry propagation pass. Very effective for large n.
 //
-// Not yet enabled by default — the unsigned version above is simpler and
+// Not yet enabled by default -- the unsigned version above is simpler and
 // already very fast. This is provided for future optimization.
 
-// ── Vector convenience ───────────────────────────────────────────────────────
+// -- Vector convenience -------------------------------------------------------
 Point pippenger_msm(const std::vector<Scalar>& scalars,
                     const std::vector<Point>& points) {
     std::size_t n = std::min(scalars.size(), points.size());
@@ -133,8 +133,8 @@ Point pippenger_msm(const std::vector<Scalar>& scalars,
     return pippenger_msm(scalars.data(), points.data(), n);
 }
 
-// ── Unified MSM (auto-select) ────────────────────────────────────────────────
-// Strauss ≤ 128 points, Pippenger > 128
+// -- Unified MSM (auto-select) ------------------------------------------------
+// Strauss <= 128 points, Pippenger > 128
 Point msm(const Scalar* scalars,
           const Point* points,
           std::size_t n) {

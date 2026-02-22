@@ -1,5 +1,5 @@
 // =============================================================================
-// UltrafastSecp256k1 — Shared POD Data Types
+// UltrafastSecp256k1 -- Shared POD Data Types
 // =============================================================================
 // Canonical data layouts for secp256k1 field elements, scalars, and points.
 // These types define the MEMORY LAYOUT contract between all backends
@@ -24,50 +24,50 @@
 
 namespace secp256k1 {
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Field element: 256-bit integer mod p (secp256k1 prime)
 // p = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 struct FieldElementData {
     uint64_t limbs[4];  // Little-endian: limbs[0] = bits [0..63]
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // 32-bit view of field element (same 256 bits, different interpretation)
-// Memory layout is IDENTICAL to FieldElementData — safe to reinterpret_cast
-// ─────────────────────────────────────────────────────────────────────────────
+// Memory layout is IDENTICAL to FieldElementData -- safe to reinterpret_cast
+// -----------------------------------------------------------------------------
 struct MidFieldElementData {
     uint32_t limbs[8];  // Little-endian: limbs[0] = bits [0..31]
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Scalar: 256-bit integer mod n (curve order)
 // n = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 struct ScalarData {
     uint64_t limbs[4];  // Little-endian: limbs[0] = bits [0..63]
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Affine point: (x, y) on the curve y² = x³ + 7
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
+// Affine point: (x, y) on the curve y^2 = x^3 + 7
+// -----------------------------------------------------------------------------
 struct AffinePointData {
     FieldElementData x;
     FieldElementData y;
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Jacobian point: (X, Y, Z) where affine (x, y) = (X/Z², Y/Z³)
+// -----------------------------------------------------------------------------
+// Jacobian point: (X, Y, Z) where affine (x, y) = (X/Z^2, Y/Z^3)
 //
 // NOTE: The infinity flag representation varies by backend:
-//   - CPU:    bool   (1 byte)  — inside Point class
-//   - CUDA:   bool   (1 byte)  — in JacobianPoint struct
+//   - CPU:    bool   (1 byte)  -- inside Point class
+//   - CUDA:   bool   (1 byte)  -- in JacobianPoint struct
 //   - OpenCL: uint32_t (4 bytes, GPU-friendly with padding)
 //
 // This reference layout uses uint32_t for maximum portability.
 // Backends may define their own JacobianPoint with a different infinity type
 // as long as the x/y/z field offsets match.
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 struct JacobianPointData {
     FieldElementData x;
     FieldElementData y;

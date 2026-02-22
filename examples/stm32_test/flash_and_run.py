@@ -1,5 +1,5 @@
 """
-STM32F103ZET6 Flash + Run + Monitor — one-command workflow.
+STM32F103ZET6 Flash + Run + Monitor -- one-command workflow.
 
 Usage:
     python flash_and_run.py               # flash + run + monitor
@@ -130,7 +130,7 @@ def main():
     args = parser.parse_args()
 
     if args.monitor:
-        # Just monitor — user presses RESET manually
+        # Just monitor -- user presses RESET manually
         print("Press RESET on the board, then wait for output...", flush=True)
         monitor(args.port, args.baud, TIMEOUT)
         return
@@ -153,7 +153,7 @@ def main():
         sys.exit(1)
 
     print("\n>>> Set BOOT0 back to LOW and press RESET <<<", flush=True)
-    print(">>> Or just wait — GO command will try to start... <<<\n", flush=True)
+    print(">>> Or just wait -- GO command will try to start... <<<\n", flush=True)
     time.sleep(2)
 
     go_command(args.port)

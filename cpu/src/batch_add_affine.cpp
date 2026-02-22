@@ -1,11 +1,11 @@
 // ============================================================================
-// Affine Batch Addition — Fastest CPU pipeline for sequential ECC search
+// Affine Batch Addition -- Fastest CPU pipeline for sequential ECC search
 // ============================================================================
 // Algorithm: Given base point P (affine) and N offset points T[i] (affine),
 // compute P + T[i] using Montgomery batch inversion on dx values.
 //
-// Cost per point: ~6M + 1S ≈ 150 ns (vs 463 ns for Jacobian pipeline)
-// Performance: 3× faster than Jacobian mixed-add + batch Z-inverse
+// Cost per point: ~6M + 1S ~= 150 ns (vs 463 ns for Jacobian pipeline)
+// Performance: 3x faster than Jacobian mixed-add + batch Z-inverse
 // ============================================================================
 
 #include "secp256k1/batch_add_affine.hpp"
@@ -31,7 +31,7 @@ void batch_add_affine_x(
 {
     if (count == 0) return;
 
-    // scratch is used for dx values → then inverted in-place
+    // scratch is used for dx values -> then inverted in-place
     if (scratch.size() < count) {
         scratch.resize(count);
     }
@@ -40,7 +40,7 @@ void batch_add_affine_x(
 
     // Phase 1: Compute dx[i] = x_T[i] - x_base
     //          Replace any zeros with ONE to avoid corrupting batch inverse chain.
-    //          Zero dx means P == ±T[i] (astronomically rare in search; ~2^{-128}).
+    //          Zero dx means P == +/-T[i] (astronomically rare in search; ~2^{-128}).
     for (std::size_t i = 0; i < count; ++i) {
         FieldElement dx = offsets[i].x - base_x;
         // Branchless: if dx==0, substitute ONE so batch inverse stays valid.
@@ -54,8 +54,8 @@ void batch_add_affine_x(
     fe_batch_inverse(scratch.data(), count);
 
     // Phase 3: Compute affine addition for each offset
-    // λ[i] = (y_T[i] - y_base) * dx_inv[i]
-    // x3[i] = λ² - x_base - x_T[i]
+    // lambda[i] = (y_T[i] - y_base) * dx_inv[i]
+    // x3[i] = lambda^2 - x_base - x_T[i]
     for (std::size_t i = 0; i < count; ++i) {
         // Handle degenerate case: original dx was zero (P == T[i] or P == -T[i])
         FieldElement dx_original = offsets[i].x - base_x;
@@ -65,10 +65,10 @@ void batch_add_affine_x(
         }
 
         FieldElement dy = offsets[i].y - base_y;      // dy = y_T - y_base
-        FieldElement lambda = dy * scratch[i];         // λ = dy / dx  [1M]
+        FieldElement lambda = dy * scratch[i];         // lambda = dy / dx  [1M]
         FieldElement lambda_sq = lambda;
-        lambda_sq.square_inplace();                    // λ²            [1S]
-        out_x[i] = lambda_sq - base_x - offsets[i].x; // x3 = λ² - x_P - x_T
+        lambda_sq.square_inplace();                    // lambda^2            [1S]
+        out_x[i] = lambda_sq - base_x - offsets[i].x; // x3 = lambda^2 - x_P - x_T
     }
 }
 
@@ -93,7 +93,7 @@ void batch_add_affine_xy(
 
     const FieldElement zero = FieldElement::zero();
 
-    // Phase 1: dx[i] = x_T[i] - x_base (zero-safe: replace 0 → 1)
+    // Phase 1: dx[i] = x_T[i] - x_base (zero-safe: replace 0 -> 1)
     for (std::size_t i = 0; i < count; ++i) {
         FieldElement dx = offsets[i].x - base_x;
         bool is_zero = (dx == zero);
@@ -113,9 +113,9 @@ void batch_add_affine_xy(
         }
 
         FieldElement dy = offsets[i].y - base_y;
-        FieldElement lambda = dy * scratch[i];         // λ = dy/dx     [1M]
+        FieldElement lambda = dy * scratch[i];         // lambda = dy/dx     [1M]
         FieldElement lambda_sq = lambda;
-        lambda_sq.square_inplace();                    // λ²            [1S]
+        lambda_sq.square_inplace();                    // lambda^2            [1S]
         FieldElement x3 = lambda_sq - base_x - offsets[i].x;
         FieldElement y3 = lambda * (base_x - x3) - base_y;  // [2M]
 
@@ -160,7 +160,7 @@ void batch_add_affine_x_with_parity(
 
     const FieldElement zero = FieldElement::zero();
 
-    // Phase 1: dx (zero-safe: replace 0 → 1)
+    // Phase 1: dx (zero-safe: replace 0 -> 1)
     for (std::size_t i = 0; i < count; ++i) {
         FieldElement dx = offsets[i].x - base_x;
         bool is_zero = (dx == zero);
@@ -218,7 +218,7 @@ void batch_add_affine_x_bidirectional(
 
     const FieldElement zero = FieldElement::zero();
 
-    // Phase 1: dx for both directions (zero-safe: replace 0 → 1)
+    // Phase 1: dx for both directions (zero-safe: replace 0 -> 1)
     for (std::size_t i = 0; i < count; ++i) {
         FieldElement dx_fwd = offsets_fwd[i].x - base_x;
         FieldElement dx_bwd = offsets_bwd[i].x - base_x;
@@ -290,7 +290,7 @@ std::vector<AffinePointCompact> precompute_g_multiples(std::size_t count) {
     // Batch inverse all Z coordinates
     fe_batch_inverse(jac_z.data(), count);
 
-    // Convert Jacobian → Affine: x_aff = X * Z^{-2}, y_aff = Y * Z^{-3}
+    // Convert Jacobian -> Affine: x_aff = X * Z^{-2}, y_aff = Y * Z^{-3}
     for (std::size_t i = 0; i < count; ++i) {
         FieldElement z_inv = jac_z[i];
         FieldElement z_inv2 = z_inv;

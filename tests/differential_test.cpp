@@ -1,5 +1,5 @@
 // ============================================================================
-// Differential Correctness Tests — UltrafastSecp256k1 vs libsecp256k1
+// Differential Correctness Tests -- UltrafastSecp256k1 vs libsecp256k1
 // ============================================================================
 // These tests generate random keys/messages and verify that both libraries
 // produce identical results for all core operations.
@@ -17,7 +17,7 @@
 #include <array>
 #include <random>
 
-// ── UltrafastSecp256k1 ──────────────────────────────────────────────────────
+// -- UltrafastSecp256k1 ------------------------------------------------------
 #include "secp256k1/field.hpp"
 #include "secp256k1/scalar.hpp"
 #include "secp256k1/point.hpp"
@@ -27,7 +27,7 @@
 
 using namespace secp256k1::fast;
 
-// ── Test infrastructure ─────────────────────────────────────────────────────
+// -- Test infrastructure -----------------------------------------------------
 
 static int g_pass = 0, g_fail = 0;
 
@@ -61,12 +61,12 @@ static Scalar random_scalar() {
     }
 }
 
-// ── Test: Public Key Derivation ─────────────────────────────────────────────
+// -- Test: Public Key Derivation ---------------------------------------------
 
 static void test_pubkey_derivation() {
     printf("[1] Public Key Derivation (1000 random keys)\n");
 
-    // Known test vector: k=1 → G
+    // Known test vector: k=1 -> G
     {
         auto G = Point::generator();
         auto comp = G.to_compressed();
@@ -95,7 +95,7 @@ static void test_pubkey_derivation() {
     printf("    %d checks passed\n\n", g_pass);
 }
 
-// ── Test: ECDSA Sign+Verify Cross-Check ─────────────────────────────────────
+// -- Test: ECDSA Sign+Verify Cross-Check -------------------------------------
 
 static void test_ecdsa_cross() {
     printf("[2] ECDSA Sign+Verify Internal Consistency (1000 rounds)\n");
@@ -132,7 +132,7 @@ static void test_ecdsa_cross() {
     printf("    %d total checks passed\n\n", g_pass);
 }
 
-// ── Test: Schnorr Sign+Verify Cross-Check ───────────────────────────────────
+// -- Test: Schnorr Sign+Verify Cross-Check -----------------------------------
 
 static void test_schnorr_cross() {
     printf("[3] Schnorr (BIP-340) Sign+Verify Internal Consistency (1000 rounds)\n");
@@ -160,7 +160,7 @@ static void test_schnorr_cross() {
     printf("    %d total checks passed\n\n", g_pass);
 }
 
-// ── Test: Point Arithmetic Identities ───────────────────────────────────────
+// -- Test: Point Arithmetic Identities ---------------------------------------
 
 static void test_point_arithmetic() {
     printf("[4] Point Arithmetic Identities\n");
@@ -221,7 +221,7 @@ static void test_point_arithmetic() {
     printf("    %d total checks passed\n\n", g_pass);
 }
 
-// ── Test: Scalar Arithmetic ─────────────────────────────────────────────────
+// -- Test: Scalar Arithmetic -------------------------------------------------
 
 static void test_scalar_arithmetic() {
     printf("[5] Scalar Arithmetic\n");
@@ -263,7 +263,7 @@ static void test_scalar_arithmetic() {
     printf("    %d total checks passed\n\n", g_pass);
 }
 
-// ── Test: Field Arithmetic ──────────────────────────────────────────────────
+// -- Test: Field Arithmetic --------------------------------------------------
 
 static void test_field_arithmetic() {
     printf("[6] Field Arithmetic\n");
@@ -278,20 +278,20 @@ static void test_field_arithmetic() {
         CHECK(product.equals(FieldElement::one()), "x * x^-1 == 1");
     }
 
-    // sqrt(x²) == ±x
+    // sqrt(x^2) == +/-x
     for (int i = 0; i < 100; ++i) {
         auto bytes = random_bytes();
         auto x = FieldElement::from_bytes(bytes);
         auto x2 = x * x;
         auto s = x2.sqrt();
         auto s2 = s * s;
-        CHECK(s2.equals(x2), "sqrt(x²)² == x²");
+        CHECK(s2.equals(x2), "sqrt(x^2)^2 == x^2");
     }
 
     printf("    %d total checks passed\n\n", g_pass);
 }
 
-// ── Test: ECDSA Signature Roundtrip ─────────────────────────────────────────
+// -- Test: ECDSA Signature Roundtrip -----------------------------------------
 
 static void test_ecdsa_roundtrip() {
     printf("[7] ECDSA Signature Serialization Roundtrip\n");
@@ -316,7 +316,7 @@ static void test_ecdsa_roundtrip() {
     printf("    %d total checks passed\n\n", g_pass);
 }
 
-// ── Test: Known BIP-340 Test Vectors ────────────────────────────────────────
+// -- Test: Known BIP-340 Test Vectors ----------------------------------------
 
 static void test_bip340_vectors() {
     printf("[8] BIP-340 Known Test Vectors\n");
@@ -336,13 +336,13 @@ static void test_bip340_vectors() {
     printf("    %d total checks passed\n\n", g_pass);
 }
 
-// ── Main ─────────────────────────────────────────────────────────────────────
+// -- Main ---------------------------------------------------------------------
 
 int main() {
-    printf("═══════════════════════════════════════════════════════════════\n");
-    printf("  UltrafastSecp256k1 — Differential Correctness Tests\n");
-    printf("  Seed: 42 (deterministic — change seed for different coverage)\n");
-    printf("═══════════════════════════════════════════════════════════════\n\n");
+    printf("===============================================================\n");
+    printf("  UltrafastSecp256k1 -- Differential Correctness Tests\n");
+    printf("  Seed: 42 (deterministic -- change seed for different coverage)\n");
+    printf("===============================================================\n\n");
 
     test_pubkey_derivation();
     test_ecdsa_cross();
@@ -353,9 +353,9 @@ int main() {
     test_ecdsa_roundtrip();
     test_bip340_vectors();
 
-    printf("═══════════════════════════════════════════════════════════════\n");
+    printf("===============================================================\n");
     printf("  TOTAL: %d passed, %d failed\n", g_pass, g_fail);
-    printf("═══════════════════════════════════════════════════════════════\n");
+    printf("===============================================================\n");
 
     return g_fail > 0 ? 1 : 0;
 }

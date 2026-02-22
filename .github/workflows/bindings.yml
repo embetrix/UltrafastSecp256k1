@@ -1,5 +1,5 @@
 # ============================================================================
-# Bindings CI — Compile-check all 12 language bindings
+# Bindings CI -- Compile-check all 12 language bindings
 # ============================================================================
 # Validates that every binding compiles/parses correctly against the C API.
 # Actual runtime tests require the shared library; here we verify:
@@ -30,7 +30,7 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-# ── Build the C shared library (reused by binding jobs) ──────────────────
+# -- Build the C shared library (reused by binding jobs) ------------------
 jobs:
   build-capi:
     name: "Build C API (${{ matrix.os }})"
@@ -67,7 +67,7 @@ jobs:
             bindings/c_api/ultrafast_secp256k1.h
           retention-days: 1
 
-  # ── Python (syntax + type-check) ─────────────────────────────────────────
+  # -- Python (syntax + type-check) -----------------------------------------
   python:
     name: "Python (syntax check)"
     runs-on: ubuntu-24.04
@@ -88,7 +88,7 @@ jobs:
       - name: Lint
         run: pyflakes bindings/python/ultrafast_secp256k1/
 
-  # ── C# (.NET build) ─────────────────────────────────────────────────────
+  # -- C# (.NET build) -----------------------------------------------------
   csharp:
     name: "C# (.NET build)"
     runs-on: ubuntu-24.04
@@ -103,7 +103,7 @@ jobs:
       - name: Build C# binding
         run: dotnet build bindings/csharp/UltrafastSecp256k1/UltrafastSecp256k1.csproj -c Release
 
-  # ── Rust (cargo check) ─────────────────────────────────────────────────
+  # -- Rust (cargo check) -------------------------------------------------
   rust:
     name: "Rust (cargo check)"
     runs-on: ubuntu-24.04
@@ -132,7 +132,7 @@ jobs:
         run: cargo clippy -- -D warnings
         continue-on-error: true
 
-  # ── Node.js (syntax check) ─────────────────────────────────────────────
+  # -- Node.js (syntax check) ---------------------------------------------
   nodejs:
     name: "Node.js (syntax check)"
     runs-on: ubuntu-24.04
@@ -153,7 +153,7 @@ jobs:
             --target ES2022 --module Node16 --moduleResolution Node16 \
             bindings/nodejs/lib/index.d.ts || true
 
-  # ── PHP (syntax check) ─────────────────────────────────────────────────
+  # -- PHP (syntax check) -------------------------------------------------
   php:
     name: "PHP (syntax check)"
     runs-on: ubuntu-24.04
@@ -169,7 +169,7 @@ jobs:
       - name: Syntax check
         run: php -l bindings/php/src/Secp256k1.php
 
-  # ── Go (build check) ───────────────────────────────────────────────────
+  # -- Go (build check) ---------------------------------------------------
   go:
     name: "Go (build check)"
     runs-on: ubuntu-24.04
@@ -200,7 +200,7 @@ jobs:
           # Check that Go source parses correctly
           go build -v ./... 2>&1 || echo "Build completed (link errors expected without full lib)"
 
-  # ── Java JNI (compile check) ───────────────────────────────────────────
+  # -- Java JNI (compile check) -------------------------------------------
   java:
     name: "Java JNI (compile check)"
     runs-on: ubuntu-24.04
@@ -229,7 +229,7 @@ jobs:
             -I bindings/java/jni \
             bindings/java/jni/secp256k1_jni.c
 
-  # ── Swift (build check) ────────────────────────────────────────────────
+  # -- Swift (build check) ------------------------------------------------
   swift:
     name: "Swift (build check)"
     runs-on: macos-14
@@ -254,7 +254,7 @@ jobs:
             -import-objc-header bindings/c_api/ultrafast_secp256k1.h \
             bindings/swift/Sources/UltrafastSecp256k1/Secp256k1.swift 2>&1 || true
 
-  # ── React Native (syntax check) ───────────────────────────────────────
+  # -- React Native (syntax check) ---------------------------------------
   react-native:
     name: "React Native (syntax + Java)"
     runs-on: ubuntu-24.04
@@ -284,7 +284,7 @@ jobs:
             bindings/react-native/android/src/main/java/com/ultrafastsecp256k1/*.java 2>&1 \
             || echo "Java syntax parsed (RN framework deps expected missing)"
 
-  # ── Ruby (syntax check) ───────────────────────────────────────────────
+  # -- Ruby (syntax check) -----------------------------------------------
   ruby:
     name: "Ruby (syntax check)"
     runs-on: ubuntu-24.04
@@ -304,7 +304,7 @@ jobs:
           cd bindings/ruby
           gem build ultrafast_secp256k1.gemspec --strict 2>&1 || echo "Gemspec validated (ffi dep may be missing)"
 
-  # ── Dart (analyze) ────────────────────────────────────────────────────
+  # -- Dart (analyze) ----------------------------------------------------
   dart:
     name: "Dart (analyze)"
     runs-on: ubuntu-24.04
@@ -324,7 +324,7 @@ jobs:
         working-directory: bindings/dart
         run: dart analyze --fatal-infos
 
-  # ── Summary job ─────────────────────────────────────────────────────────
+  # -- Summary job ---------------------------------------------------------
   bindings-summary:
     name: "Bindings Summary"
     runs-on: ubuntu-24.04

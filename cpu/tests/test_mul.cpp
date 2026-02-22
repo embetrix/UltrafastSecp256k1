@@ -26,7 +26,7 @@ static int g_fail = 0;
 // 1. Field Multiplication
 // ================================================================
 static void test_field_mul() {
-    std::cout << "── Field Multiplication ──\n";
+    std::cout << "-- Field Multiplication --\n";
 
     // Basic known products
     CHECK(FieldElement::from_uint64(2) * FieldElement::from_uint64(3) == FieldElement::from_uint64(6),
@@ -47,7 +47,7 @@ static void test_field_mul() {
     FieldElement b = FieldElement::from_uint64(0x12345678ABCDEF01ULL);
     CHECK(a * b == b * a, "a*b = b*a");
 
-    // (p-1)^2 mod p = 1 (since p-1 ≡ -1 mod p)
+    // (p-1)^2 mod p = 1 (since p-1 == -1 mod p)
     std::array<uint64_t, 4> pm1_limbs = {
         0xFFFFFFFEFFFFFC2EULL, 0xFFFFFFFFFFFFFFFFULL,
         0xFFFFFFFFFFFFFFFFULL, 0xFFFFFFFFFFFFFFFFULL
@@ -81,7 +81,7 @@ static void test_field_mul() {
 // 2. Field Square
 // ================================================================
 static void test_field_square() {
-    std::cout << "── Field Square ──\n";
+    std::cout << "-- Field Square --\n";
 
     // 0^2 = 0
     FieldElement z = FieldElement::zero();
@@ -110,7 +110,7 @@ static void test_field_square() {
 // 3. Field Add / Sub
 // ================================================================
 static void test_field_add_sub() {
-    std::cout << "── Field Add / Sub ──\n";
+    std::cout << "-- Field Add / Sub --\n";
 
     FieldElement z = FieldElement::zero();
     FieldElement a = FieldElement::from_uint64(0xDEADBEEFCAFE1234ULL);
@@ -162,7 +162,7 @@ static void test_field_add_sub() {
 // 4. Field Normalization edge cases
 // ================================================================
 static void test_field_normalize() {
-    std::cout << "── Field Normalization ──\n";
+    std::cout << "-- Field Normalization --\n";
 
     FieldElement z = FieldElement::zero();
 
@@ -208,7 +208,7 @@ static void test_field_normalize() {
 // 5. Scalar Arithmetic
 // ================================================================
 static void test_scalar_arithmetic() {
-    std::cout << "── Scalar Arithmetic ──\n";
+    std::cout << "-- Scalar Arithmetic --\n";
 
     Scalar zero = Scalar::zero();
     Scalar one  = Scalar::one();
@@ -230,7 +230,7 @@ static void test_scalar_arithmetic() {
     // Commutativity
     CHECK(s7 * s3 == s3 * s7, "7*3 = 3*7");
 
-    // (n-1) ≡ -1 mod n, so (n-1)^2 = 1
+    // (n-1) == -1 mod n, so (n-1)^2 = 1
     // n = FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141
     Scalar nm1 = Scalar::from_hex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364140");
     CHECK(nm1 * nm1 == one, "(n-1)^2 = 1");
@@ -267,7 +267,7 @@ static void test_scalar_arithmetic() {
         CHECK((a * b) * c == a * (b * c), "associative random");
     }
 
-    // Additive inverse: a + (n-1)*a = (n-1+1)*a = 0*a = 0? No — (a + (n-a)) = 0
+    // Additive inverse: a + (n-1)*a = (n-1+1)*a = 0*a = 0? No -- (a + (n-a)) = 0
     // Actually: a - a = 0
     for (int i = 0; i < 200; i++) {
         std::array<uint8_t, 32> ba{};
@@ -283,7 +283,7 @@ static void test_scalar_arithmetic() {
 // 6. Scalar encoding: NAF / wNAF
 // ================================================================
 static void test_scalar_encoding() {
-    std::cout << "── Scalar Encoding (NAF / wNAF) ──\n";
+    std::cout << "-- Scalar Encoding (NAF / wNAF) --\n";
 
     // NAF of 0 should be empty
     Scalar zero = Scalar::zero();
@@ -330,9 +330,9 @@ static void test_scalar_encoding() {
 }
 
 int test_mul_run() {
-    std::cout << "\n╔══════════════════════════════════════════════════════════╗\n";
-    std::cout << "║  Comprehensive Field & Scalar Arithmetic Tests          ║\n";
-    std::cout << "╚══════════════════════════════════════════════════════════╝\n\n";
+    std::cout << "\n+==========================================================+\n";
+    std::cout << "|  Comprehensive Field & Scalar Arithmetic Tests          |\n";
+    std::cout << "+==========================================================+\n\n";
 
     test_field_mul();
     test_field_square();
@@ -341,7 +341,7 @@ int test_mul_run() {
     test_scalar_arithmetic();
     test_scalar_encoding();
 
-    std::cout << "\n══════════════════════════════════════════════════════════\n";
+    std::cout << "\n==========================================================\n";
     std::cout << "Results: " << g_pass << " passed, " << g_fail << " failed\n";
 
     if (g_fail > 0) {

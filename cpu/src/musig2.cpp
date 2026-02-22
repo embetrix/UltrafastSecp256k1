@@ -14,7 +14,7 @@ using fast::Scalar;
 using fast::Point;
 using fast::FieldElement;
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// -- Helpers ------------------------------------------------------------------
 
 namespace {
 
@@ -28,7 +28,7 @@ Point decompress_point(const std::array<uint8_t, 33>& compressed) {
     std::memcpy(x_bytes.data(), compressed.data() + 1, 32);
     auto x = FieldElement::from_bytes(x_bytes);
 
-    // y² = x³ + 7
+    // y^2 = x^3 + 7
     auto x3 = x.square() * x;
     auto y2 = x3 + FieldElement::from_uint64(7);
 
@@ -56,7 +56,7 @@ bool has_even_y(const Point& P) {
 
 } // anonymous namespace
 
-// ── Key Aggregation (KeyAgg) ─────────────────────────────────────────────────
+// -- Key Aggregation (KeyAgg) -------------------------------------------------
 // BIP-327 KeyAgg: Q = sum(a_i * P_i)
 // a_i = tagged_hash("KeyAgg coefficient", L || pk_i)
 // where L = hash of all sorted pubkeys
@@ -148,7 +148,7 @@ MuSig2KeyAggCtx musig2_key_agg(const std::vector<std::array<uint8_t, 32>>& pubke
     return ctx;
 }
 
-// ── Nonce Generation ─────────────────────────────────────────────────────────
+// -- Nonce Generation ---------------------------------------------------------
 
 std::pair<MuSig2SecNonce, MuSig2PubNonce> musig2_nonce_gen(
     const Scalar& secret_key,
@@ -202,7 +202,7 @@ std::pair<MuSig2SecNonce, MuSig2PubNonce> musig2_nonce_gen(
     return {sec, pub};
 }
 
-// ── Nonce Serialization ──────────────────────────────────────────────────────
+// -- Nonce Serialization ------------------------------------------------------
 
 std::array<uint8_t, 66> MuSig2PubNonce::serialize() const {
     std::array<uint8_t, 66> out{};
@@ -218,7 +218,7 @@ MuSig2PubNonce MuSig2PubNonce::deserialize(const std::array<uint8_t, 66>& data) 
     return nonce;
 }
 
-// ── Nonce Aggregation ────────────────────────────────────────────────────────
+// -- Nonce Aggregation --------------------------------------------------------
 
 MuSig2AggNonce musig2_nonce_agg(const std::vector<MuSig2PubNonce>& pub_nonces) {
     MuSig2AggNonce agg{};
@@ -235,7 +235,7 @@ MuSig2AggNonce musig2_nonce_agg(const std::vector<MuSig2PubNonce>& pub_nonces) {
     return agg;
 }
 
-// ── Session Start ────────────────────────────────────────────────────────────
+// -- Session Start ------------------------------------------------------------
 
 MuSig2Session musig2_start_sign_session(
     const MuSig2AggNonce& agg_nonce,
@@ -278,7 +278,7 @@ MuSig2Session musig2_start_sign_session(
     return session;
 }
 
-// ── Partial Signing ──────────────────────────────────────────────────────────
+// -- Partial Signing ----------------------------------------------------------
 
 Scalar musig2_partial_sign(
     const MuSig2SecNonce& sec_nonce,
@@ -312,7 +312,7 @@ Scalar musig2_partial_sign(
     return k + session.e * key_agg_ctx.key_coefficients[signer_index] * d;
 }
 
-// ── Partial Verification ─────────────────────────────────────────────────────
+// -- Partial Verification -----------------------------------------------------
 
 bool musig2_partial_verify(
     const Scalar& partial_sig,
@@ -374,7 +374,7 @@ bool musig2_partial_verify(
     return sG_x == exp_x && sG_y == exp_y;
 }
 
-// ── Signature Aggregation ────────────────────────────────────────────────────
+// -- Signature Aggregation ----------------------------------------------------
 
 std::array<uint8_t, 64> musig2_partial_sig_agg(
     const std::vector<Scalar>& partial_sigs,

@@ -1,11 +1,11 @@
 // ============================================================================
-// shim_context.cpp — Context lifecycle (no-op for UltrafastSecp256k1)
+// shim_context.cpp -- Context lifecycle (no-op for UltrafastSecp256k1)
 // ============================================================================
 #include "secp256k1.h"
 #include <cstdlib>
 #include <cstring>
 
-// UltrafastSecp256k1 is stateless — contexts are opaque dummies.
+// UltrafastSecp256k1 is stateless -- contexts are opaque dummies.
 // We allocate a small sentinel so null-checks in user code pass.
 
 struct secp256k1_context_struct {
@@ -38,7 +38,7 @@ void secp256k1_context_destroy(secp256k1_context *ctx) {
 
 int secp256k1_context_randomize(secp256k1_context *ctx, const unsigned char *seed32) {
     (void)ctx; (void)seed32;
-    // UltrafastSecp256k1 does not use blinding — accepted as no-op.
+    // UltrafastSecp256k1 does not use blinding -- accepted as no-op.
     return 1;
 }
 

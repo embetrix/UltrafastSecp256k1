@@ -5,7 +5,7 @@
 // then multiplies by gathering bits from the scalar at regular spacings.
 //
 // Reference: Lim & Lee, "More Flexible Exponentiation with Precomputation"
-//            (CRYPTO 1994) — adapted for elliptic curves.
+//            (CRYPTO 1994) -- adapted for elliptic curves.
 
 #include "secp256k1/ecmult_gen_comb.hpp"
 #include "secp256k1/ct/ops.hpp"
@@ -16,7 +16,7 @@
 
 namespace secp256k1::fast {
 
-// ── Table construction ───────────────────────────────────────────────────────
+// -- Table construction -------------------------------------------------------
 // For teeth=t, spacing=d:
 //   We need base points: G_j = 2^(j*d) * G  for j = 0..t-1
 //   Table entry for index I (t-bit) = sum_{j where bit j of I is set} G_j
@@ -43,7 +43,7 @@ void CombGenContext::build_table() {
     table_[0].infinity = true;  // entry 0 = point at infinity
 
     for (std::size_t i = 1; i < table_entries; ++i) {
-        // Find lowest set bit — this entry = table[i ^ (1<<lsb)] + bases[lsb]
+        // Find lowest set bit -- this entry = table[i ^ (1<<lsb)] + bases[lsb]
         unsigned lsb = 0;
         while (((i >> lsb) & 1) == 0) ++lsb;
 
@@ -55,7 +55,7 @@ void CombGenContext::build_table() {
                                       .add(bases[lsb]);
 
         // Normalize to affine for cache-friendly storage
-        // (Jacobian → affine via z inversion)
+        // (Jacobian -> affine via z inversion)
         if (sum.is_infinity()) {
             table_[i].infinity = true;
         } else {
@@ -76,7 +76,7 @@ void CombGenContext::init(unsigned teeth) {
     build_table();
 }
 
-// ── Extract comb index ───────────────────────────────────────────────────────
+// -- Extract comb index -------------------------------------------------------
 // For bit position b, gather bits at b, b+d, b+2d, ..., b+(t-1)*d
 // forming a t-bit index.
 
@@ -91,9 +91,9 @@ uint32_t CombGenContext::extract_comb_index(const Scalar& k, unsigned b) const {
     return idx;
 }
 
-// ── Fast Generator Multiplication (variable-time) ────────────────────────────
+// -- Fast Generator Multiplication (variable-time) ----------------------------
 // For each bit position b from (spacing_-1) down to 0:
-//   1. R = 2·R (except first)
+//   1. R = 2*R (except first)
 //   2. Look up table[extract_comb_index(k, b)] and add to R
 
 Point CombGenContext::mul(const Scalar& k) const {
@@ -123,7 +123,7 @@ Point CombGenContext::mul(const Scalar& k) const {
     return R;
 }
 
-// ── Constant-Time Generator Multiplication ───────────────────────────────────
+// -- Constant-Time Generator Multiplication -----------------------------------
 // Same algorithm but:
 //   - Always performs addition (adds identity if idx=0)
 //   - CT table lookup (scans all entries)
@@ -162,7 +162,7 @@ Point CombGenContext::mul_ct(const Scalar& k) const {
             selected.infinity = (sel_inf != 0);
         }
 
-        // Always add (even if infinity — this is constant-time)
+        // Always add (even if infinity -- this is constant-time)
         Point P = Point::from_jacobian_coords(selected.x, selected.y, FieldElement::one(), selected.infinity);
         R = R.add(P);
     }
@@ -170,7 +170,7 @@ Point CombGenContext::mul_ct(const Scalar& k) const {
     return R;
 }
 
-// ── Cache I/O ────────────────────────────────────────────────────────────────
+// -- Cache I/O ----------------------------------------------------------------
 
 std::size_t CombGenContext::table_size_bytes() const noexcept {
     if (!ready()) return 0;
@@ -232,7 +232,7 @@ bool CombGenContext::load_cache(const std::string& path) {
     return f.good();
 }
 
-// ── Global singleton ─────────────────────────────────────────────────────────
+// -- Global singleton ---------------------------------------------------------
 
 static std::mutex g_comb_mutex;
 static CombGenContext g_comb_ctx;

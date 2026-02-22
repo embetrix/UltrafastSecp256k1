@@ -1,5 +1,5 @@
 /* ============================================================================
- * libsecp256k1-compatible C API — backed by UltrafastSecp256k1
+ * libsecp256k1-compatible C API -- backed by UltrafastSecp256k1
  *
  * This header provides the same types and function declarations as
  * bitcoin-core/secp256k1's secp256k1.h so that existing C/C++ code
@@ -14,7 +14,7 @@ extern "C" {
 
 #include <stddef.h>
 
-/* ── Visibility ─────────────────────────────────────────────────────────── */
+/* -- Visibility ----------------------------------------------------------- */
 #ifndef SECP256K1_API
 #  define SECP256K1_API extern
 #endif
@@ -22,20 +22,20 @@ extern "C" {
 #define SECP256K1_ARG_NONNULL(_x)
 #define SECP256K1_DEPRECATED(_msg)
 
-/* ── Opaque context ─────────────────────────────────────────────────────── */
+/* -- Opaque context ------------------------------------------------------- */
 typedef struct secp256k1_context_struct secp256k1_context;
 
-/* ── Public key (64 bytes opaque) ───────────────────────────────────────── */
+/* -- Public key (64 bytes opaque) ----------------------------------------- */
 typedef struct secp256k1_pubkey {
     unsigned char data[64];
 } secp256k1_pubkey;
 
-/* ── ECDSA signature (64 bytes opaque) ──────────────────────────────────── */
+/* -- ECDSA signature (64 bytes opaque) ------------------------------------ */
 typedef struct secp256k1_ecdsa_signature {
     unsigned char data[64];
 } secp256k1_ecdsa_signature;
 
-/* ── Nonce function type ────────────────────────────────────────────────── */
+/* -- Nonce function type -------------------------------------------------- */
 typedef int (*secp256k1_nonce_function)(
     unsigned char *nonce32,
     const unsigned char *msg32,
@@ -45,7 +45,7 @@ typedef int (*secp256k1_nonce_function)(
     unsigned int attempt
 );
 
-/* ── Flags ──────────────────────────────────────────────────────────────── */
+/* -- Flags ---------------------------------------------------------------- */
 #define SECP256K1_FLAGS_TYPE_MASK         ((1 << 8) - 1)
 #define SECP256K1_FLAGS_TYPE_CONTEXT      (1 << 0)
 #define SECP256K1_FLAGS_TYPE_COMPRESSION  (1 << 1)
@@ -64,17 +64,17 @@ typedef int (*secp256k1_nonce_function)(
 #define SECP256K1_TAG_PUBKEY_ODD           0x03
 #define SECP256K1_TAG_PUBKEY_UNCOMPRESSED  0x04
 
-/* ── Static context ─────────────────────────────────────────────────────── */
+/* -- Static context ------------------------------------------------------- */
 SECP256K1_API const secp256k1_context * const secp256k1_context_static;
 
-/* ── Context lifecycle ──────────────────────────────────────────────────── */
+/* -- Context lifecycle ---------------------------------------------------- */
 SECP256K1_API secp256k1_context *secp256k1_context_create(unsigned int flags);
 SECP256K1_API secp256k1_context *secp256k1_context_clone(const secp256k1_context *ctx);
 SECP256K1_API void secp256k1_context_destroy(secp256k1_context *ctx);
 SECP256K1_API int  secp256k1_context_randomize(secp256k1_context *ctx, const unsigned char *seed32);
 SECP256K1_API void secp256k1_selftest(void);
 
-/* ── Public key operations ──────────────────────────────────────────────── */
+/* -- Public key operations ------------------------------------------------ */
 SECP256K1_API int secp256k1_ec_pubkey_parse(
     const secp256k1_context *ctx, secp256k1_pubkey *pubkey,
     const unsigned char *input, size_t inputlen);
@@ -106,7 +106,7 @@ SECP256K1_API int secp256k1_ec_pubkey_combine(
     const secp256k1_context *ctx, secp256k1_pubkey *out,
     const secp256k1_pubkey * const *ins, size_t n);
 
-/* ── Secret key operations ──────────────────────────────────────────────── */
+/* -- Secret key operations ------------------------------------------------ */
 SECP256K1_API int secp256k1_ec_seckey_verify(
     const secp256k1_context *ctx, const unsigned char *seckey);
 
@@ -121,7 +121,7 @@ SECP256K1_API int secp256k1_ec_seckey_tweak_mul(
     const secp256k1_context *ctx, unsigned char *seckey,
     const unsigned char *tweak32);
 
-/* ── ECDSA ──────────────────────────────────────────────────────────────── */
+/* -- ECDSA ---------------------------------------------------------------- */
 SECP256K1_API int secp256k1_ecdsa_signature_parse_compact(
     const secp256k1_context *ctx, secp256k1_ecdsa_signature *sig,
     const unsigned char *input64);
@@ -154,7 +154,7 @@ SECP256K1_API int secp256k1_ecdsa_sign(
 SECP256K1_API const secp256k1_nonce_function secp256k1_nonce_function_rfc6979;
 SECP256K1_API const secp256k1_nonce_function secp256k1_nonce_function_default;
 
-/* ── Tagged hash ────────────────────────────────────────────────────────── */
+/* -- Tagged hash ---------------------------------------------------------- */
 SECP256K1_API int secp256k1_tagged_sha256(
     const secp256k1_context *ctx, unsigned char *hash32,
     const unsigned char *tag, size_t taglen,

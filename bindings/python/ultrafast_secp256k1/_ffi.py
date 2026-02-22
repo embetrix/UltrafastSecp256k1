@@ -1,5 +1,5 @@
 """
-UltrafastSecp256k1 — ctypes FFI wrapper
+UltrafastSecp256k1 -- ctypes FFI wrapper
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 Loads the native shared library and exposes all C API functions
 as Python methods with proper type conversion.
@@ -66,7 +66,7 @@ def _find_library() -> str:
 class Secp256k1:
     """Python wrapper around the UltrafastSecp256k1 C API."""
 
-    # ── Constants ─────────────────────────────────────────────────────────
+    # -- Constants ---------------------------------------------------------
     NETWORK_MAINNET = 0
     NETWORK_TESTNET = 1
 
@@ -84,7 +84,7 @@ class Secp256k1:
         if rc != 0:
             raise RuntimeError("secp256k1_init() failed: library selftest failure")
 
-    # ── Key Operations ────────────────────────────────────────────────────
+    # -- Key Operations ----------------------------------------------------
 
     def ec_pubkey_create(self, privkey: bytes) -> bytes:
         """Compute compressed public key (33 bytes) from private key (32 bytes)."""
@@ -146,7 +146,7 @@ class Secp256k1:
             raise ValueError("Tweak mul resulted in invalid key")
         return buf.raw
 
-    # ── ECDSA ─────────────────────────────────────────────────────────────
+    # -- ECDSA -------------------------------------------------------------
 
     def ecdsa_sign(self, msg_hash: bytes, privkey: bytes) -> bytes:
         """Sign a 32-byte message hash. Returns 64-byte compact signature."""
@@ -177,7 +177,7 @@ class Secp256k1:
             raise ValueError("DER serialization failed")
         return der.raw[: der_len.value]
 
-    # ── ECDSA Recovery ────────────────────────────────────────────────────
+    # -- ECDSA Recovery ----------------------------------------------------
 
     def ecdsa_sign_recoverable(self, msg_hash: bytes, privkey: bytes) -> Tuple[bytes, int]:
         """Sign with recovery id. Returns (64-byte signature, recid)."""
@@ -202,7 +202,7 @@ class Secp256k1:
             raise ValueError("Recovery failed")
         return pubkey.raw
 
-    # ── Schnorr (BIP-340) ─────────────────────────────────────────────────
+    # -- Schnorr (BIP-340) -------------------------------------------------
 
     def schnorr_sign(self, msg: bytes, privkey: bytes, aux_rand: bytes) -> bytes:
         """Create Schnorr signature. Returns 64-byte signature."""
@@ -231,7 +231,7 @@ class Secp256k1:
             raise ValueError("Invalid private key")
         return out.raw
 
-    # ── ECDH ──────────────────────────────────────────────────────────────
+    # -- ECDH --------------------------------------------------------------
 
     def ecdh(self, privkey: bytes, pubkey: bytes) -> bytes:
         """Compute ECDH shared secret: SHA256(compressed_point)."""
@@ -263,7 +263,7 @@ class Secp256k1:
             raise ValueError("ECDH raw failed")
         return out.raw
 
-    # ── Hashing ───────────────────────────────────────────────────────────
+    # -- Hashing -----------------------------------------------------------
 
     def sha256(self, data: bytes) -> bytes:
         """SHA-256 hash. Returns 32 bytes."""
@@ -284,7 +284,7 @@ class Secp256k1:
         self._lib.secp256k1_tagged_hash(tag_bytes, data, len(data), out)
         return out.raw
 
-    # ── Bitcoin Addresses ─────────────────────────────────────────────────
+    # -- Bitcoin Addresses -------------------------------------------------
 
     def address_p2pkh(self, pubkey: bytes, network: int = NETWORK_MAINNET) -> str:
         """Generate P2PKH address from compressed public key."""
@@ -316,7 +316,7 @@ class Secp256k1:
             raise ValueError("P2TR address generation failed")
         return buf.value.decode("ascii")
 
-    # ── WIF ───────────────────────────────────────────────────────────────
+    # -- WIF ---------------------------------------------------------------
 
     def wif_encode(self, privkey: bytes, compressed: bool = True,
                    network: int = NETWORK_MAINNET) -> str:
@@ -344,7 +344,7 @@ class Secp256k1:
             raise ValueError("WIF decoding failed")
         return privkey.raw, compressed.value == 1, network.value
 
-    # ── BIP-32 ────────────────────────────────────────────────────────────
+    # -- BIP-32 ------------------------------------------------------------
 
     def bip32_master_key(self, seed: bytes) -> bytes:
         """Create master key from seed. Returns opaque 79-byte key."""
@@ -383,7 +383,7 @@ class Secp256k1:
             raise ValueError("Public key extraction failed")
         return pubkey.raw
 
-    # ── Taproot ───────────────────────────────────────────────────────────
+    # -- Taproot -----------------------------------------------------------
 
     def taproot_output_key(self, internal_key_x: bytes,
                            merkle_root: Optional[bytes] = None) -> Tuple[bytes, int]:
@@ -410,7 +410,7 @@ class Secp256k1:
             raise ValueError("Taproot privkey tweaking failed")
         return out.raw
 
-    # ── Prototypes setup ──────────────────────────────────────────────────
+    # -- Prototypes setup --------------------------------------------------
 
     def _setup_prototypes(self):
         """Declare C API function signatures for type safety."""

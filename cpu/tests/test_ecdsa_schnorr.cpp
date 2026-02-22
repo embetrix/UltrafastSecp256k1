@@ -25,7 +25,7 @@ static int tests_passed = 0;
     else { printf("  [FAIL] %s\n", msg); } \
 } while(0)
 
-// ── SHA-256 Tests ────────────────────────────────────────────────────────────
+// -- SHA-256 Tests ------------------------------------------------------------
 
 static void test_sha256() {
     printf("\n--- SHA-256 ---\n");
@@ -51,7 +51,7 @@ static void test_sha256() {
     CHECK(std::memcmp(h2.data(), expected2, 32) == 0, "SHA256(\"\") matches NIST vector");
 }
 
-// ── Scalar::inverse Tests ────────────────────────────────────────────────────
+// -- Scalar::inverse Tests ----------------------------------------------------
 
 static void test_scalar_inverse() {
     printf("\n--- Scalar::inverse ---\n");
@@ -71,7 +71,7 @@ static void test_scalar_inverse() {
     CHECK(zero_inv.is_zero(), "inverse(0) = 0");
 }
 
-// ── Scalar::negate Tests ─────────────────────────────────────────────────────
+// -- Scalar::negate Tests -----------------------------------------------------
 
 static void test_scalar_negate() {
     printf("\n--- Scalar::negate ---\n");
@@ -84,7 +84,7 @@ static void test_scalar_negate() {
     CHECK(Scalar::zero().negate().is_zero(), "negate(0) = 0");
 }
 
-// ── ECDSA Tests ──────────────────────────────────────────────────────────────
+// -- ECDSA Tests --------------------------------------------------------------
 
 static void test_ecdsa_sign_verify() {
     printf("\n--- ECDSA Sign/Verify ---\n");
@@ -133,20 +133,20 @@ static void test_ecdsa_deterministic() {
         "0000000000000000000000000000000000000000000000000000000000000001");
     auto msg = SHA256::hash("test", 4);
 
-    // Sign twice with same key + message → same signature (deterministic)
+    // Sign twice with same key + message -> same signature (deterministic)
     auto sig1 = ecdsa_sign(msg, priv);
     auto sig2 = ecdsa_sign(msg, priv);
     CHECK(sig1.r == sig2.r && sig1.s == sig2.s,
-          "same key + message → same signature (deterministic)");
+          "same key + message -> same signature (deterministic)");
 
-    // Different message → different signature
+    // Different message -> different signature
     auto msg2 = SHA256::hash("test2", 5);
     auto sig3 = ecdsa_sign(msg2, priv);
     CHECK(sig3.r != sig1.r || sig3.s != sig1.s,
-          "different message → different signature");
+          "different message -> different signature");
 }
 
-// ── Schnorr Tests ────────────────────────────────────────────────────────────
+// -- Schnorr Tests ------------------------------------------------------------
 
 static void test_schnorr_sign_verify() {
     printf("\n--- Schnorr BIP-340 Sign/Verify ---\n");
@@ -196,10 +196,10 @@ static void test_tagged_hash() {
     CHECK(h1 == h2, "tagged_hash is deterministic");
 
     auto h3 = tagged_hash("BIP0340/aux", "test", 4);
-    CHECK(h1 != h3, "different tags → different hashes");
+    CHECK(h1 != h3, "different tags -> different hashes");
 }
 
-// ── Main ─────────────────────────────────────────────────────────────────────
+// -- Main ---------------------------------------------------------------------
 
 int test_ecdsa_schnorr_run() {
     printf("================================================================\n");

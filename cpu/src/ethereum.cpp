@@ -1,5 +1,5 @@
 // ============================================================================
-// Ethereum Address — Implementation
+// Ethereum Address -- Implementation
 // ============================================================================
 // EIP-55 mixed-case checksum addresses using Keccak-256.
 // ============================================================================
@@ -10,7 +10,7 @@
 
 namespace secp256k1::coins {
 
-// ── Hex helpers (no heap, no formatting) ─────────────────────────────────────
+// -- Hex helpers (no heap, no formatting) -------------------------------------
 
 static constexpr char HEX_LOWER[] = "0123456789abcdef";
 
@@ -22,7 +22,7 @@ static void bytes_to_hex_lower(const std::uint8_t* bytes, std::size_t len,
     }
 }
 
-// ── Raw Address Bytes ────────────────────────────────────────────────────────
+// -- Raw Address Bytes --------------------------------------------------------
 
 std::array<std::uint8_t, 20> ethereum_address_bytes(const fast::Point& pubkey) {
     // Get uncompressed public key (65 bytes: 0x04 + x[32] + y[32])
@@ -37,7 +37,7 @@ std::array<std::uint8_t, 20> ethereum_address_bytes(const fast::Point& pubkey) {
     return addr;
 }
 
-// ── Raw Hex Address ──────────────────────────────────────────────────────────
+// -- Raw Hex Address ----------------------------------------------------------
 
 std::string ethereum_address_raw(const fast::Point& pubkey) {
     auto addr_bytes = ethereum_address_bytes(pubkey);
@@ -46,7 +46,7 @@ std::string ethereum_address_raw(const fast::Point& pubkey) {
     return std::string(hex, 40);
 }
 
-// ── EIP-55 Checksum ──────────────────────────────────────────────────────────
+// -- EIP-55 Checksum ----------------------------------------------------------
 
 std::string eip55_checksum(const std::string& hex_addr) {
     // Keccak-256 of the lowercase hex address string
@@ -90,7 +90,7 @@ bool eip55_verify(const std::string& addr) {
     return std::memcmp(hex, checksummed.data(), 40) == 0;
 }
 
-// ── EIP-55 Address ───────────────────────────────────────────────────────────
+// -- EIP-55 Address -----------------------------------------------------------
 
 std::string ethereum_address(const fast::Point& pubkey) {
     std::string raw = ethereum_address_raw(pubkey);

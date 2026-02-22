@@ -25,7 +25,7 @@
 #include <chrono>
 #include <cmath>
 
-// ── Our library ──────────────────────────────────────────────────────────────
+// -- Our library --------------------------------------------------------------
 #include "secp256k1/field.hpp"
 #include "secp256k1/scalar.hpp"
 #include "secp256k1/point.hpp"
@@ -37,7 +37,7 @@
 #include "secp256k1/ct/scalar.hpp"
 #include "secp256k1/ct/point.hpp"
 
-// ── libsecp256k1 (C API) ────────────────────────────────────────────────────
+// -- libsecp256k1 (C API) ----------------------------------------------------
 extern "C" {
 #include <secp256k1.h>
 #include <secp256k1_schnorrsig.h>
@@ -48,7 +48,7 @@ extern "C" {
 
 using namespace secp256k1::fast;
 
-// ── PRNG ─────────────────────────────────────────────────────────────────────
+// -- PRNG ---------------------------------------------------------------------
 static std::mt19937_64 rng(0xA0D17'BE4C8);
 
 static void random_bytes(uint8_t* out, size_t len) {
@@ -75,7 +75,7 @@ static void random_seckey(uint8_t seckey[32], secp256k1_context* ctx) {
     }
 }
 
-// ── Benchmark harness ────────────────────────────────────────────────────────
+// -- Benchmark harness --------------------------------------------------------
 struct BenchResult {
     const char* name;
     int         iters;
@@ -107,43 +107,43 @@ struct ComparisonRow {
 };
 
 static void print_header() {
-    printf("┌────────────────────────────┬──────────────────────────────────────┬──────────────────────────────────────┬──────────┐\n");
-    printf("│ %-26s │ %-36s │ %-36s │ %-8s │\n",
-           "ოპერაცია", "UltrafastSecp256k1 (CT)", "libsecp256k1", "თანაფარდობა");
-    printf("├────────────────────────────┼──────────────────────────────────────┼──────────────────────────────────────┼──────────┤\n");
+    printf("+----------------------------+--------------------------------------+--------------------------------------+----------+\n");
+    printf("| %-26s | %-36s | %-36s | %-8s |\n",
+           "", "UltrafastSecp256k1 (CT)", "libsecp256k1", "");
+    printf("+----------------------------+--------------------------------------+--------------------------------------+----------+\n");
 }
 
 static void print_row(const char* label, const BenchResult& ours, const BenchResult& lib) {
     double ratio = (lib.per_op_ns > 0) ? (ours.per_op_ns / lib.per_op_ns) : 0;
     const char* indicator;
-    if (ratio < 0.85)      indicator = "✅ ჩვენი";
-    else if (ratio <= 1.15) indicator = "≈  თანაბარი";
-    else                    indicator = "⚠️  libsecp";
+    if (ratio < 0.85)      indicator = "[OK] ";
+    else if (ratio <= 1.15) indicator = "~=  ";
+    else                    indicator = "[!]  libsecp";
 
-    printf("│ %-26s │ %8.1f ns/op  %10.0f op/s   │ %8.1f ns/op  %10.0f op/s   │ %5.2fx   │  %s\n",
+    printf("| %-26s | %8.1f ns/op  %10.0f op/s   | %8.1f ns/op  %10.0f op/s   | %5.2fx   |  %s\n",
            label, ours.per_op_ns, ours.ops_per_sec, lib.per_op_ns, lib.ops_per_sec, ratio, indicator);
 }
 
 static void print_row_single(const char* label, const BenchResult& r) {
-    printf("│ %-26s │ %8.1f ns/op  %10.0f op/s   │ %-36s │ %-8s │\n",
-           label, r.per_op_ns, r.ops_per_sec, "(N/A)", "—");
+    printf("| %-26s | %8.1f ns/op  %10.0f op/s   | %-36s | %-8s |\n",
+           label, r.per_op_ns, r.ops_per_sec, "(N/A)", "--");
 }
 
 static void print_separator() {
-    printf("├────────────────────────────┼──────────────────────────────────────┼──────────────────────────────────────┼──────────┤\n");
+    printf("+----------------------------+--------------------------------------+--------------------------------------+----------+\n");
 }
 
 static void print_footer() {
-    printf("└────────────────────────────┴──────────────────────────────────────┴──────────────────────────────────────┴──────────┘\n");
+    printf("+----------------------------+--------------------------------------+--------------------------------------+----------+\n");
 }
 
 // ============================================================================
 int main() {
-    printf("═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════\n");
-    printf("  CT ბენჩმარკი: UltrafastSecp256k1 vs libsecp256k1 (Bitcoin Core)\n");
-    printf("═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════\n\n");
+    printf("=======================================================================================================================\n");
+    printf("  CT : UltrafastSecp256k1 vs libsecp256k1 (Bitcoin Core)\n");
+    printf("=======================================================================================================================\n\n");
 
-    // ── Setup libsecp256k1 context ───────────────────────────────────────
+    // -- Setup libsecp256k1 context ---------------------------------------
     secp256k1_context* ctx = secp256k1_context_create(SECP256K1_CONTEXT_SIGN | SECP256K1_CONTEXT_VERIFY);
     {
         uint8_t seed[32];
@@ -151,7 +151,7 @@ int main() {
         secp256k1_context_randomize(ctx, seed);
     }
 
-    // ── Pre-generate test data ───────────────────────────────────────────
+    // -- Pre-generate test data -------------------------------------------
     // NOTE: Every benchmark rotates through a POOL of random 256-bit scalars
     // to prevent branch-predictor / cache warming artifacts.
     // Both libraries receive identical treatment for fair comparison.
@@ -162,7 +162,7 @@ int main() {
     constexpr int N_SCMUL    = 1000;
     constexpr int N_PRIM     = 100000;
 
-    // ── Pool of random 256-bit secret keys ───────────────────────────────
+    // -- Pool of random 256-bit secret keys -------------------------------
     constexpr int POOL = 64;  // rotate through 64 different keys
 
     // Secret key pool (valid for both libraries)
@@ -217,7 +217,7 @@ int main() {
     std::array<uint8_t, 32> aux{};
     random_bytes(aux.data(), 32);
 
-    // Pre-sign for verify benchmarks — pool of different sigs on different msgs
+    // Pre-sign for verify benchmarks -- pool of different sigs on different msgs
     secp256k1_ecdsa_signature lib_ecdsa_sig_pool[POOL];
     secp256k1::ECDSASignature our_ecdsa_sig_pool[POOL];
     for (int i = 0; i < POOL; ++i) {
@@ -245,16 +245,16 @@ int main() {
     Scalar scalar_pool[POOL];
     for (int i = 0; i < POOL; ++i) scalar_pool[i] = random_scalar();
 
-    printf("  იტერაციები: keygen=%d, sign=%d, verify=%d, ecdh=%d, scalar_mul=%d, primitives=%d\n",
+    printf("  : keygen=%d, sign=%d, verify=%d, ecdh=%d, scalar_mul=%d, primitives=%d\n",
            N_KEYGEN, N_SIGN, N_VERIFY, N_ECDH, N_SCMUL, N_PRIM);
-    printf("  სკალარების პული: %d სხვადასხვა 256-ბიტიანი შემთხვევითი სკალარი (თითო ოპერაციისთვის სხვადასხვა)\n\n",
+    printf("   : %d  256-   (  )\n\n",
            POOL);
 
     print_header();
 
-    // ═════════════════════════════════════════════════════════════════════
+    // =====================================================================
     // Section 1: Key Generation (pubkey_create)
-    // ═════════════════════════════════════════════════════════════════════
+    // =====================================================================
 
     auto r_keygen_ours = BENCH("keygen_ct", N_KEYGEN, {}, {
         volatile auto p = secp256k1::ct::generator_mul(our_sk_pool[_i % POOL]);
@@ -275,9 +275,9 @@ int main() {
 
     print_separator();
 
-    // ═════════════════════════════════════════════════════════════════════
+    // =====================================================================
     // Section 2: ECDSA Sign
-    // ═════════════════════════════════════════════════════════════════════
+    // =====================================================================
 
     auto r_ecdsa_sign_ours = BENCH("ecdsa_sign", N_SIGN, {}, {
         volatile auto s = secp256k1::ecdsa_sign(msg_pool[_i % POOL], our_sk_pool[_i % POOL]);
@@ -290,9 +290,9 @@ int main() {
 
     print_row("ECDSA sign", r_ecdsa_sign_ours, r_ecdsa_sign_lib);
 
-    // ═════════════════════════════════════════════════════════════════════
+    // =====================================================================
     // Section 3: ECDSA Verify
-    // ═════════════════════════════════════════════════════════════════════
+    // =====================================================================
 
     auto r_ecdsa_verify_ours = BENCH("ecdsa_verify", N_VERIFY, {}, {
         int idx = _i % POOL;
@@ -308,9 +308,9 @@ int main() {
 
     print_separator();
 
-    // ═════════════════════════════════════════════════════════════════════
+    // =====================================================================
     // Section 4: Schnorr Sign
-    // ═════════════════════════════════════════════════════════════════════
+    // =====================================================================
 
     auto r_schnorr_sign_ours = BENCH("schnorr_sign", N_SIGN, {}, {
         int idx = _i % POOL;
@@ -325,9 +325,9 @@ int main() {
 
     print_row("Schnorr sign", r_schnorr_sign_ours, r_schnorr_sign_lib);
 
-    // ═════════════════════════════════════════════════════════════════════
+    // =====================================================================
     // Section 5: Schnorr Verify
-    // ═════════════════════════════════════════════════════════════════════
+    // =====================================================================
 
     auto r_schnorr_verify_ours = BENCH("schnorr_verify", N_VERIFY, {}, {
         int idx = _i % POOL;
@@ -343,9 +343,9 @@ int main() {
 
     print_separator();
 
-    // ═════════════════════════════════════════════════════════════════════
+    // =====================================================================
     // Section 6: ECDH
-    // ═════════════════════════════════════════════════════════════════════
+    // =====================================================================
 
     auto r_ecdh_ours = BENCH("ecdh", N_ECDH, {}, {
         int idx = _i % POOL;
@@ -364,9 +364,9 @@ int main() {
 
     print_separator();
 
-    // ═════════════════════════════════════════════════════════════════════
+    // =====================================================================
     // Section 7: CT Scalar Multiplication
-    // ═════════════════════════════════════════════════════════════════════
+    // =====================================================================
 
     auto r_ct_scmul_ours = BENCH("ct_scalar_mul", N_SCMUL, {}, {
         volatile auto p = secp256k1::ct::scalar_mul(G, scalar_pool[_i % POOL]);
@@ -395,9 +395,9 @@ int main() {
 
     print_separator();
 
-    // ═════════════════════════════════════════════════════════════════════
-    // Section 8: CT Primitives (ours only — libsecp doesn't expose these)
-    // ═════════════════════════════════════════════════════════════════════
+    // =====================================================================
+    // Section 8: CT Primitives (ours only -- libsecp doesn't expose these)
+    // =====================================================================
 
     // CT cmov256
     uint64_t buf_a[4] = {1,2,3,4}, buf_b[4] = {5,6,7,8};
@@ -480,26 +480,26 @@ int main() {
 
     print_footer();
 
-    // ═════════════════════════════════════════════════════════════════════
+    // =====================================================================
     // Summary
-    // ═════════════════════════════════════════════════════════════════════
+    // =====================================================================
     printf("\n");
-    printf("═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════\n");
-    printf("  შეჯამება\n");
-    printf("═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════\n");
+    printf("=======================================================================================================================\n");
+    printf("  \n");
+    printf("=======================================================================================================================\n");
     printf("\n");
-    printf("  ლეგენდა:\n");
-    printf("    თანაფარდობა = ჩვენი_ns / libsecp_ns  (< 1.0 = ჩვენი უფრო სწრაფია)\n");
-    printf("    ✅ ჩვენი   — ჩვენი ბიბლიოთეკა მნიშვნელოვნად სწრაფია (< 0.85x)\n");
-    printf("    ≈  თანაბარი — შესადარებელი სიჩქარე (0.85x – 1.15x)\n");
-    printf("    ⚠️  libsecp — libsecp256k1 უფრო სწრაფია (> 1.15x)\n");
+    printf("  :\n");
+    printf("     = _ns / libsecp_ns  (< 1.0 =   )\n");
+    printf("    [OK]    --     (< 0.85x)\n");
+    printf("    ~=   --   (0.85x - 1.15x)\n");
+    printf("    [!]  libsecp -- libsecp256k1   (> 1.15x)\n");
     printf("\n");
-    printf("  შენიშვნა:\n");
-    printf("    - libsecp256k1-ის ყველა ოპერაცია CT-ია (constant-time by design)\n");
-    printf("    - ჩვენი ბიბლიოთეკის 'fast' path არ არის CT, მაგრამ უფრო სწრაფია\n");
-    printf("    - ჩვენი 'ct::' namespace იძლევა CT გარანტიებს fast:: ტიპებზე\n");
-    printf("    - CT primitives (cmov, cswap, lookup) მხოლოდ ჩვენს ბიბლიოთეკაშია\n");
-    printf("      ექსპოზირებული — libsecp256k1 არ ავლენს ამ შიდა ინტერფეისებს\n");
+    printf("  :\n");
+    printf("    - libsecp256k1-   CT- (constant-time by design)\n");
+    printf("    -   'fast' path   CT,   \n");
+    printf("    -  'ct::' namespace  CT  fast:: \n");
+    printf("    - CT primitives (cmov, cswap, lookup)   \n");
+    printf("       -- libsecp256k1     \n");
     printf("\n");
 
     secp256k1_context_destroy(ctx);

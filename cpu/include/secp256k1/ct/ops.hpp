@@ -22,12 +22,12 @@
 #include <cstdint>
 #include <cstddef>
 
-// ─── Declassify / Classify Markers ───────────────────────────────────────────
+// --- Declassify / Classify Markers -------------------------------------------
 // For constant-time verification with Valgrind (memcheck) or MSAN.
 //
-// SECP256K1_CLASSIFY(ptr, len)   — Mark memory as secret (undefined).
+// SECP256K1_CLASSIFY(ptr, len)   -- Mark memory as secret (undefined).
 //                                  Call on inputs before CT operations.
-// SECP256K1_DECLASSIFY(ptr, len) — Mark memory as public (defined).
+// SECP256K1_DECLASSIFY(ptr, len) -- Mark memory as public (defined).
 //                                  Call on outputs after CT operations.
 //
 // Under normal compilation these are no-ops. When compiled with:
@@ -42,7 +42,7 @@
 //
 // If valgrind reports a "conditional jump depends on uninitialised value"
 // error BETWEEN classify and declassify, the code has a CT violation.
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 #if defined(SECP256K1_CT_VALGRIND) && SECP256K1_CT_VALGRIND
     #include <valgrind/memcheck.h>
@@ -55,7 +55,7 @@
 
 namespace secp256k1::ct {
 
-// ─── Compiler barrier ────────────────────────────────────────────────────────
+// --- Compiler barrier --------------------------------------------------------
 // Prevents compiler from optimizing away branchless patterns.
 // Uses inline asm (GCC/Clang) or volatile (MSVC) to create optimization barrier.
 
@@ -79,7 +79,7 @@ namespace secp256k1::ct {
     }
 #endif
 
-// ─── Mask generation ─────────────────────────────────────────────────────────
+// --- Mask generation ---------------------------------------------------------
 
 // Returns 0xFFFFFFFFFFFFFFFF if v == 0, else 0x0000000000000000
 inline std::uint64_t is_zero_mask(std::uint64_t v) noexcept {
@@ -120,8 +120,8 @@ inline std::uint64_t lt_mask(std::uint64_t a, std::uint64_t b) noexcept {
     return -borrow;
 }
 
-// ─── Conditional move (CT) ───────────────────────────────────────────────────
-// if (flag) *dst = *src;  — constant time, no branch
+// --- Conditional move (CT) ---------------------------------------------------
+// if (flag) *dst = *src;  -- constant time, no branch
 
 inline void cmov64(std::uint64_t* dst, const std::uint64_t* src,
                    std::uint64_t mask) noexcept {
@@ -138,8 +138,8 @@ inline void cmov256(std::uint64_t dst[4], const std::uint64_t src[4],
     dst[3] ^= (dst[3] ^ src[3]) & mask;
 }
 
-// ─── Conditional swap (CT) ───────────────────────────────────────────────────
-// if (flag) swap(*a, *b);  — constant time
+// --- Conditional swap (CT) ---------------------------------------------------
+// if (flag) swap(*a, *b);  -- constant time
 
 inline void cswap256(std::uint64_t a[4], std::uint64_t b[4],
                      std::uint64_t mask) noexcept {
@@ -150,7 +150,7 @@ inline void cswap256(std::uint64_t a[4], std::uint64_t b[4],
     }
 }
 
-// ─── Constant-time select ────────────────────────────────────────────────────
+// --- Constant-time select ----------------------------------------------------
 // Returns a if mask == 0xFFF...F, else b (mask must be all-zeros or all-ones)
 
 inline std::uint64_t ct_select(std::uint64_t a, std::uint64_t b,
@@ -158,7 +158,7 @@ inline std::uint64_t ct_select(std::uint64_t a, std::uint64_t b,
     return (a & mask) | (b & ~mask);
 }
 
-// ─── Constant-time table lookup ──────────────────────────────────────────────
+// --- Constant-time table lookup ----------------------------------------------
 // Always reads ALL entries. No secret-dependent memory access pattern.
 // table: pointer to N entries of 'stride' bytes each
 // index: which entry to select (0-based)

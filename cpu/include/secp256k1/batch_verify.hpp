@@ -32,7 +32,7 @@
 
 namespace secp256k1 {
 
-// ── Schnorr Batch Verification ───────────────────────────────────────────────
+// -- Schnorr Batch Verification -----------------------------------------------
 
 struct SchnorrBatchEntry {
     std::array<std::uint8_t, 32> pubkey_x;  // X-only public key
@@ -48,7 +48,7 @@ struct SchnorrBatchEntry {
 bool schnorr_batch_verify(const SchnorrBatchEntry* entries, std::size_t n);
 bool schnorr_batch_verify(const std::vector<SchnorrBatchEntry>& entries);
 
-// ── ECDSA Batch Verification ─────────────────────────────────────────────────
+// -- ECDSA Batch Verification -------------------------------------------------
 
 struct ECDSABatchEntry {
     std::array<std::uint8_t, 32> msg_hash;  // 32-byte message hash
@@ -64,7 +64,7 @@ struct ECDSABatchEntry {
 bool ecdsa_batch_verify(const ECDSABatchEntry* entries, std::size_t n);
 bool ecdsa_batch_verify(const std::vector<ECDSABatchEntry>& entries);
 
-// ── Identify Invalid Signatures ──────────────────────────────────────────────
+// -- Identify Invalid Signatures ----------------------------------------------
 
 // After a batch fails, identify which signature(s) are invalid.
 // Returns indices of invalid entries.

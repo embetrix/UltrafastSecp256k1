@@ -4,12 +4,12 @@
 
 namespace secp256k1::fast {
 
-// ── Selftest execution modes ──
+// -- Selftest execution modes --
 // Controls which test subsets run and how many iterations stress tests perform.
 //
-//   smoke  — 1-2 seconds, core KAT vectors only (suitable for app startup)
-//   ci     — 30-90 seconds, full coverage (GitHub Actions / every push)
-//   stress — 10-60 minutes, extended iterations + big sweeps (nightly / manual)
+//   smoke  -- 1-2 seconds, core KAT vectors only (suitable for app startup)
+//   ci     -- 30-90 seconds, full coverage (GitHub Actions / every push)
+//   stress -- 10-60 minutes, extended iterations + big sweeps (nightly / manual)
 enum class SelftestMode : uint8_t {
     smoke  = 0,   // Core vectors + field/scalar identities (~1-2 s)
     ci     = 1,   // All tests including batch sweeps, bilinearity, NAF (~30-90 s)

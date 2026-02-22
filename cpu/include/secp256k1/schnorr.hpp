@@ -20,7 +20,7 @@
 
 namespace secp256k1 {
 
-// ── Schnorr Signature ────────────────────────────────────────────────────────
+// -- Schnorr Signature --------------------------------------------------------
 
 struct SchnorrSignature {
     std::array<std::uint8_t, 32> r;  // R.x (x-coordinate of nonce point)
@@ -31,7 +31,7 @@ struct SchnorrSignature {
     static SchnorrSignature from_bytes(const std::array<std::uint8_t, 64>& data);
 };
 
-// ── Pre-computed Schnorr Keypair ──────────────────────────────────────────────
+// -- Pre-computed Schnorr Keypair ----------------------------------------------
 // Equivalent to libsecp256k1's secp256k1_keypair: pre-computes pubkey x-bytes
 // and adjusts private key for even-Y, saving 1 gen_mul + 1 inverse per sign.
 
@@ -43,7 +43,7 @@ struct SchnorrKeypair {
 // Create a pre-computed keypair (call once, then reuse for multiple signs).
 SchnorrKeypair schnorr_keypair_create(const fast::Scalar& private_key);
 
-// ── BIP-340 Operations ───────────────────────────────────────────────────────
+// -- BIP-340 Operations -------------------------------------------------------
 
 // Sign using pre-computed keypair (fast: only 1 gen_mul per sign).
 SchnorrSignature schnorr_sign(const SchnorrKeypair& kp,
@@ -63,7 +63,7 @@ bool schnorr_verify(const std::array<std::uint8_t, 32>& pubkey_x,
                     const std::array<std::uint8_t, 32>& msg,
                     const SchnorrSignature& sig);
 
-// ── Pre-cached X-only Public Key ─────────────────────────────────────────────
+// -- Pre-cached X-only Public Key ---------------------------------------------
 // Caches the full Point (avoiding sqrt per verify), similar to libsecp's
 // secp256k1_xonly_pubkey which internally stores the cached (x,y) point.
 
@@ -77,7 +77,7 @@ struct SchnorrXonlyPubkey {
 bool schnorr_xonly_pubkey_parse(SchnorrXonlyPubkey& out,
                                 const std::array<std::uint8_t, 32>& pubkey_x);
 
-// Create from keypair (no sqrt needed — point already known).
+// Create from keypair (no sqrt needed -- point already known).
 SchnorrXonlyPubkey schnorr_xonly_from_keypair(const SchnorrKeypair& kp);
 
 // Verify using pre-cached pubkey (fast: skips lift_x sqrt).
@@ -85,7 +85,7 @@ bool schnorr_verify(const SchnorrXonlyPubkey& pubkey,
                     const std::array<std::uint8_t, 32>& msg,
                     const SchnorrSignature& sig);
 
-// ── Tagged Hashing (BIP-340) ─────────────────────────────────────────────────
+// -- Tagged Hashing (BIP-340) -------------------------------------------------
 
 // H_tag(msg) = SHA256(SHA256(tag) || SHA256(tag) || msg)
 std::array<std::uint8_t, 32> tagged_hash(const char* tag,

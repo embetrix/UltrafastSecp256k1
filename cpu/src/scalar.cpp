@@ -253,11 +253,11 @@ Scalar Scalar::operator-(const Scalar& rhs) const {
 }
 
 Scalar Scalar::operator*(const Scalar& rhs) const {
-    // Schoolbook 4×4 limb multiplication → 8-limb wide result
+    // Schoolbook 4x4 limb multiplication -> 8-limb wide result
     // Then Barrett reduction mod ORDER
-    // ~25-50× faster than double-and-add
+    // ~25-50x faster than double-and-add
 
-    // Step 1: Schoolbook 4×4 → 512-bit product
+    // Step 1: Schoolbook 4x4 -> 512-bit product
     wide8 prod{};
 
 #ifdef SECP256K1_NO_INT128
@@ -313,7 +313,7 @@ Scalar Scalar::operator*(const Scalar& rhs) const {
     // q_approx = q * mu >> 256
     // Then result = prod - q_approx * ORDER, with at most 2 conditional subtracts
 
-    // Compute q * mu (5-limb mu × 4-limb q → we need high limbs)
+    // Compute q * mu (5-limb mu x 4-limb q -> we need high limbs)
     // mu has non-zero limbs at [0],[1],[2],[4]
     // q = prod[4..7]
     const auto& q = prod; // use prod[4], prod[5], prod[6], prod[7]
@@ -431,7 +431,7 @@ Scalar Scalar::operator*(const Scalar& rhs) const {
 #endif
 
     // r = prod[0..3] - qn[0..3], tracking overflow into r4
-    // R = prod - q_approx*ORDER can be up to ~2*ORDER ≈ 2^257, so we need
+    // R = prod - q_approx*ORDER can be up to ~2*ORDER ~= 2^257, so we need
     // the 5th limb (r4) to detect values >= 2^256.
     limbs4 r;
     unsigned char borrow = 0;
@@ -488,8 +488,8 @@ bool Scalar::operator==(const Scalar& rhs) const noexcept {
 }
 
 // ============================================================================
-// SafeGCD scalar modular inverse — Bernstein-Yang divsteps algorithm (mod n)
-// Variable-time.  ~10× faster than Fermat square-and-multiply.
+// SafeGCD scalar modular inverse -- Bernstein-Yang divsteps algorithm (mod n)
+// Variable-time.  ~10x faster than Fermat square-and-multiply.
 // Ref: "Fast constant-time gcd computation and modular inversion" (2019)
 // Direct port of bitcoin-core/secp256k1 secp256k1_modinv64_var.
 // ============================================================================
@@ -738,14 +738,14 @@ static limbs4 inverse_impl(const limbs4& x) {
 
 Scalar Scalar::inverse() const {
     if (is_zero()) return Scalar::zero();
-    // SafeGCD divsteps — ~10× faster than Fermat square-and-multiply
+    // SafeGCD divsteps -- ~10x faster than Fermat square-and-multiply
     return from_limbs(scalar_safegcd::inverse_impl(limbs_));
 }
 
 #else // !__SIZEOF_INT128__
 
 // ============================================================================
-// SafeGCD scalar modular inverse — 30-bit divsteps (no __int128 needed)
+// SafeGCD scalar modular inverse -- 30-bit divsteps (no __int128 needed)
 // Port of bitcoin-core/secp256k1 modinv32 for 32-bit platforms (ESP32, etc.)
 // Uses int32_t[9] signed-30 representation; intermediates fit in int64_t.
 // ============================================================================
@@ -947,8 +947,8 @@ static void normalize_30(S30& r, int32_t sign, const ModInfo& mod) {
     r.v[5]=r5; r.v[6]=r6; r.v[7]=r7; r.v[8]=r8;
 }
 
-// Convert 4×64-bit limbs → signed-30 representation
-// Direct extraction per limb — avoids accumulator overflow that drops
+// Convert 4x64-bit limbs -> signed-30 representation
+// Direct extraction per limb -- avoids accumulator overflow that drops
 // high bits when shifting uint64_t left (x[1]<<4 loses bits 124-127, etc.).
 static S30 limbs_to_s30(const limbs4& x) {
     S30 r{};
@@ -967,7 +967,7 @@ static S30 limbs_to_s30(const limbs4& x) {
     return r;
 }
 
-// Convert signed-30 → 4×64-bit limbs
+// Convert signed-30 -> 4x64-bit limbs
 static limbs4 s30_to_limbs(const S30& s) {
     limbs4 r{};
     // Reassemble 9 x 30-bit limbs into 4 x 64-bit limbs
@@ -1055,7 +1055,7 @@ std::uint8_t Scalar::bit(std::size_t index) const {
 // Converts scalar to signed representation {-1, 0, 1}
 // NAF property: no two adjacent non-zero digits
 // This reduces the number of non-zero digits by ~33%
-// Algorithm: scan from LSB, if odd → take ±1, adjust remaining
+// Algorithm: scan from LSB, if odd -> take +/-1, adjust remaining
 std::vector<int8_t> Scalar::to_naf() const {
     std::vector<int8_t> naf;
     naf.reserve(257);  // Maximum NAF length is n+1 for n-bit number
@@ -1070,17 +1070,17 @@ std::vector<int8_t> Scalar::to_naf() const {
             int8_t digit;
             
             if (low_bits == 1 || low_bits == 2) {
-                // k ≡ 1 or 2 (mod 4) → use +1
+                // k == 1 or 2 (mod 4) -> use +1
                 digit = 1;
                 k -= Scalar::one();
             } else {
-                // k ≡ 3 (mod 4) → use -1 (equivalent to k-1 being even)
+                // k == 3 (mod 4) -> use -1 (equivalent to k-1 being even)
                 digit = -1;
                 k += Scalar::one();
             }
             naf.push_back(digit);
         } else {
-            // k is even → digit is 0
+            // k is even -> digit is 0
             naf.push_back(0);
         }
         
@@ -1100,7 +1100,7 @@ std::vector<int8_t> Scalar::to_naf() const {
 
 // Phase 5.7: wNAF (width-w Non-Adjacent Form)
 // Converts scalar to signed odd-digit representation
-// Window width w → digits in range {±1, ±3, ±5, ..., ±(2^w - 1)}
+// Window width w -> digits in range {+/-1, +/-3, +/-5, ..., +/-(2^w - 1)}
 // Property: At most one non-zero digit in any w consecutive positions
 // This reduces precompute table size by ~50% (only odd multiples needed)
 std::vector<int8_t> Scalar::to_wnaf(unsigned width) const {
@@ -1135,7 +1135,7 @@ std::vector<int8_t> Scalar::to_wnaf(unsigned width) const {
             
             wnaf.push_back(static_cast<int8_t>(digit));
         } else {
-            // k is even → digit is 0
+            // k is even -> digit is 0
             wnaf.push_back(0);
         }
         

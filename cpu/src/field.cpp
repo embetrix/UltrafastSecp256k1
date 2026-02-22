@@ -278,7 +278,7 @@ limbs4 add_impl(const limbs4& a, const limbs4& b);
 #if defined(SECP256K1_PLATFORM_STM32) && (defined(__arm__) || defined(__thumb__))
 // ============================================================================
 // ARM Cortex-M3 optimized 256-bit modular add/sub
-// Uses ADDS/ADCS chain on 8×32-bit words — avoids expensive 64-bit emulation.
+// Uses ADDS/ADCS chain on 8x32-bit words -- avoids expensive 64-bit emulation.
 // Branchless conditional reduction via mask.
 // ============================================================================
 
@@ -358,7 +358,7 @@ static const std::uint32_t MOD_C32[8] = {
 };
 
 limbs4 sub_impl(const limbs4& a, const limbs4& b) {
-    // Work in 32-bit words — use memcpy to avoid strict aliasing UB
+    // Work in 32-bit words -- use memcpy to avoid strict aliasing UB
     std::uint32_t a32[8], b32[8];
     std::memcpy(a32, a.data(), 32);
     std::memcpy(b32, b.data(), 32);
@@ -388,7 +388,7 @@ limbs4 sub_impl(const limbs4& a, const limbs4& b) {
 }
 
 limbs4 add_impl(const limbs4& a, const limbs4& b) {
-    // Work in 32-bit words — use memcpy to avoid strict aliasing UB
+    // Work in 32-bit words -- use memcpy to avoid strict aliasing UB
     std::uint32_t a32[8], b32[8];
     std::memcpy(a32, a.data(), 32);
     std::memcpy(b32, b.data(), 32);
@@ -448,8 +448,8 @@ limbs4 add_impl(const limbs4& a, const limbs4& b) {
     reduced[2] = sub64(out[2], PRIME[2], borrow);
     reduced[3] = sub64(out[3], PRIME[3], borrow);
     // Branchless select: use reduced if carry from add OR no borrow from sub
-    // carry=1 means sum >= 2^256 → definitely >= p
-    // borrow=0 means (sum - p) didn't underflow → sum >= p
+    // carry=1 means sum >= 2^256 -> definitely >= p
+    // borrow=0 means (sum - p) didn't underflow -> sum >= p
     const auto use_reduced = static_cast<std::uint64_t>(carry | (1U - borrow));
     const auto mask = -use_reduced;
     out[0] ^= (out[0] ^ reduced[0]) & mask;
@@ -481,8 +481,8 @@ wide8 mul_wide(const limbs4& a, const limbs4& b) {
 // Phase 5.5: Fast modular reduction for secp256k1 prime
 // p = 2^256 - 2^32 - 977 = FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F
 // For 512-bit t = t_high * 2^256 + t_low:
-// Since 2^256 ≡ 2^32 + 977 (mod p)
-// We have: t ≡ t_low + t_high * (2^32 + 977) (mod p)
+// Since 2^256 == 2^32 + 977 (mod p)
+// We have: t == t_low + t_high * (2^32 + 977) (mod p)
 // One-pass reduction algorithm
 limbs4 reduce(const wide8& t) {
     // Step 1: Start with low 256 bits
@@ -536,8 +536,8 @@ limbs4 reduce(const wide8& t) {
 // ============================================================================
 // ESP32-Optimized Field Arithmetic (32-bit Comba / Product-Scanning)
 // ============================================================================
-// ESP32-S3 Xtensa LX7 is a 32-bit processor with native 32x32→64 multiply.
-// The standard 64-bit limb path emulates 64x64→128 via 4 native multiplies
+// ESP32-S3 Xtensa LX7 is a 32-bit processor with native 32x32->64 multiply.
+// The standard 64-bit limb path emulates 64x64->128 via 4 native multiplies
 // plus significant decomposition/carry overhead per mul64 call.
 //
 // This Comba implementation works directly with 8 x 32-bit limbs:
@@ -555,7 +555,7 @@ limbs4 reduce(const wide8& t) {
 
 // Accumulate product a[i]*b[j] into 96-bit accumulator (c0,c1,c2)
 #if defined(SECP256K1_PLATFORM_STM32) && (defined(__arm__) || defined(__thumb__))
-// ARM Cortex-M3: UMULL + ADDS/ADCS/ADC — 4 instructions per product
+// ARM Cortex-M3: UMULL + ADDS/ADCS/ADC -- 4 instructions per product
 // vs ~12 instructions with C uint64_t emulation on 32-bit target
 #define MULACC(i, j) do {                                        \
     std::uint32_t _lo, _hi;                                      \
@@ -584,7 +584,7 @@ limbs4 reduce(const wide8& t) {
 // Store column and shift accumulator
 #define COL_END(k) do { r[k] = c0; c0 = c1; c1 = c2; c2 = 0; } while (0)
 
-// Fully unrolled 8×8 → 16 Comba multiplication (64 products, 0 branches)
+// Fully unrolled 8x8 -> 16 Comba multiplication (64 products, 0 branches)
 static void esp32_mul_comba(const std::uint32_t a[8], const std::uint32_t b[8],
                             std::uint32_t r[16]) {
     std::uint32_t c0 = 0, c1 = 0, c2 = 0;
@@ -622,9 +622,9 @@ static void esp32_mul_comba(const std::uint32_t a[8], const std::uint32_t b[8],
 #undef MULACC
 #undef COL_END
 
-// Cross-product: accumulate a[i]*a[j] TWICE (for i≠j symmetry in squaring)
+// Cross-product: accumulate a[i]*a[j] TWICE (for i!=j symmetry in squaring)
 #if defined(SECP256K1_PLATFORM_STM32) && (defined(__arm__) || defined(__thumb__))
-// ARM Cortex-M3: UMULL + 2×(ADDS/ADCS/ADC) — 7 instructions per cross-product
+// ARM Cortex-M3: UMULL + 2x(ADDS/ADCS/ADC) -- 7 instructions per cross-product
 #define SQRMAC2(i, j) do {                                       \
     std::uint32_t _lo, _hi;                                      \
     __asm__ volatile(                                             \
@@ -641,7 +641,7 @@ static void esp32_mul_comba(const std::uint32_t a[8], const std::uint32_t b[8],
         : "cc"                                                  \
     );                                                            \
 } while (0)
-// Diagonal: accumulate a[i]² once
+// Diagonal: accumulate a[i]^2 once
 #define SQRMAC1(i) do {                                          \
     std::uint32_t _lo, _hi;                                      \
     __asm__ volatile(                                             \
@@ -668,7 +668,7 @@ static void esp32_mul_comba(const std::uint32_t a[8], const std::uint32_t b[8],
     _s = (std::uint64_t)c1 + _ph + (_s >> 32); c1 = (std::uint32_t)_s;   \
     c2 += (std::uint32_t)(_s >> 32);                             \
 } while (0)
-// Diagonal: accumulate a[i]² once
+// Diagonal: accumulate a[i]^2 once
 #define SQRMAC1(i) do {                                          \
     std::uint64_t _p = (std::uint64_t)a[i] * a[i];              \
     std::uint64_t _s = (std::uint64_t)c0 + (std::uint32_t)_p;   \
@@ -721,8 +721,8 @@ static void esp32_sqr_comba(const std::uint32_t a[8], std::uint32_t r[16]) {
 #if defined(SECP256K1_PLATFORM_STM32) && (defined(__arm__) || defined(__thumb__))
 // ============================================================================
 // ARM Cortex-M3 optimized secp256k1 reduction
-// Uses UMULL for 977×r[i], ADDS/ADCS chains for accumulation.
-// All 32-bit operations — no expensive 64-bit emulation.
+// Uses UMULL for 977xr[i], ADDS/ADCS chains for accumulation.
+// All 32-bit operations -- no expensive 64-bit emulation.
 // ============================================================================
 
 // Reduction helper: acc(lo,hi) += val
@@ -862,13 +862,13 @@ static limbs4 esp32_reduce_secp256k1(const std::uint32_t r[16]) {
 #undef REDUCE_COL
 
 #else
-// Generic C reduction for ESP32/Xtensa — fully branchless for CT safety
+// Generic C reduction for ESP32/Xtensa -- fully branchless for CT safety
 static limbs4 esp32_reduce_secp256k1(const std::uint32_t r[16]) {
     std::uint64_t acc;
     std::uint32_t res[8];
 
     // First reduction pass: fold r[8..15] into r[0..7]
-    // 2^256 ≡ 2^32 + 977 (mod p), so t_high[i] contributes
+    // 2^256 == 2^32 + 977 (mod p), so t_high[i] contributes
     //   t_high[i] * 977 to position i, t_high[i] * 2^32 to position i+1
     acc = (std::uint64_t)r[0] + (std::uint64_t)r[8] * 977ULL;
     res[0] = (std::uint32_t)acc;
@@ -901,7 +901,7 @@ static limbs4 esp32_reduce_secp256k1(const std::uint32_t r[16]) {
     // Maximum overflow after first pass: acc < 2^34 (since max product <2^512
     // and k=2^32+977). After this fold, result is in [0, 2p).
     // Note: ov can be >= 2^32 for edge cases (e.g. (p-1)^2), so we
-    // must NOT truncate it — use full uint64_t in word-1 addition.
+    // must NOT truncate it -- use full uint64_t in word-1 addition.
     {
         std::uint64_t ov = acc;
 
@@ -935,7 +935,7 @@ static limbs4 esp32_reduce_secp256k1(const std::uint32_t r[16]) {
     tmp[1] = sub64(out[1], PRIME[1], borrow);
     tmp[2] = sub64(out[2], PRIME[2], borrow);
     tmp[3] = sub64(out[3], PRIME[3], borrow);
-    // If no borrow → out >= p → use tmp. If borrow → out < p → keep out.
+    // If no borrow -> out >= p -> use tmp. If borrow -> out < p -> keep out.
     const auto mask = -static_cast<std::uint64_t>(1U - borrow);
     out[0] ^= (out[0] ^ tmp[0]) & mask;
     out[1] ^= (out[1] ^ tmp[1]) & mask;
@@ -1055,7 +1055,7 @@ void normalize(limbs4& value) {
     reduced[1] = sub64(value[1], PRIME[1], borrow);
     reduced[2] = sub64(value[2], PRIME[2], borrow);
     reduced[3] = sub64(value[3], PRIME[3], borrow);
-    // borrow == 0 means value >= PRIME → use reduced
+    // borrow == 0 means value >= PRIME -> use reduced
     const auto mask = -static_cast<std::uint64_t>(1U - borrow);
     value[0] ^= (value[0] ^ reduced[0]) & mask;
     value[1] ^= (value[1] ^ reduced[1]) & mask;
@@ -1078,14 +1078,14 @@ inline std::uint8_t exponent_bit(std::size_t index) {
     return static_cast<std::uint8_t>((kPrimeMinusTwo[byte_index] >> bit_index) & 0x1U);
 }
 
-// ── secp256k1-specific addition chain for a^(p-2) ─────────────────────────
+// -- secp256k1-specific addition chain for a^(p-2) -------------------------
 // Adapted from bitcoin-core/secp256k1 src/field_impl.h (MIT license).
 // Uses the special structure of p = 2^256 - 2^32 - 977 to compute
 // the modular inverse via Fermat's little theorem: a^(p-2) mod p.
 //
 // Operation count: 255 squarings + 15 multiplications = 270 total
 // vs binary method: 256 squarings + ~128 multiplications = ~384 total
-// Speedup: ~30% fewer operations → on ESP32 LX6: ~1.6ms vs ~3ms.
+// Speedup: ~30% fewer operations -> on ESP32 LX6: ~1.6ms vs ~3ms.
 SECP256K1_CRITICAL_FUNCTION
 FieldElement pow_p_minus_2_binary(FieldElement base) {
     // Step 1: Build power-of-two-minus-one chains
@@ -2067,7 +2067,7 @@ FieldElement pow_p_minus_2_binary(FieldElement base) {
     Uint320 x2{};
     
     while (!uint320_is_one(u)) {
-        // Invariant: u*x1 ≡ a (mod p)
+        // Invariant: u*x1 == a (mod p)
         
         while (uint320_is_even(u)) {
             uint320_rshift1(u);
@@ -2379,27 +2379,27 @@ FieldElement FieldElement::from_hex(const std::string& hex) {
 }
 
 // ============================================================================
-// SafeGCD modular inverse — Bernstein-Yang divsteps algorithm
-// Variable-time version.  ~3× faster than binary EEA for secp256k1.
+// SafeGCD modular inverse -- Bernstein-Yang divsteps algorithm
+// Variable-time version.  ~3x faster than binary EEA for secp256k1.
 // Ref: "Fast constant-time gcd computation and modular inversion" (2019)
 // Requires __int128 for the 128-bit accumulation in update_fg / update_de.
 // ============================================================================
 #if defined(__SIZEOF_INT128__)
 namespace {
 
-// Signed 62-bit limb representation: value = Σ v[i]·2^(62·i)
+// Signed 62-bit limb representation: value = Sum v[i]*2^(62*i)
 struct SafeGCD_Int { int64_t v[5]; };
 
-// 2×2 transition matrix from batched divstep iterations
+// 2x2 transition matrix from batched divstep iterations
 struct SafeGCD_Trans { int64_t u, v, q, r; };
 
 // secp256k1 prime in signed-62 form:
-//   p = 2^256 − 2^32 − 977  =  (−0x1000003D1) + 256·2^248
+//   p = 2^256 - 2^32 - 977  =  (-0x1000003D1) + 256*2^248
 static constexpr SafeGCD_Int SAFEGCD_P = {{
     -(int64_t)0x1000003D1LL, 0, 0, 0, 256
 }};
 
-// (−p)^{−1} mod 2^62  — needed for exact division in update_de
+// (-p)^{-1} mod 2^62  -- needed for exact division in update_de
 static constexpr uint64_t SAFEGCD_P_INV62 = 0x27C7F6E22DDACACFULL;
 
 // Variable-time trailing zero count
@@ -2415,7 +2415,7 @@ static inline int safegcd_ctz64(uint64_t x) {
 #endif
 }
 
-// FieldElement (4×64 LE) → SafeGCD (5×62 signed)
+// FieldElement (4x64 LE) -> SafeGCD (5x62 signed)
 static SafeGCD_Int fe_to_s62(const FieldElement& fe) {
     const auto& d = fe.limbs();
     constexpr uint64_t M = (1ULL << 62) - 1;
@@ -2428,7 +2428,7 @@ static SafeGCD_Int fe_to_s62(const FieldElement& fe) {
     }};
 }
 
-// SafeGCD (5×62, normalized non-negative) → FieldElement
+// SafeGCD (5x62, normalized non-negative) -> FieldElement
 static FieldElement s62_to_fe(const SafeGCD_Int& s) {
     return FieldElement::from_limbs({
         (uint64_t)s.v[0] | ((uint64_t)s.v[1] << 62),
@@ -2438,10 +2438,10 @@ static FieldElement s62_to_fe(const SafeGCD_Int& s) {
     });
 }
 
-// ── Batch 62 variable-time divsteps (ctz-accelerated) ──
+// -- Batch 62 variable-time divsteps (ctz-accelerated) --
 // Invariant: f is always odd.
-// Matrix semantics:  f_new = (u·f0 + v·g0) / 2^62
-//                    g_new = (q·f0 + r·g0) / 2^62
+// Matrix semantics:  f_new = (u*f0 + v*g0) / 2^62
+//                    g_new = (q*f0 + r*g0) / 2^62
 static int64_t safegcd_divsteps_62_var(int64_t delta, uint64_t f0, uint64_t g0,
                                         SafeGCD_Trans& t) {
     uint64_t u = 1, v = 0, q = 0, r = 1;
@@ -2458,16 +2458,16 @@ static int64_t safegcd_divsteps_62_var(int64_t delta, uint64_t f0, uint64_t g0,
         i -= zeros;
         if (i == 0) break;
 
-        // g is odd, f is odd.  Check δ for swap decision.
+        // g is odd, f is odd.  Check delta for swap decision.
         if (delta > 0) {
-            // Swap-case:  δ → 1−δ  (set to −δ now, +1 after the shift below)
+            // Swap-case:  delta -> 1-delta  (set to -delta now, +1 after the shift below)
             delta = -delta;
             uint64_t tmp;
             tmp = f; f = g; g = (uint64_t)(-(int64_t)tmp);
             tmp = u; u = q; q = (uint64_t)(-(int64_t)tmp);
             tmp = v; v = r; r = (uint64_t)(-(int64_t)tmp);
         }
-        // g += f  →  g becomes even  (odd + odd = even)
+        // g += f  ->  g becomes even  (odd + odd = even)
         g += f;  q += u;  r += v;
         // One shift iteration
         g >>= 1;  u <<= 1;  v <<= 1;
@@ -2480,8 +2480,8 @@ static int64_t safegcd_divsteps_62_var(int64_t delta, uint64_t f0, uint64_t g0,
     return delta;
 }
 
-// ── Apply transition matrix to full-precision (f, g) ──
-// f' = (u·f + v·g) / 2^62,  g' = (q·f + r·g) / 2^62   (exact)
+// -- Apply transition matrix to full-precision (f, g) --
+// f' = (u*f + v*g) / 2^62,  g' = (q*f + r*g) / 2^62   (exact)
 static void safegcd_update_fg(SafeGCD_Int& f, SafeGCD_Int& g,
                                const SafeGCD_Trans& t, int len) {
     const int64_t M62 = (int64_t)((uint64_t)(-1) >> 2);
@@ -2506,8 +2506,8 @@ static void safegcd_update_fg(SafeGCD_Int& f, SafeGCD_Int& g,
     for (int i = len; i < 5; ++i) { f.v[i] = 0; g.v[i] = 0; }
 }
 
-// ── Apply transition matrix to (d, e) mod p ──
-// Computes (t/2^62) · [d, e] mod p.  On input, d and e are in range (-2p, p).
+// -- Apply transition matrix to (d, e) mod p --
+// Computes (t/2^62) * [d, e] mod p.  On input, d and e are in range (-2p, p).
 // secp256k1 optimization: p.v[1..3] = 0, so only limbs 0 and 4 contribute.
 // Ref: secp256k1_modinv64_update_de_62 in bitcoin-core/secp256k1.
 static void safegcd_update_de(SafeGCD_Int& d, SafeGCD_Int& e,
@@ -2526,15 +2526,15 @@ static void safegcd_update_de(SafeGCD_Int& d, SafeGCD_Int& e,
     md = (u & sd) + (v & se);
     me = (q & sd) + (r & se);
 
-    // Begin computing t·[d,e]
+    // Begin computing t*[d,e]
     cd = (__int128)u * d0 + (__int128)v * e0;
     ce = (__int128)q * d0 + (__int128)r * e0;
 
-    // Correct md, me so that t·[d,e] + p·[md,me] has 62 zero bottom bits
+    // Correct md, me so that t*[d,e] + p*[md,me] has 62 zero bottom bits
     md -= (int64_t)((SAFEGCD_P_INV62 * (uint64_t)cd + (uint64_t)md) & M62);
     me -= (int64_t)((SAFEGCD_P_INV62 * (uint64_t)ce + (uint64_t)me) & M62);
 
-    // Limb 0: exact-division shift-out  (p.v[0] = −0x1000003D1)
+    // Limb 0: exact-division shift-out  (p.v[0] = -0x1000003D1)
     cd += (__int128)SAFEGCD_P.v[0] * md;
     ce += (__int128)SAFEGCD_P.v[0] * me;
     cd >>= 62;       // bottom 62 bits are zero by construction
@@ -2568,7 +2568,7 @@ static void safegcd_update_de(SafeGCD_Int& d, SafeGCD_Int& e,
     e.v[4] = (int64_t)ce;
 }
 
-// ── Effective limb count reduction (with sign-extension propagation) ──
+// -- Effective limb count reduction (with sign-extension propagation) --
 // Ref: inline len reduction in secp256k1_modinv64_var.
 // Reduces len when top limbs of both f and g are 0 or -1.
 static void safegcd_reduce_len(int& len, SafeGCD_Int& f, SafeGCD_Int& g) {
@@ -2586,7 +2586,7 @@ static void safegcd_reduce_len(int& len, SafeGCD_Int& f, SafeGCD_Int& g) {
     }
 }
 
-// ── Normalize to [0, p):  conditional add + negate + carry + conditional add ──
+// -- Normalize to [0, p):  conditional add + negate + carry + conditional add --
 // Input:  r in range (-2p, p),  sign = top limb of f (negative if f = -1).
 // Ref: secp256k1_modinv64_normalize_62 in bitcoin-core/secp256k1.
 static void safegcd_normalize(SafeGCD_Int& r, int64_t f_sign) {
@@ -2628,17 +2628,17 @@ static void safegcd_normalize(SafeGCD_Int& r, int64_t f_sign) {
 
 } // anonymous namespace (safegcd helpers)
 
-// ── SafeGCD inverse entry point ──
+// -- SafeGCD inverse entry point --
 static FieldElement fe_inverse_safegcd_impl(const FieldElement& x) {
-    SafeGCD_Int d = {{0, 0, 0, 0, 0}};     // d tracks: f = d·x (mod p)
-    SafeGCD_Int e = {{1, 0, 0, 0, 0}};     // e tracks: g = e·x (mod p)
+    SafeGCD_Int d = {{0, 0, 0, 0, 0}};     // d tracks: f = d*x (mod p)
+    SafeGCD_Int e = {{1, 0, 0, 0, 0}};     // e tracks: g = e*x (mod p)
     SafeGCD_Int f = SAFEGCD_P;               // f = p
     SafeGCD_Int g = fe_to_s62(x);            // g = x
 
     int64_t delta = 1;
     int len = 5;
 
-    // At most 12 × 62 = 744 divsteps  (> 590 bound for 256-bit primes)
+    // At most 12 x 62 = 744 divsteps  (> 590 bound for 256-bit primes)
     for (int i = 0; i < 12; ++i) {
         SafeGCD_Trans t;
         delta = safegcd_divsteps_62_var(delta,
@@ -2647,7 +2647,7 @@ static FieldElement fe_inverse_safegcd_impl(const FieldElement& x) {
         safegcd_update_de(d, e, t);
         safegcd_update_fg(f, g, t, len);
 
-        // g == 0 → done (gcd found)
+        // g == 0 -> done (gcd found)
         {
             int64_t cond = 0;
             for (int j = 0; j < len; ++j) cond |= g.v[j];
@@ -2658,17 +2658,17 @@ static FieldElement fe_inverse_safegcd_impl(const FieldElement& x) {
         if (i < 11) safegcd_reduce_len(len, f, g);
     }
 
-    // f = ±1 now.  Normalize d: negate if f<0, reduce into [0, p).
+    // f = +/-1 now.  Normalize d: negate if f<0, reduce into [0, p).
     safegcd_normalize(d, f.v[len - 1]);
     return s62_to_fe(d);
 }
 #endif // __SIZEOF_INT128__
 
 // ============================================================================
-// SafeGCD30 field inverse — 30-bit divsteps (no __int128 required)
+// SafeGCD30 field inverse -- 30-bit divsteps (no __int128 required)
 // Adapted from bitcoin-core secp256k1_modinv32_var (MIT license).
 // Uses the secp256k1 prime p = 2^256 - 2^32 - 977.
-// ~130μs on ESP32 vs ~3000μs for Fermat chain (pow_p_minus_2_binary).
+// ~130us on ESP32 vs ~3000us for Fermat chain (pow_p_minus_2_binary).
 // ============================================================================
 namespace field_safegcd30 {
 
@@ -2678,7 +2678,7 @@ struct ModInfo { S30 modulus; uint32_t modulus_inv30; };
 
 // secp256k1 prime p in signed-30 form:
 //   p = 2^256 - 2^32 - 977
-//   = -977 + (-4)·2^30 + 65536·2^240
+//   = -977 + (-4)*2^30 + 65536*2^240
 // Matches bitcoin-core secp256k1_const_modinfo_fe.
 static constexpr ModInfo PINFO = {
     {{-0x3D1, -4, 0, 0, 0, 0, 0, 0, 65536}},
@@ -2697,7 +2697,7 @@ static inline int ctz32_var(uint32_t x) {
 #endif
 }
 
-// Lookup: -(2i+1)^{-1} mod 256 — same table as scalar_safegcd30
+// Lookup: -(2i+1)^{-1} mod 256 -- same table as scalar_safegcd30
 static const uint8_t inv256[128] = {
     0xFF,0x55,0x33,0x49,0xC7,0x5D,0x3B,0x11,0x0F,0xE5,0xC3,0x59,
     0xD7,0xED,0xCB,0x21,0x1F,0x75,0x53,0x69,0xE7,0x7D,0x5B,0x31,
@@ -2748,7 +2748,7 @@ static int32_t divsteps_30_var(int32_t eta, uint32_t f0, uint32_t g0, T2x2& t) {
     return eta;
 }
 
-// (t/2^30) · [d, e] mod p (matches secp256k1_modinv32_update_de_30)
+// (t/2^30) * [d, e] mod p (matches secp256k1_modinv32_update_de_30)
 static void update_de_30(S30& d, S30& e, const T2x2& t, const ModInfo& mod) {
     const int32_t M30 = (int32_t)(UINT32_MAX >> 2);
     const int32_t u = t.u, v = t.v, q = t.q, r = t.r;
@@ -2784,7 +2784,7 @@ static void update_de_30(S30& d, S30& e, const T2x2& t, const ModInfo& mod) {
     e.v[8] = (int32_t)ce;
 }
 
-// (t/2^30) · [f, g] variable-length
+// (t/2^30) * [f, g] variable-length
 static void update_fg_30_var(int len, S30& f, S30& g, const T2x2& t) {
     const int32_t M30 = (int32_t)(UINT32_MAX >> 2);
     const int32_t u = t.u, v = t.v, q = t.q, r = t.r;
@@ -2867,7 +2867,7 @@ static void normalize_30(S30& r, int32_t sign, const ModInfo& mod) {
     r.v[5]=r5; r.v[6]=r6; r.v[7]=r7; r.v[8]=r8;
 }
 
-// Convert 4×64-bit limbs → signed-30 representation
+// Convert 4x64-bit limbs -> signed-30 representation
 static S30 limbs_to_s30(const limbs4& x) {
     S30 r{};
     const uint32_t M30 = 0x3FFFFFFFu;
@@ -2883,7 +2883,7 @@ static S30 limbs_to_s30(const limbs4& x) {
     return r;
 }
 
-// Convert signed-30 → 4×64-bit limbs
+// Convert signed-30 -> 4x64-bit limbs
 static limbs4 s30_to_limbs(const S30& s) {
     limbs4 r{};
     r[0] = ((uint64_t)(uint32_t)s.v[0])
@@ -2968,7 +2968,7 @@ FieldElement FieldElement::inverse() const {
     #if defined(__SIZEOF_INT128__)
     return fe_inverse_safegcd_impl(*this);
     #else
-    return field_safegcd30::inverse_impl(*this); // SafeGCD30: ~130μs vs ~3ms Fermat
+    return field_safegcd30::inverse_impl(*this); // SafeGCD30: ~130us vs ~3ms Fermat
     #endif
 }
 
@@ -3004,11 +3004,11 @@ void FieldElement::inverse_inplace() {
     #if defined(__SIZEOF_INT128__)
     *this = fe_inverse_safegcd_impl(*this);
     #else
-    *this = field_safegcd30::inverse_impl(*this); // SafeGCD30: ~130μs vs ~3ms Fermat
+    *this = field_safegcd30::inverse_impl(*this); // SafeGCD30: ~130us vs ~3ms Fermat
     #endif
 }
 
-// ── Optimized square root: a^((p+1)/4) mod p ────────────────────────────────
+// -- Optimized square root: a^((p+1)/4) mod p --------------------------------
 // Uses an addition chain building 2^n-1 blocks: {2, 22, 223}
 // then assembles (p+1)/4 via sliding window.
 // Total cost: ~255 squarings + 13 multiplications.
@@ -3217,16 +3217,16 @@ FieldElement fe_inverse_strauss(const FieldElement& value) {
 }
 
 // Montgomery batch inversion algorithm
-// Input: array of N field elements [a₀, a₁, ..., aₙ₋₁]
-// Output: modifies array in-place to [a₀⁻¹, a₁⁻¹, ..., aₙ₋₁⁻¹]
+// Input: array of N field elements [a_0, a_1, ..., a_n_1]
+// Output: modifies array in-place to [a_0^-^1, a_1^-^1, ..., a_n_1^-^1]
 //
 // Algorithm:
-//   1. Compute products: p₀=a₀, p₁=a₀*a₁, p₂=a₀*a₁*a₂, ..., pₙ₋₁=a₀*...*aₙ₋₁
-//   2. Invert final product: inv = (a₀*...*aₙ₋₁)⁻¹
-//   3. Work backwards: aᵢ⁻¹ = inv * pᵢ₋₁, then inv = inv * aᵢ
+//   1. Compute products: p_0=a_0, p_1=a_0*a_1, p_2=a_0*a_1*a_2, ..., p_n_1=a_0*...*a_n_1
+//   2. Invert final product: inv = (a_0*...*a_n_1)^-^1
+//   3. Work backwards: a^-^1 = inv * p_1, then inv = inv * a
 //
 // Cost: 3N multiplications + 1 inversion (vs N inversions)
-// For N=8: ~8 μs vs ~28 μs (3.5x faster!)
+// For N=8: ~8 us vs ~28 us (3.5x faster!)
 SECP256K1_HOT_FUNCTION
 void fe_batch_inverse(FieldElement* elements, size_t count, std::vector<FieldElement>& scratch) {
     if (count == 0) return;

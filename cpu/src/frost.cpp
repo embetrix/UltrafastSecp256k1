@@ -1,5 +1,5 @@
 // ============================================================================
-// FROST Threshold Signatures — Implementation
+// FROST Threshold Signatures -- Implementation
 // ============================================================================
 
 #include "secp256k1/frost.hpp"
@@ -13,7 +13,7 @@ namespace secp256k1 {
 using fast::Point;
 using fast::Scalar;
 
-// ── Internal Helpers ─────────────────────────────────────────────────────────
+// -- Internal Helpers ---------------------------------------------------------
 
 // Deterministic scalar from seed + context
 static Scalar derive_scalar(const std::uint8_t* seed, std::size_t seed_len,
@@ -42,7 +42,7 @@ static Scalar poly_eval(const std::vector<Scalar>& coeffs, const Scalar& x) {
 }
 
 // Compute binding factor for FROST signing
-// ρ_i = H("FROST_binding", group_key || i || R_commitments || msg)
+// rho_i = H("FROST_binding", group_key || i || R_commitments || msg)
 static Scalar compute_binding_factor(const Point& group_key,
                                        ParticipantId id,
                                        const std::vector<FrostNonceCommitment>& nonce_commitments,
@@ -79,7 +79,7 @@ static Scalar compute_binding_factor(const Point& group_key,
     return Scalar::from_bytes(digest);
 }
 
-// Compute group commitment R = Σ(D_i + ρ_i * E_i)
+// Compute group commitment R = Sum(D_i + rho_i * E_i)
 static Point compute_group_commitment(
     const std::vector<FrostNonceCommitment>& nonce_commitments,
     const std::vector<Scalar>& binding_factors) {
@@ -107,7 +107,7 @@ static Scalar compute_challenge(const Point& R, const Point& group_key,
     return Scalar::from_bytes(e_hash);
 }
 
-// ── Lagrange Coefficient ─────────────────────────────────────────────────────
+// -- Lagrange Coefficient -----------------------------------------------------
 
 Scalar frost_lagrange_coefficient(ParticipantId i,
                                    const std::vector<ParticipantId>& signer_ids) {
@@ -126,7 +126,7 @@ Scalar frost_lagrange_coefficient(ParticipantId i,
     return num * den.inverse();
 }
 
-// ── DKG ──────────────────────────────────────────────────────────────────────
+// -- DKG ----------------------------------------------------------------------
 
 std::pair<FrostCommitment, std::vector<FrostShare>>
 frost_keygen_begin(ParticipantId participant_id,
@@ -186,7 +186,7 @@ frost_keygen_finalize(ParticipantId participant_id,
         }
         if (!comm) return {pkg, false};
 
-        // Verify: share.value * G == Σ(A_{sender,j} * x_i^j)
+        // Verify: share.value * G == Sum(A_{sender,j} * x_i^j)
         Point lhs = Point::generator().scalar_mul(share.value);
         Point rhs = Point::infinity();
         Scalar x_pow = Scalar::one();
@@ -200,7 +200,7 @@ frost_keygen_finalize(ParticipantId participant_id,
         if (lhs_c != rhs_c) return {pkg, false};
     }
 
-    // Compute signing share: s_i = Σ f_j(i) for all j
+    // Compute signing share: s_i = Sum f_j(i) for all j
     Scalar signing_share = Scalar::zero();
     for (const auto& share : received_shares) {
         signing_share = signing_share + share.value;
@@ -210,7 +210,7 @@ frost_keygen_finalize(ParticipantId participant_id,
     // Verification share: Y_i = s_i * G
     pkg.verification_share = Point::generator().scalar_mul(signing_share);
 
-    // Group public key: Y = Σ A_{j,0} (sum of constant terms)
+    // Group public key: Y = Sum A_{j,0} (sum of constant terms)
     Point group_key = Point::infinity();
     for (const auto& c : commitments) {
         if (!c.coeffs.empty()) {
@@ -222,7 +222,7 @@ frost_keygen_finalize(ParticipantId participant_id,
     return {pkg, true};
 }
 
-// ── Signing ──────────────────────────────────────────────────────────────────
+// -- Signing ------------------------------------------------------------------
 
 std::pair<FrostNonce, FrostNonceCommitment>
 frost_sign_nonce_gen(ParticipantId participant_id,
@@ -289,7 +289,7 @@ frost_sign(const FrostKeyPackage& key_pkg,
     // Lagrange coefficient
     Scalar lambda_i = frost_lagrange_coefficient(key_pkg.id, signer_ids);
 
-    // Partial signature: z_i = d_i + ρ_i * e_i + λ_i * s_i * e
+    // Partial signature: z_i = d_i + rho_i * e_i + lambda_i * s_i * e
     Scalar d = nonce.hiding_nonce;
     Scalar ei = nonce.binding_nonce;
     if (negate_R) {
@@ -350,8 +350,8 @@ bool frost_verify_partial(const FrostPartialSig& partial_sig,
 
     Scalar lambda_i = frost_lagrange_coefficient(partial_sig.id, signer_ids);
 
-    // Verify: z_i * G == R_i + λ_i * e * Y_i
-    // where R_i = D_i + ρ_i * E_i
+    // Verify: z_i * G == R_i + lambda_i * e * Y_i
+    // where R_i = D_i + rho_i * E_i
     Point R_i = signer_commitment.hiding_point.add(
         signer_commitment.binding_point.scalar_mul(rho));
     if (negate_R) R_i = R_i.negate();
@@ -387,7 +387,7 @@ frost_aggregate(const std::vector<FrostPartialSig>& partial_sigs,
         R = R.negate();
     }
 
-    // Aggregate: s = Σ z_i
+    // Aggregate: s = Sum z_i
     Scalar s = Scalar::zero();
     for (const auto& ps : partial_sigs) {
         s = s + ps.z_i;

@@ -59,7 +59,7 @@ static bool points_equal(const Point& a, const Point& b) {
 }
 
 // ============================================================================
-// 1. ECDH key exchange — symmetry & correctness
+// 1. ECDH key exchange -- symmetry & correctness
 // ============================================================================
 static void test_ecdh() {
     g_section = "ecdh";
@@ -102,7 +102,7 @@ static void test_ecdh() {
         auto inf = Point::infinity();
         auto result = secp256k1::ecdh_compute(sk, inf);
         std::array<uint8_t, 32> zeros{};
-        CHECK(result == zeros, "ECDH with infinity → all-zeros");
+        CHECK(result == zeros, "ECDH with infinity -> all-zeros");
     }
 
     printf("    %d checks\n\n", g_pass);
@@ -133,14 +133,14 @@ static void test_schnorr_batch_verify() {
     }
 
     bool all_valid = secp256k1::schnorr_batch_verify(entries);
-    CHECK(all_valid, "batch(100 valid) → true");
+    CHECK(all_valid, "batch(100 valid) -> true");
 
     // Corrupt one signature
     {
         auto bad = entries;
         bad[50].signature.r[0] ^= 0x01;
         bool bad_result = secp256k1::schnorr_batch_verify(bad);
-        CHECK(!bad_result, "batch with 1 bad → false");
+        CHECK(!bad_result, "batch with 1 bad -> false");
 
         // Identify the bad one
         auto invalids = secp256k1::schnorr_batch_identify_invalid(
@@ -152,13 +152,13 @@ static void test_schnorr_batch_verify() {
     // Empty batch
     {
         std::vector<secp256k1::SchnorrBatchEntry> empty;
-        CHECK(secp256k1::schnorr_batch_verify(empty), "empty batch → true");
+        CHECK(secp256k1::schnorr_batch_verify(empty), "empty batch -> true");
     }
 
     // Single entry
     {
         std::vector<secp256k1::SchnorrBatchEntry> single = {entries[0]};
-        CHECK(secp256k1::schnorr_batch_verify(single), "single entry → true");
+        CHECK(secp256k1::schnorr_batch_verify(single), "single entry -> true");
     }
 
     printf("    %d checks\n\n", g_pass);
@@ -188,7 +188,7 @@ static void test_ecdsa_batch_verify() {
     }
 
     bool all_valid = secp256k1::ecdsa_batch_verify(entries);
-    CHECK(all_valid, "ECDSA batch(100 valid) → true");
+    CHECK(all_valid, "ECDSA batch(100 valid) -> true");
 
     // Corrupt one
     {
@@ -198,7 +198,7 @@ static void test_ecdsa_batch_verify() {
         bad[25].signature = secp256k1::ECDSASignature::from_compact(compact);
 
         bool bad_result = secp256k1::ecdsa_batch_verify(bad);
-        CHECK(!bad_result, "ECDSA batch with 1 bad → false");
+        CHECK(!bad_result, "ECDSA batch with 1 bad -> false");
 
         auto invalids = secp256k1::ecdsa_batch_identify_invalid(
             bad.data(), bad.size());
@@ -211,11 +211,11 @@ static void test_ecdsa_batch_verify() {
 }
 
 // ============================================================================
-// 4. ECDSA sign → recover → verify (full round-trip)
+// 4. ECDSA sign -> recover -> verify (full round-trip)
 // ============================================================================
 static void test_ecdsa_full_roundtrip() {
     g_section = "full_rt";
-    printf("[4] ECDSA sign → recover → verify (1K)\n");
+    printf("[4] ECDSA sign -> recover -> verify (1K)\n");
 
     auto G = Point::generator();
 
@@ -251,7 +251,7 @@ static void test_ecdsa_full_roundtrip() {
 }
 
 // ============================================================================
-// 5. Schnorr sign → verify → batch verify (cross-path)
+// 5. Schnorr sign -> verify -> batch verify (cross-path)
 // ============================================================================
 static void test_schnorr_cross_path() {
     g_section = "schn_cross";
@@ -369,7 +369,7 @@ static void test_multikey_consistency() {
     auto G = Point::generator();
 
     for (int i = 0; i < 200; ++i) {
-        // k1 + k2 → (k1+k2)*G should equal k1*G + k2*G
+        // k1 + k2 -> (k1+k2)*G should equal k1*G + k2*G
         auto k1 = random_scalar(), k2 = random_scalar();
         auto sum_scalar = k1 + k2;
 
@@ -488,9 +488,9 @@ static void test_stress_mixed() {
 
 // ============================================================================
 int main() {
-    printf("═══════════════════════════════════════════════════════════════\n");
-    printf("  AUDIT VI — Integration Testing\n");
-    printf("═══════════════════════════════════════════════════════════════\n\n");
+    printf("===============================================================\n");
+    printf("  AUDIT VI -- Integration Testing\n");
+    printf("===============================================================\n\n");
 
     test_ecdh();
     test_schnorr_batch_verify();
@@ -503,9 +503,9 @@ int main() {
     test_schnorr_ecdsa_key_consistency();
     test_stress_mixed();
 
-    printf("═══════════════════════════════════════════════════════════════\n");
+    printf("===============================================================\n");
     printf("  INTEGRATION AUDIT: %d passed, %d failed\n", g_pass, g_fail);
-    printf("═══════════════════════════════════════════════════════════════\n");
+    printf("===============================================================\n");
 
     return g_fail > 0 ? 1 : 0;
 }

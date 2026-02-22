@@ -65,14 +65,14 @@ static void test_mod_n_reduction() {
 
     // 2n should reduce to 0
     // 2n = 1FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFDD5DB9CD5E9140777FA4BD19A06C8282
-    // But from_bytes takes 32 bytes, 2n overflows 256 bits → gets truncated+reduced
+    // But from_bytes takes 32 bytes, 2n overflows 256 bits -> gets truncated+reduced
     // Instead test: n-1 + 1 == 0
     auto n_minus_1 = Scalar::from_hex(
         "fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364140");
     auto sum = n_minus_1 + Scalar::one();
     CHECK(sum.is_zero(), "(n-1) + 1 == 0");
 
-    // to_bytes → from_bytes roundtrip
+    // to_bytes -> from_bytes roundtrip
     for (int i = 0; i < 10000; ++i) {
         auto s = random_scalar();
         auto bytes = s.to_bytes();
@@ -147,9 +147,9 @@ static void test_edge_scalars() {
     // n-1 + 1 == 0
     CHECK((n_minus_1 + one).is_zero(), "(n-1) + 1 == 0");
 
-    // n-1 * n-1 == 1 (since (-1)² = 1)
+    // n-1 * n-1 == 1 (since (-1)^2 = 1)
     auto prod = n_minus_1 * n_minus_1;
-    CHECK(prod == one, "(n-1)² == 1");
+    CHECK(prod == one, "(n-1)^2 == 1");
 
     // 0 * anything == 0
     for (int i = 0; i < 100; ++i) {
@@ -305,9 +305,9 @@ static void test_negate() {
 
 // ============================================================================
 int main() {
-    printf("═══════════════════════════════════════════════════════════════\n");
-    printf("  AUDIT I.2 — Scalar Arithmetic Correctness\n");
-    printf("═══════════════════════════════════════════════════════════════\n\n");
+    printf("===============================================================\n");
+    printf("  AUDIT I.2 -- Scalar Arithmetic Correctness\n");
+    printf("===============================================================\n\n");
 
     test_mod_n_reduction();
     test_overflow_normalization();
@@ -318,9 +318,9 @@ int main() {
     test_high_bits();
     test_negate();
 
-    printf("═══════════════════════════════════════════════════════════════\n");
+    printf("===============================================================\n");
     printf("  SCALAR AUDIT: %d passed, %d failed\n", g_pass, g_fail);
-    printf("═══════════════════════════════════════════════════════════════\n");
+    printf("===============================================================\n");
 
     return g_fail > 0 ? 1 : 0;
 }

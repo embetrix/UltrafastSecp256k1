@@ -1,10 +1,10 @@
 // =============================================================================
-// UltrafastSecp256k1 Metal — Host Helpers (host_helpers.h)
+// UltrafastSecp256k1 Metal -- Host Helpers (host_helpers.h)
 // =============================================================================
 // Host-side utility functions for field elements, hex conversion, etc.
 // Matches the CUDA host_helpers.cuh API pattern exactly.
 //
-// Uses uint64_t limbs[4] (little-endian) — same as shared types.hpp.
+// Uses uint64_t limbs[4] (little-endian) -- same as shared types.hpp.
 // Memory is reinterpret_cast-compatible with MidFieldElementData{uint32_t[8]}
 // used by Metal shaders, so buffer I/O is zero-cost on little-endian hosts.
 // =============================================================================
@@ -30,7 +30,7 @@ namespace metal {
 // Host Helper Functions (matching CUDA host_helpers.cuh)
 // ============================================================
 
-// Helper: Hex string → big-endian byte array (32 bytes)
+// Helper: Hex string -> big-endian byte array (32 bytes)
 inline std::array<uint8_t, 32> hex_to_bytes(const char* hex) {
     std::array<uint8_t, 32> bytes{};
     size_t len = strlen(hex);
@@ -57,7 +57,7 @@ inline std::array<uint8_t, 32> hex_to_bytes(const char* hex) {
     return bytes;
 }
 
-// Helper: Byte array → hex string
+// Helper: Byte array -> hex string
 inline std::string bytes_to_hex(const uint8_t* bytes, size_t len) {
     std::stringstream ss;
     ss << std::hex << std::setfill('0');
@@ -81,7 +81,7 @@ inline bool hex_equal(const std::string& a, const char* b) {
 }
 
 // ============================================================
-// Host Scalar — uint64_t limbs[4], matching ScalarData
+// Host Scalar -- uint64_t limbs[4], matching ScalarData
 // ============================================================
 
 struct HostScalar {
@@ -129,7 +129,7 @@ struct HostScalar {
         return bytes_to_hex(to_bytes().data(), 32);
     }
 
-    // Bridge to shared POD type (zero-cost — identical layout)
+    // Bridge to shared POD type (zero-cost -- identical layout)
     ScalarData to_data() const {
         ScalarData d;
         for (int i = 0; i < 4; i++) d.limbs[i] = limbs[i];
@@ -151,7 +151,7 @@ struct HostScalar {
 };
 
 // ============================================================
-// Host Field Element — uint64_t limbs[4], matching FieldElementData
+// Host Field Element -- uint64_t limbs[4], matching FieldElementData
 // ============================================================
 
 struct HostFieldElement {
@@ -208,7 +208,7 @@ struct HostFieldElement {
         return true;
     }
 
-    // Bridge to shared POD type (zero-cost — identical layout)
+    // Bridge to shared POD type (zero-cost -- identical layout)
     FieldElementData to_data() const {
         FieldElementData d;
         for (int i = 0; i < 4; i++) d.limbs[i] = limbs[i];
@@ -230,7 +230,7 @@ struct HostFieldElement {
 };
 
 // ============================================================
-// Host Affine Point — (x, y), matching AffinePointData layout
+// Host Affine Point -- (x, y), matching AffinePointData layout
 // ============================================================
 
 struct HostAffinePoint {
@@ -253,7 +253,7 @@ struct HostAffinePoint {
 };
 
 // ============================================================
-// Host Jacobian Point — (X, Y, Z, infinity)
+// Host Jacobian Point -- (X, Y, Z, infinity)
 // ============================================================
 
 struct HostJacobianPoint {
@@ -282,10 +282,10 @@ struct HostJacobianPoint {
 };
 
 // ============================================================
-// Host Point — Jacobian with factory methods (matching CUDA HostPoint)
+// Host Point -- Jacobian with factory methods (matching CUDA HostPoint)
 // ============================================================
 // NOTE: GPU arithmetic (scalar_mul, add, dbl, normalize) is done through
-// MetalRuntime dispatch — not embedded in the type. This matches the
+// MetalRuntime dispatch -- not embedded in the type. This matches the
 // OpenCL host type pattern (explicit dispatch model).
 
 struct HostPoint {
@@ -444,11 +444,11 @@ inline void print_field(const char* label, const HostFieldElement& f) {
 }
 
 // =============================================================================
-// Layout Guarantees — Cross-backend compatibility with shared types.hpp
+// Layout Guarantees -- Cross-backend compatibility with shared types.hpp
 // =============================================================================
 // FieldElementData{uint64_t[4]} and MidFieldElementData{uint32_t[8]} are
 // reinterpret_cast-compatible (same 32 bytes, little-endian).
-// Metal shaders use 8×32-bit but host stores 4×64-bit — buffer I/O is
+// Metal shaders use 8x32-bit but host stores 4x64-bit -- buffer I/O is
 // zero-cost since the byte layout is identical on little-endian platforms.
 
 static_assert(sizeof(HostFieldElement) == sizeof(FieldElementData),

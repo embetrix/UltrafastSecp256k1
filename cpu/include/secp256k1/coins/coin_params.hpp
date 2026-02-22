@@ -3,7 +3,7 @@
 #pragma once
 
 // ============================================================================
-// Coin Parameters — constexpr definitions for all secp256k1-based coins
+// Coin Parameters -- constexpr definitions for all secp256k1-based coins
 // ============================================================================
 // Each CoinParams holds:
 //   - Network prefixes (P2PKH version byte, WIF prefix)
@@ -13,7 +13,7 @@
 //   - Feature flags (supports_segwit, supports_taproot, etc.)
 //   - Display name + ticker
 //
-// All data is constexpr — zero runtime cost, no heap allocation.
+// All data is constexpr -- zero runtime cost, no heap allocation.
 // ============================================================================
 
 #include <cstdint>
@@ -21,15 +21,15 @@
 
 namespace secp256k1::coins {
 
-// ── Address Hash Algorithm ───────────────────────────────────────────────────
+// -- Address Hash Algorithm ---------------------------------------------------
 
 enum class AddressHash : std::uint8_t {
-    HASH160,     // RIPEMD160(SHA256(pubkey)) — Bitcoin, Litecoin, etc.
-    KECCAK256,   // Keccak-256(pubkey[1:]) — Ethereum, BNB, etc.
-    BLAKE2B_160, // BLAKE2b-160 — reserved for future use
+    HASH160,     // RIPEMD160(SHA256(pubkey)) -- Bitcoin, Litecoin, etc.
+    KECCAK256,   // Keccak-256(pubkey[1:]) -- Ethereum, BNB, etc.
+    BLAKE2B_160, // BLAKE2b-160 -- reserved for future use
 };
 
-// ── Address Encoding ─────────────────────────────────────────────────────────
+// -- Address Encoding ---------------------------------------------------------
 
 enum class AddressEncoding : std::uint8_t {
     BASE58CHECK, // Base58Check (P2PKH, P2SH)
@@ -38,7 +38,7 @@ enum class AddressEncoding : std::uint8_t {
     CASHADDR,    // CashAddr (Bitcoin Cash)
 };
 
-// ── Feature Flags ────────────────────────────────────────────────────────────
+// -- Feature Flags ------------------------------------------------------------
 
 struct CoinFeatures {
     bool supports_segwit   : 1;  // SegWit (P2WPKH, Bech32)
@@ -49,7 +49,7 @@ struct CoinFeatures {
     bool uses_schnorr      : 1;  // Native Schnorr support (BIP-340)
 };
 
-// ── Coin Parameters ──────────────────────────────────────────────────────────
+// -- Coin Parameters ----------------------------------------------------------
 
 struct CoinParams {
     // Display
@@ -87,7 +87,7 @@ struct CoinParams {
 // ============================================================================
 // All secp256k1-based cryptocurrencies
 
-// ── Bitcoin (BTC) ────────────────────────────────────────────────────────────
+// -- Bitcoin (BTC) ------------------------------------------------------------
 inline constexpr CoinParams Bitcoin = {
     .name               = "Bitcoin",
     .ticker             = "BTC",
@@ -106,7 +106,7 @@ inline constexpr CoinParams Bitcoin = {
     .features           = {true, true, true, true, false, true},
 };
 
-// ── Litecoin (LTC) ──────────────────────────────────────────────────────────
+// -- Litecoin (LTC) ----------------------------------------------------------
 inline constexpr CoinParams Litecoin = {
     .name               = "Litecoin",
     .ticker             = "LTC",
@@ -125,7 +125,7 @@ inline constexpr CoinParams Litecoin = {
     .features           = {true, false, true, true, false, false},
 };
 
-// ── Dogecoin (DOGE) ──────────────────────────────────────────────────────────
+// -- Dogecoin (DOGE) ----------------------------------------------------------
 inline constexpr CoinParams Dogecoin = {
     .name               = "Dogecoin",
     .ticker             = "DOGE",
@@ -144,7 +144,7 @@ inline constexpr CoinParams Dogecoin = {
     .features           = {false, false, true, false, false, false},
 };
 
-// ── Dash (DASH) ──────────────────────────────────────────────────────────────
+// -- Dash (DASH) --------------------------------------------------------------
 inline constexpr CoinParams Dash = {
     .name               = "Dash",
     .ticker             = "DASH",
@@ -163,7 +163,7 @@ inline constexpr CoinParams Dash = {
     .features           = {false, false, true, true, false, false},
 };
 
-// ── Ethereum (ETH) ───────────────────────────────────────────────────────────
+// -- Ethereum (ETH) -----------------------------------------------------------
 inline constexpr CoinParams Ethereum = {
     .name               = "Ethereum",
     .ticker             = "ETH",
@@ -182,7 +182,7 @@ inline constexpr CoinParams Ethereum = {
     .features           = {false, false, false, true, true, false},
 };
 
-// ── Bitcoin Cash (BCH) ───────────────────────────────────────────────────────
+// -- Bitcoin Cash (BCH) -------------------------------------------------------
 inline constexpr CoinParams BitcoinCash = {
     .name               = "Bitcoin Cash",
     .ticker             = "BCH",
@@ -201,7 +201,7 @@ inline constexpr CoinParams BitcoinCash = {
     .features           = {false, false, true, true, false, true},
 };
 
-// ── Bitcoin SV (BSV) ─────────────────────────────────────────────────────────
+// -- Bitcoin SV (BSV) ---------------------------------------------------------
 inline constexpr CoinParams BitcoinSV = {
     .name               = "Bitcoin SV",
     .ticker             = "BSV",
@@ -220,7 +220,7 @@ inline constexpr CoinParams BitcoinSV = {
     .features           = {false, false, true, false, false, false},
 };
 
-// ── Zcash (ZEC) ──────────────────────────────────────────────────────────────
+// -- Zcash (ZEC) --------------------------------------------------------------
 inline constexpr CoinParams Zcash = {
     .name               = "Zcash",
     .ticker             = "ZEC",
@@ -239,7 +239,7 @@ inline constexpr CoinParams Zcash = {
     .features           = {false, false, true, true, false, false},
 };
 
-// ── DigiByte (DGB) ───────────────────────────────────────────────────────────
+// -- DigiByte (DGB) -----------------------------------------------------------
 inline constexpr CoinParams DigiByte = {
     .name               = "DigiByte",
     .ticker             = "DGB",
@@ -258,7 +258,7 @@ inline constexpr CoinParams DigiByte = {
     .features           = {true, false, true, true, false, false},
 };
 
-// ── Namecoin (NMC) ───────────────────────────────────────────────────────────
+// -- Namecoin (NMC) -----------------------------------------------------------
 inline constexpr CoinParams Namecoin = {
     .name               = "Namecoin",
     .ticker             = "NMC",
@@ -277,7 +277,7 @@ inline constexpr CoinParams Namecoin = {
     .features           = {false, false, true, true, false, false},
 };
 
-// ── Peercoin (PPC) ───────────────────────────────────────────────────────────
+// -- Peercoin (PPC) -----------------------------------------------------------
 inline constexpr CoinParams Peercoin = {
     .name               = "Peercoin",
     .ticker             = "PPC",
@@ -296,7 +296,7 @@ inline constexpr CoinParams Peercoin = {
     .features           = {false, false, true, false, false, false},
 };
 
-// ── Vertcoin (VTC) ───────────────────────────────────────────────────────────
+// -- Vertcoin (VTC) -----------------------------------------------------------
 inline constexpr CoinParams Vertcoin = {
     .name               = "Vertcoin",
     .ticker             = "VTC",
@@ -315,7 +315,7 @@ inline constexpr CoinParams Vertcoin = {
     .features           = {true, false, true, true, false, false},
 };
 
-// ── Viacoin (VIA) ────────────────────────────────────────────────────────────
+// -- Viacoin (VIA) ------------------------------------------------------------
 inline constexpr CoinParams Viacoin = {
     .name               = "Viacoin",
     .ticker             = "VIA",
@@ -334,7 +334,7 @@ inline constexpr CoinParams Viacoin = {
     .features           = {true, false, true, true, false, false},
 };
 
-// ── Groestlcoin (GRS) ────────────────────────────────────────────────────────
+// -- Groestlcoin (GRS) --------------------------------------------------------
 inline constexpr CoinParams Groestlcoin = {
     .name               = "Groestlcoin",
     .ticker             = "GRS",
@@ -353,7 +353,7 @@ inline constexpr CoinParams Groestlcoin = {
     .features           = {true, true, true, true, false, false},
 };
 
-// ── Syscoin (SYS) ────────────────────────────────────────────────────────────
+// -- Syscoin (SYS) ------------------------------------------------------------
 inline constexpr CoinParams Syscoin = {
     .name               = "Syscoin",
     .ticker             = "SYS",
@@ -372,7 +372,7 @@ inline constexpr CoinParams Syscoin = {
     .features           = {true, false, true, true, false, false},
 };
 
-// ── BNB Smart Chain (BNB) ────────────────────────────────────────────────────
+// -- BNB Smart Chain (BNB) ----------------------------------------------------
 inline constexpr CoinParams BNBSmartChain = {
     .name               = "BNB Smart Chain",
     .ticker             = "BNB",
@@ -391,7 +391,7 @@ inline constexpr CoinParams BNBSmartChain = {
     .features           = {false, false, false, true, true, false},
 };
 
-// ── Polygon (MATIC / POL) ────────────────────────────────────────────────────
+// -- Polygon (MATIC / POL) ----------------------------------------------------
 inline constexpr CoinParams Polygon = {
     .name               = "Polygon",
     .ticker             = "POL",
@@ -410,7 +410,7 @@ inline constexpr CoinParams Polygon = {
     .features           = {false, false, false, true, true, false},
 };
 
-// ── Avalanche C-Chain (AVAX) ─────────────────────────────────────────────────
+// -- Avalanche C-Chain (AVAX) -------------------------------------------------
 inline constexpr CoinParams Avalanche = {
     .name               = "Avalanche",
     .ticker             = "AVAX",
@@ -429,7 +429,7 @@ inline constexpr CoinParams Avalanche = {
     .features           = {false, false, false, true, true, false},
 };
 
-// ── Fantom (FTM) ─────────────────────────────────────────────────────────────
+// -- Fantom (FTM) -------------------------------------------------------------
 inline constexpr CoinParams Fantom = {
     .name               = "Fantom",
     .ticker             = "FTM",
@@ -448,7 +448,7 @@ inline constexpr CoinParams Fantom = {
     .features           = {false, false, false, true, true, false},
 };
 
-// ── Arbitrum (ARB) ───────────────────────────────────────────────────────────
+// -- Arbitrum (ARB) -----------------------------------------------------------
 inline constexpr CoinParams Arbitrum = {
     .name               = "Arbitrum",
     .ticker             = "ARB",
@@ -467,7 +467,7 @@ inline constexpr CoinParams Arbitrum = {
     .features           = {false, false, false, true, true, false},
 };
 
-// ── Optimism (OP) ────────────────────────────────────────────────────────────
+// -- Optimism (OP) ------------------------------------------------------------
 inline constexpr CoinParams Optimism = {
     .name               = "Optimism",
     .ticker             = "OP",
@@ -486,7 +486,7 @@ inline constexpr CoinParams Optimism = {
     .features           = {false, false, false, true, true, false},
 };
 
-// ── Ravencoin (RVN) ──────────────────────────────────────────────────────────
+// -- Ravencoin (RVN) ----------------------------------------------------------
 inline constexpr CoinParams Ravencoin = {
     .name               = "Ravencoin",
     .ticker             = "RVN",
@@ -505,7 +505,7 @@ inline constexpr CoinParams Ravencoin = {
     .features           = {false, false, true, true, false, false},
 };
 
-// ── Flux (FLUX) ──────────────────────────────────────────────────────────────
+// -- Flux (FLUX) --------------------------------------------------------------
 inline constexpr CoinParams Flux = {
     .name               = "Flux",
     .ticker             = "FLUX",
@@ -524,7 +524,7 @@ inline constexpr CoinParams Flux = {
     .features           = {false, false, true, true, false, false},
 };
 
-// ── Qtum (QTUM) ──────────────────────────────────────────────────────────────
+// -- Qtum (QTUM) --------------------------------------------------------------
 inline constexpr CoinParams Qtum = {
     .name               = "Qtum",
     .ticker             = "QTUM",
@@ -543,7 +543,7 @@ inline constexpr CoinParams Qtum = {
     .features           = {true, false, true, true, false, false},
 };
 
-// ── Horizen (ZEN) ────────────────────────────────────────────────────────────
+// -- Horizen (ZEN) ------------------------------------------------------------
 inline constexpr CoinParams Horizen = {
     .name               = "Horizen",
     .ticker             = "ZEN",
@@ -562,7 +562,7 @@ inline constexpr CoinParams Horizen = {
     .features           = {false, false, true, true, false, false},
 };
 
-// ── Bitcoin Gold (BTG) ───────────────────────────────────────────────────────
+// -- Bitcoin Gold (BTG) -------------------------------------------------------
 inline constexpr CoinParams BitcoinGold = {
     .name               = "Bitcoin Gold",
     .ticker             = "BTG",
@@ -581,7 +581,7 @@ inline constexpr CoinParams BitcoinGold = {
     .features           = {true, false, true, true, false, false},
 };
 
-// ── Komodo (KMD) ─────────────────────────────────────────────────────────────
+// -- Komodo (KMD) -------------------------------------------------------------
 inline constexpr CoinParams Komodo = {
     .name               = "Komodo",
     .ticker             = "KMD",
@@ -601,7 +601,7 @@ inline constexpr CoinParams Komodo = {
 };
 
 // ============================================================================
-// Coin Registry — Lookup by coin_type or ticker
+// Coin Registry -- Lookup by coin_type or ticker
 // ============================================================================
 
 // All predefined coins for iteration

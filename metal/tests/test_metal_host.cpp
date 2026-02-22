@@ -1,8 +1,8 @@
 // =============================================================================
-// UltrafastSecp256k1 Metal — Host-Side Type Tests (Cross-Platform)
+// UltrafastSecp256k1 Metal -- Host-Side Type Tests (Cross-Platform)
 // =============================================================================
 // Verifies Metal host types, hex conversion, type bridges, and test vectors.
-// Pure C++20 — runs on ANY platform (Windows, Linux, macOS) without Metal GPU.
+// Pure C++20 -- runs on ANY platform (Windows, Linux, macOS) without Metal GPU.
 //
 // CTest: metal_host_test
 // =============================================================================
@@ -120,7 +120,7 @@ static void test_bytes_roundtrip() {
 static void test_type_bridge() {
     std::cout << "  [Bridge] to_data/from_data with shared types...\n";
 
-    // FieldElement ↔ FieldElementData
+    // FieldElement <-> FieldElementData
     auto fe = HostFieldElement::from_hex(GENERATOR_X);
     secp256k1::FieldElementData fed = fe.to_data();
     for (int i = 0; i < 4; i++) {
@@ -129,7 +129,7 @@ static void test_type_bridge() {
     auto fe2 = HostFieldElement::from_data(fed);
     CHECK(fe == fe2, "FieldElement round-trip through FieldElementData");
 
-    // Scalar ↔ ScalarData
+    // Scalar <-> ScalarData
     auto sc = HostScalar::from_hex(CURVE_ORDER);
     secp256k1::ScalarData scd = sc.to_data();
     for (int i = 0; i < 4; i++) {
@@ -138,7 +138,7 @@ static void test_type_bridge() {
     auto sc2 = HostScalar::from_data(scd);
     CHECK(sc == sc2, "Scalar round-trip through ScalarData");
 
-    // AffinePoint ↔ AffinePointData
+    // AffinePoint <-> AffinePointData
     auto gp = generator_point();
     secp256k1::AffinePointData apd = gp.to_data();
     CHECK(apd.x.limbs[0] == gp.x.limbs[0], "AffinePointData.x.limbs[0] matches");
@@ -146,7 +146,7 @@ static void test_type_bridge() {
     auto gp2 = HostAffinePoint::from_data(apd);
     CHECK(gp.x == gp2.x && gp.y == gp2.y, "AffinePoint round-trip through AffinePointData");
 
-    // JacobianPoint ↔ JacobianPointData
+    // JacobianPoint <-> JacobianPointData
     HostJacobianPoint jp;
     jp.x = gp.x;
     jp.y = gp.y;
@@ -239,7 +239,7 @@ static void test_mid_field_reinterpret() {
     auto fe = HostFieldElement::from_hex(GENERATOR_X);
     secp256k1::FieldElementData fed = fe.to_data();
 
-    // Reinterpret as MidFieldElementData (8×32-bit view)
+    // Reinterpret as MidFieldElementData (8x32-bit view)
     auto* mid = reinterpret_cast<const secp256k1::MidFieldElementData*>(&fed);
 
     // Verify byte-level identity: the 32 bytes must be identical
@@ -308,10 +308,10 @@ static void test_negate() {
 // ============================================================
 
 int main() {
-    std::cout << "╔══════════════════════════════════════════════════════════╗\n"
-              << "║  UltrafastSecp256k1 — Metal Host-Side Type Tests        ║\n"
-              << "║  Cross-platform (no GPU required)                       ║\n"
-              << "╚══════════════════════════════════════════════════════════╝\n\n";
+    std::cout << "+==========================================================+\n"
+              << "|  UltrafastSecp256k1 -- Metal Host-Side Type Tests        |\n"
+              << "|  Cross-platform (no GPU required)                       |\n"
+              << "+==========================================================+\n\n";
 
     test_field_hex_roundtrip();
     test_scalar_hex_roundtrip();
@@ -323,14 +323,14 @@ int main() {
     test_serialization();
     test_negate();
 
-    std::cout << "\n═══════════════════════════════════════════════════════\n"
+    std::cout << "\n=======================================================\n"
               << "  Results: " << g_pass << " passed, " << g_fail << " failed\n"
-              << "═══════════════════════════════════════════════════════\n";
+              << "=======================================================\n";
 
     if (g_fail > 0) {
-        std::cerr << "  FAILED ✗\n";
+        std::cerr << "  FAILED [x]\n";
         return 1;
     }
-    std::cout << "  All tests PASSED ✓\n";
+    std::cout << "  All tests PASSED [ok]\n";
     return 0;
 }

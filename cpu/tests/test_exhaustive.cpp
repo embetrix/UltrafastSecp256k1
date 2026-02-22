@@ -68,16 +68,16 @@ static bool pt_eq(const PT& a, const PT& b) {
         }                                                       \
     } while (0)
 
-// ────────────────────────────────────────────────────────────────────────────
-// Test 1: Closure — every k*G is on the curve
-// ────────────────────────────────────────────────────────────────────────────
+// ----------------------------------------------------------------------------
+// Test 1: Closure -- every k*G is on the curve
+// ----------------------------------------------------------------------------
 static void test_closure(unsigned N) {
     std::cout << "  [1] Closure: k*G on curve for k=1.." << N << std::endl;
     PT G = PT::generator();
     PT P = G;
     for (unsigned k = 1; k <= N; ++k) {
         CHECK(!P.is_infinity(), "k*G should not be infinity for small k");
-        // Verify: y² = x³ + 7 (affine check)
+        // Verify: y^2 = x^3 + 7 (affine check)
         FE x = P.x();
         FE y = P.y();
         FE lhs = y.square();
@@ -87,9 +87,9 @@ static void test_closure(unsigned N) {
     }
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-// Test 2: Additive consistency — k*G + G = (k+1)*G
-// ────────────────────────────────────────────────────────────────────────────
+// ----------------------------------------------------------------------------
+// Test 2: Additive consistency -- k*G + G = (k+1)*G
+// ----------------------------------------------------------------------------
 static void test_additive_consistency(unsigned N) {
     std::cout << "  [2] Additive consistency: k*G + G = (k+1)*G, k=1.." << N << std::endl;
     PT G = PT::generator();
@@ -110,9 +110,9 @@ static void test_additive_consistency(unsigned N) {
     }
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-// Test 3: Homomorphism — a*G + b*G = (a+b)*G
-// ────────────────────────────────────────────────────────────────────────────
+// ----------------------------------------------------------------------------
+// Test 3: Homomorphism -- a*G + b*G = (a+b)*G
+// ----------------------------------------------------------------------------
 static void test_homomorphism(unsigned N) {
     std::cout << "  [3] Homomorphism: a*G + b*G = (a+b)*G, a,b=1.." << N << std::endl;
     PT G = PT::generator();
@@ -142,9 +142,9 @@ static void test_homomorphism(unsigned N) {
     std::cout << "    " << checks << " pairs verified" << std::endl;
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-// Test 4: Scalar mul consistency — scalar_mul(k) matches iterated addition
-// ────────────────────────────────────────────────────────────────────────────
+// ----------------------------------------------------------------------------
+// Test 4: Scalar mul consistency -- scalar_mul(k) matches iterated addition
+// ----------------------------------------------------------------------------
 static void test_scalar_mul_consistency(unsigned N) {
     std::cout << "  [4] Scalar mul: scalar_mul(k) vs iterated add, k=1.." << N << std::endl;
     PT G = PT::generator();
@@ -159,9 +159,9 @@ static void test_scalar_mul_consistency(unsigned N) {
     }
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-// Test 5: Scalar associativity — k*(l*G) = (k*l)*G
-// ────────────────────────────────────────────────────────────────────────────
+// ----------------------------------------------------------------------------
+// Test 5: Scalar associativity -- k*(l*G) = (k*l)*G
+// ----------------------------------------------------------------------------
 static void test_scalar_associativity() {
     std::cout << "  [5] Scalar associativity: k*(l*G) = (k*l)*G" << std::endl;
     PT G = PT::generator();
@@ -187,9 +187,9 @@ static void test_scalar_associativity() {
     }
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-// Test 6: Point addition — associativity, commutativity, identity, inverse
-// ────────────────────────────────────────────────────────────────────────────
+// ----------------------------------------------------------------------------
+// Test 6: Point addition -- associativity, commutativity, identity, inverse
+// ----------------------------------------------------------------------------
 static void test_point_addition_axioms() {
     std::cout << "  [6] Addition axioms: assoc, commut, identity, inverse" << std::endl;
     PT G = PT::generator();
@@ -240,9 +240,9 @@ static void test_point_addition_axioms() {
     }
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-// Test 7: Doubling consistency — 2*P = P + P
-// ────────────────────────────────────────────────────────────────────────────
+// ----------------------------------------------------------------------------
+// Test 7: Doubling consistency -- 2*P = P + P
+// ----------------------------------------------------------------------------
 static void test_doubling() {
     std::cout << "  [7] Doubling: 2*P = P + P" << std::endl;
     PT G = PT::generator();
@@ -256,9 +256,9 @@ static void test_doubling() {
     }
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-// Test 8: Order of the curve — n*G = O, (n-1)*G = -G
-// ────────────────────────────────────────────────────────────────────────────
+// ----------------------------------------------------------------------------
+// Test 8: Order of the curve -- n*G = O, (n-1)*G = -G
+// ----------------------------------------------------------------------------
 static void test_order() {
     std::cout << "  [8] Curve order: n*G = O, (n-1)*G = -G" << std::endl;
     PT G = PT::generator();
@@ -284,9 +284,9 @@ static void test_order() {
     CHECK(pt_eq(oneG, G), "1*G != G");
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-// Test 9: Scalar arithmetic exhaustive — a + b, a * b, a - b for small values
-// ────────────────────────────────────────────────────────────────────────────
+// ----------------------------------------------------------------------------
+// Test 9: Scalar arithmetic exhaustive -- a + b, a * b, a - b for small values
+// ----------------------------------------------------------------------------
 static void test_scalar_arithmetic(unsigned N) {
     std::cout << "  [9] Scalar arithmetic exhaustive, N=" << N << std::endl;
     
@@ -324,9 +324,9 @@ static void test_scalar_arithmetic(unsigned N) {
     std::cout << "    " << checks << " pairs verified" << std::endl;
 }
 
-// ────────────────────────────────────────────────────────────────────────────
+// ----------------------------------------------------------------------------
 // Test 10: CT scalar_mul matches fast scalar_mul
-// ────────────────────────────────────────────────────────────────────────────
+// ----------------------------------------------------------------------------
 static void test_ct_consistency(unsigned N) {
     std::cout << "  [10] CT consistency: ct::scalar_mul vs fast::scalar_mul, k=1.." << N << std::endl;
     PT G = PT::generator();
@@ -340,9 +340,9 @@ static void test_ct_consistency(unsigned N) {
     }
 }
 
-// ────────────────────────────────────────────────────────────────────────────
+// ----------------------------------------------------------------------------
 // Test 11: Negation properties
-// ────────────────────────────────────────────────────────────────────────────
+// ----------------------------------------------------------------------------
 static void test_negation() {
     std::cout << "  [11] Negation properties" << std::endl;
     PT G = PT::generator();
@@ -371,9 +371,9 @@ static void test_negation() {
     }
 }
 
-// ────────────────────────────────────────────────────────────────────────────
+// ----------------------------------------------------------------------------
 // Test 12: In-place operations consistency
-// ────────────────────────────────────────────────────────────────────────────
+// ----------------------------------------------------------------------------
 static void test_inplace() {
     std::cout << "  [12] In-place ops: next/prev/dbl_inplace vs immutable" << std::endl;
     PT G = PT::generator();
@@ -402,9 +402,9 @@ static void test_inplace() {
     }
 }
 
-// ────────────────────────────────────────────────────────────────────────────
+// ----------------------------------------------------------------------------
 // Test 13: Pippenger MSM correctness
-// ────────────────────────────────────────────────────────────────────────────
+// ----------------------------------------------------------------------------
 static void test_pippenger() {
     std::cout << "  [13] Pippenger MSM correctness" << std::endl;
     PT G = PT::generator();
@@ -458,16 +458,16 @@ static void test_pippenger() {
     CHECK(pt_eq(single, expected), "MSM(n=1) != scalar_mul");
 }
 
-// ────────────────────────────────────────────────────────────────────────────
+// ----------------------------------------------------------------------------
 // Test 14: Comb generator multiplication
-// ────────────────────────────────────────────────────────────────────────────
+// ----------------------------------------------------------------------------
 static void test_comb_gen() {
     std::cout << "  [14] Comb generator: comb_mul(k) vs k*G" << std::endl;
     PT G = PT::generator();
     
     // Init with small teeth for fast test
     secp256k1::fast::CombGenContext ctx;
-    ctx.init(6);  // teeth=6 → 176KB table, fast init
+    ctx.init(6);  // teeth=6 -> 176KB table, fast init
     
     CHECK(ctx.ready(), "CombGenContext not ready after init");
     
@@ -505,9 +505,9 @@ static void test_comb_gen() {
     CHECK(pt_eq(global_result, expected42), "global comb_gen_mul(42) != 42*G");
 }
 
-// ────────────────────────────────────────────────────────────────────────────
+// ----------------------------------------------------------------------------
 // Test runner
-// ────────────────────────────────────────────────────────────────────────────
+// ----------------------------------------------------------------------------
 
 #ifdef STANDALONE_TEST
 int main() {
@@ -543,13 +543,13 @@ int run_exhaustive_tests() {
     auto t1 = std::chrono::high_resolution_clock::now();
     auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();
     
-    std::cout << "\n  ── Results: " << g_pass << " passed, " << g_fail << " failed"
+    std::cout << "\n  -- Results: " << g_pass << " passed, " << g_fail << " failed"
               << " (" << ms << " ms)" << std::endl;
     
     if (g_fail > 0) {
         std::cerr << "\n  *** EXHAUSTIVE TESTS FAILED ***" << std::endl;
     } else {
-        std::cout << "  All exhaustive tests PASSED ✓" << std::endl;
+        std::cout << "  All exhaustive tests PASSED [ok]" << std::endl;
     }
     
 #ifdef STANDALONE_TEST

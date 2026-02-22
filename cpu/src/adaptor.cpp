@@ -1,5 +1,5 @@
 // ============================================================================
-// Adaptor Signatures — Implementation
+// Adaptor Signatures -- Implementation
 // ============================================================================
 
 #include "secp256k1/adaptor.hpp"
@@ -14,7 +14,7 @@ using fast::Point;
 using fast::Scalar;
 using fast::FieldElement;
 
-// ── Internal: deterministic nonce for adaptor signing ─────────────────────────
+// -- Internal: deterministic nonce for adaptor signing -------------------------
 
 static Scalar adaptor_nonce(const Scalar& privkey,
                              const std::uint8_t* msg, std::size_t msg_len,
@@ -41,7 +41,7 @@ static Scalar adaptor_nonce(const Scalar& privkey,
     return k;
 }
 
-// ── Schnorr Adaptor Signatures ───────────────────────────────────────────────
+// -- Schnorr Adaptor Signatures -----------------------------------------------
 
 SchnorrAdaptorSig
 schnorr_adaptor_sign(const Scalar& private_key,
@@ -62,13 +62,13 @@ schnorr_adaptor_sign(const Scalar& private_key,
     // Generate nonce k 
     Scalar k = adaptor_nonce(sk, msg.data(), 32, adaptor_point, aux_rand.data(), 32);
 
-    // R̂ = k * G (the pre-nonce, before adapting)
+    // R^ = k * G (the pre-nonce, before adapting)
     Point R_hat = Point::generator().scalar_mul(k);
 
-    // R = R̂ + T (the final nonce point after adapting)
+    // R = R^ + T (the final nonce point after adapting)
     Point R = R_hat.add(adaptor_point);
 
-    // BIP-340: if R.y is odd, negate k (and R̂ and R flip accordingly)
+    // BIP-340: if R.y is odd, negate k (and R^ and R flip accordingly)
     auto R_y = R.y().to_bytes();
     bool needs_neg = (R_y[31] & 1) != 0;
     if (needs_neg) {
@@ -89,7 +89,7 @@ schnorr_adaptor_sign(const Scalar& private_key,
     auto e_hash = tagged_hash("BIP0340/challenge", challenge_data, 96);
     Scalar e = Scalar::from_bytes(e_hash);
 
-    // ŝ = k + e * sk (BIP-340: s = k + e*d, but partial — missing adaptor secret t)
+    // s = k + e * sk (BIP-340: s = k + e*d, but partial -- missing adaptor secret t)
     Scalar s_hat = k + (e * sk);
 
     return SchnorrAdaptorSig{R_hat, s_hat, needs_neg};
@@ -113,7 +113,7 @@ bool schnorr_adaptor_verify(const SchnorrAdaptorSig& pre_sig,
     // Adjust T based on whether nonce was negated during signing
     Point T_adj = pre_sig.needs_negation ? adaptor_point.negate() : adaptor_point;
 
-    // Reconstruct R = R̂ + T_adj (should have even y)
+    // Reconstruct R = R^ + T_adj (should have even y)
     Point R = pre_sig.R_hat.add(T_adj);
 
     // Challenge: e = H("BIP0340/challenge", R.x || P.x || m)
@@ -125,7 +125,7 @@ bool schnorr_adaptor_verify(const SchnorrAdaptorSig& pre_sig,
     auto e_hash = tagged_hash("BIP0340/challenge", challenge_data, 96);
     Scalar e = Scalar::from_bytes(e_hash);
 
-    // Verify: ŝ*G == R̂ + e*P  (since ŝ = k + e*d)
+    // Verify: s*G == R^ + e*P  (since s = k + e*d)
     Point lhs = Point::generator().scalar_mul(pre_sig.s_hat);
     Point eP = P.scalar_mul(e);
     Point rhs_point = pre_sig.R_hat.add(eP);
@@ -141,10 +141,10 @@ schnorr_adaptor_adapt(const SchnorrAdaptorSig& pre_sig,
     // Adjust t based on nonce negation during signing
     Scalar t = pre_sig.needs_negation ? adaptor_secret.negate() : adaptor_secret;
 
-    // R = R̂ + t_adj*G (should have even y since we ensured it during signing)
+    // R = R^ + t_adj*G (should have even y since we ensured it during signing)
     Point R = pre_sig.R_hat.add(Point::generator().scalar_mul(t));
 
-    // s = ŝ + t
+    // s = s + t
     Scalar s = pre_sig.s_hat + t;
 
     SchnorrSignature sig;
@@ -156,7 +156,7 @@ schnorr_adaptor_adapt(const SchnorrAdaptorSig& pre_sig,
 std::pair<Scalar, bool>
 schnorr_adaptor_extract(const SchnorrAdaptorSig& pre_sig,
                         const SchnorrSignature& sig) {
-    // t = s - ŝ (or negation)
+    // t = s - s (or negation)
     Scalar t = sig.s - pre_sig.s_hat;
 
     // Verify: t*G == T (adaptor point)
@@ -168,7 +168,7 @@ schnorr_adaptor_extract(const SchnorrAdaptorSig& pre_sig,
     return {t, true};
 }
 
-// ── ECDSA Adaptor Signatures ─────────────────────────────────────────────────
+// -- ECDSA Adaptor Signatures -------------------------------------------------
 
 ECDSAAdaptorSig
 ecdsa_adaptor_sign(const Scalar& private_key,
@@ -177,10 +177,10 @@ ecdsa_adaptor_sign(const Scalar& private_key,
     // Generate nonce
     Scalar k = adaptor_nonce(private_key, msg_hash.data(), 32, adaptor_point, nullptr, 0);
 
-    // R̂ = k * G
+    // R^ = k * G
     Point R_hat = Point::generator().scalar_mul(k);
 
-    // R = R̂ + T
+    // R = R^ + T
     Point R = R_hat.add(adaptor_point);
 
     // r = R.x mod n
@@ -191,7 +191,7 @@ ecdsa_adaptor_sign(const Scalar& private_key,
         return ECDSAAdaptorSig{R_hat, Scalar::zero(), r};
     }
 
-    // ŝ = k⁻¹ * (z + r*x)  where z = msg_hash
+    // s = k^-^1 * (z + r*x)  where z = msg_hash
     Scalar z = Scalar::from_bytes(msg_hash);
     Scalar k_inv = k.inverse();
     Scalar s_hat = k_inv * (z + r * private_key);
@@ -209,7 +209,7 @@ bool ecdsa_adaptor_verify(const ECDSAAdaptorSig& pre_sig,
                           const Point& adaptor_point) {
     if (pre_sig.r.is_zero() || pre_sig.s_hat.is_zero()) return false;
 
-    // R = R̂ + T
+    // R = R^ + T
     Point R = pre_sig.R_hat.add(adaptor_point);
 
     // Verify r == R.x mod n
@@ -217,7 +217,7 @@ bool ecdsa_adaptor_verify(const ECDSAAdaptorSig& pre_sig,
     Scalar r_check = Scalar::from_bytes(R_x_bytes);
     if (r_check != pre_sig.r) return false;
 
-    // Verify: ŝ*R̂ == z*G + r*P (rearranged ECDSA equation)
+    // Verify: s*R^ == z*G + r*P (rearranged ECDSA equation)
     Scalar z = Scalar::from_bytes(msg_hash);
     Scalar s_inv = pre_sig.s_hat.inverse();
 
@@ -225,10 +225,10 @@ bool ecdsa_adaptor_verify(const ECDSAAdaptorSig& pre_sig,
     Point u2P = public_key.scalar_mul(pre_sig.r * s_inv);
     Point R_check = u1G.add(u2P);
 
-    // R_check should equal R̂ (not R̂+T, since we used the adapted r)
-    // Actually for ECDSA adaptor: we check that k*G = R̂
-    // The equation ŝ = k⁻¹*(z + r*x) means k = ŝ⁻¹*(z + r*x)
-    // So R̂ = ŝ⁻¹*(z + r*x)*G = ŝ⁻¹*z*G + ŝ⁻¹*r*P
+    // R_check should equal R^ (not R^+T, since we used the adapted r)
+    // Actually for ECDSA adaptor: we check that k*G = R^
+    // The equation s = k^-^1*(z + r*x) means k = s^-^1*(z + r*x)
+    // So R^ = s^-^1*(z + r*x)*G = s^-^1*z*G + s^-^1*r*P
     auto r_hat_c = pre_sig.R_hat.to_compressed();
     auto r_chk_c = R_check.to_compressed();
     return r_hat_c == r_chk_c;
@@ -240,14 +240,14 @@ ecdsa_adaptor_adapt(const ECDSAAdaptorSig& pre_sig,
     // For ECDSA adaptor: final signature uses the adapted s
     // The nonce was k, and the adaptor adds t:
     // effective_k = k + t
-    // s = effective_k⁻¹ * (z + r*x)
-    // But we have ŝ = k⁻¹ * (z + r*x)
-    // We need to adjust: s = ŝ * k / (k + t)
+    // s = effective_k^-^1 * (z + r*x)
+    // But we have s = k^-^1 * (z + r*x)
+    // We need to adjust: s = s * k / (k + t)
     // This requires knowing k, which we don't have directly.
     //
     // Alternative (simpler) ECDSA adaptor:
-    // ŝ_hat is the "encrypted" signature value
-    // s = ŝ_hat * t⁻¹  (multiplicative adaptor for ECDSA)
+    // s_hat is the "encrypted" signature value
+    // s = s_hat * t^-^1  (multiplicative adaptor for ECDSA)
     Scalar t_inv = adaptor_secret.inverse();
     Scalar s = pre_sig.s_hat * t_inv;
 
@@ -262,7 +262,7 @@ ecdsa_adaptor_extract(const ECDSAAdaptorSig& pre_sig,
                       const ECDSASignature& sig) {
     if (sig.s.is_zero() || pre_sig.s_hat.is_zero()) return {Scalar::zero(), false};
 
-    // t = ŝ * s⁻¹ (multiplicative adaptor)
+    // t = s * s^-^1 (multiplicative adaptor)
     Scalar s_inv = sig.s.inverse();
     Scalar t = pre_sig.s_hat * s_inv;
 

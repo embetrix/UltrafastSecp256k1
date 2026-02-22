@@ -1,5 +1,5 @@
 """
-UltrafastSecp256k1 — Python ctypes binding (ufsecp stable C ABI v1).
+UltrafastSecp256k1 -- Python ctypes binding (ufsecp stable C ABI v1).
 
 High-performance secp256k1 elliptic curve cryptography with dual-layer
 constant-time architecture. Context-based API.
@@ -35,7 +35,7 @@ __all__ = [
     "NET_TESTNET",
 ]
 
-# ── Constants ────────────────────────────────────────────────────────────
+# -- Constants ------------------------------------------------------------
 
 NET_MAINNET = 0
 NET_TESTNET = 1
@@ -77,7 +77,7 @@ class UfsecpError(Exception):
         super().__init__(f"ufsecp {operation} failed: {msg}")
 
 
-# ── Result types ─────────────────────────────────────────────────────────
+# -- Result types ---------------------------------------------------------
 
 class RecoverableSignature(NamedTuple):
     signature: bytes  # 64 bytes
@@ -93,7 +93,7 @@ class TaprootOutputKey(NamedTuple):
     parity: int
 
 
-# ── Library loader ───────────────────────────────────────────────────────
+# -- Library loader -------------------------------------------------------
 
 def _find_library() -> str:
     """Locate the ufsecp shared library."""
@@ -135,7 +135,7 @@ def _find_library() -> str:
     return names[0]
 
 
-# ── Main class ───────────────────────────────────────────────────────────
+# -- Main class -----------------------------------------------------------
 
 class Ufsecp:
     """Context-based wrapper around the ufsecp C ABI.
@@ -170,7 +170,7 @@ class Ufsecp:
     def __exit__(self, *_):
         self.close()
 
-    # ── Version ──────────────────────────────────────────────────────────
+    # -- Version ----------------------------------------------------------
 
     def version(self) -> int:
         return self._lib.ufsecp_version()
@@ -182,7 +182,7 @@ class Ufsecp:
         self._lib.ufsecp_version_string.restype = c_char_p
         return self._lib.ufsecp_version_string().decode()
 
-    # ── Key operations ───────────────────────────────────────────────────
+    # -- Key operations ---------------------------------------------------
 
     def pubkey_create(self, privkey: bytes) -> bytes:
         """Compressed public key (33 bytes) from 32-byte private key."""
@@ -199,7 +199,7 @@ class Ufsecp:
         return bytes(out)
 
     def pubkey_parse(self, pubkey: bytes) -> bytes:
-        """Parse compressed (33) or uncompressed (65) → compressed 33 bytes."""
+        """Parse compressed (33) or uncompressed (65) -> compressed 33 bytes."""
         out = (c_uint8 * 33)()
         self._throw(self._lib.ufsecp_pubkey_parse(self._ctx, pubkey, len(pubkey), out), "pubkey_parse")
         return bytes(out)
@@ -233,7 +233,7 @@ class Ufsecp:
         self._throw(self._lib.ufsecp_seckey_tweak_mul(self._ctx, buf, tweak), "seckey_tweak_mul")
         return bytes(buf)
 
-    # ── ECDSA ────────────────────────────────────────────────────────────
+    # -- ECDSA ------------------------------------------------------------
 
     def ecdsa_sign(self, msg_hash: bytes, privkey: bytes) -> bytes:
         """ECDSA sign (RFC 6979). Returns 64-byte compact signature."""
@@ -258,7 +258,7 @@ class Ufsecp:
         self._throw(self._lib.ufsecp_ecdsa_sig_from_der(self._ctx, der, len(der), sig), "ecdsa_sig_from_der")
         return bytes(sig)
 
-    # ── Recovery ─────────────────────────────────────────────────────────
+    # -- Recovery ---------------------------------------------------------
 
     def ecdsa_sign_recoverable(self, msg_hash: bytes, privkey: bytes) -> RecoverableSignature:
         _chk(msg_hash, 32, "msg_hash"); _chk(privkey, 32, "privkey")
@@ -273,7 +273,7 @@ class Ufsecp:
         self._throw(self._lib.ufsecp_ecdsa_recover(self._ctx, msg_hash, sig, recid, pub), "ecdsa_recover")
         return bytes(pub)
 
-    # ── Schnorr ──────────────────────────────────────────────────────────
+    # -- Schnorr ----------------------------------------------------------
 
     def schnorr_sign(self, msg: bytes, privkey: bytes, aux_rand: bytes) -> bytes:
         _chk(msg, 32, "msg"); _chk(privkey, 32, "privkey"); _chk(aux_rand, 32, "aux_rand")
@@ -285,7 +285,7 @@ class Ufsecp:
         _chk(msg, 32, "msg"); _chk(sig, 64, "sig"); _chk(pubkey_x, 32, "pubkey_x")
         return self._lib.ufsecp_schnorr_verify(self._ctx, msg, sig, pubkey_x) == _OK
 
-    # ── ECDH ─────────────────────────────────────────────────────────────
+    # -- ECDH -------------------------------------------------------------
 
     def ecdh(self, privkey: bytes, pubkey: bytes) -> bytes:
         _chk(privkey, 32, "privkey"); _chk(pubkey, 33, "pubkey")
@@ -305,7 +305,7 @@ class Ufsecp:
         self._throw(self._lib.ufsecp_ecdh_raw(self._ctx, privkey, pubkey, out), "ecdh_raw")
         return bytes(out)
 
-    # ── Hashing (context-free) ───────────────────────────────────────────
+    # -- Hashing (context-free) -------------------------------------------
 
     def sha256(self, data: bytes) -> bytes:
         out = (c_uint8 * 32)()
@@ -322,7 +322,7 @@ class Ufsecp:
         self._throw(self._lib.ufsecp_tagged_hash(tag.encode(), data, len(data), out), "tagged_hash")
         return bytes(out)
 
-    # ── Addresses ────────────────────────────────────────────────────────
+    # -- Addresses --------------------------------------------------------
 
     def addr_p2pkh(self, pubkey: bytes, network: int = NET_MAINNET) -> str:
         _chk(pubkey, 33, "pubkey")
@@ -336,7 +336,7 @@ class Ufsecp:
         _chk(xonly_key, 32, "xonly_key")
         return self._get_addr(self._lib.ufsecp_addr_p2tr, xonly_key, network)
 
-    # ── WIF ──────────────────────────────────────────────────────────────
+    # -- WIF --------------------------------------------------------------
 
     def wif_encode(self, privkey: bytes, compressed: bool = True, network: int = NET_MAINNET) -> str:
         _chk(privkey, 32, "privkey")
@@ -357,7 +357,7 @@ class Ufsecp:
         ), "wif_decode")
         return WifDecoded(bytes(key), comp.value == 1, net.value)
 
-    # ── BIP-32 ───────────────────────────────────────────────────────────
+    # -- BIP-32 -----------------------------------------------------------
 
     def bip32_master(self, seed: bytes) -> bytes:
         if not (16 <= len(seed) <= 64):
@@ -390,7 +390,7 @@ class Ufsecp:
         self._throw(self._lib.ufsecp_bip32_pubkey(self._ctx, key, pub), "bip32_pubkey")
         return bytes(pub)
 
-    # ── Taproot ──────────────────────────────────────────────────────────
+    # -- Taproot ----------------------------------------------------------
 
     def taproot_output_key(self, internal_x: bytes, merkle_root: Optional[bytes] = None) -> TaprootOutputKey:
         _chk(internal_x, 32, "internal_x")
@@ -413,7 +413,7 @@ class Ufsecp:
         mr_len = len(merkle_root) if merkle_root else 0
         return self._lib.ufsecp_taproot_verify(self._ctx, output_x, parity, internal_x, mr, mr_len) == _OK
 
-    # ── Internals ────────────────────────────────────────────────────────
+    # -- Internals --------------------------------------------------------
 
     def _throw(self, rc: int, op: str) -> None:
         if rc != _OK:

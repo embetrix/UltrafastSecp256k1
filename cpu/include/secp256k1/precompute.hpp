@@ -28,8 +28,8 @@ void compute_wnaf_into(const Scalar& scalar,
 using ProgressCallback = void(*)(size_t, size_t, unsigned, unsigned);
 
 struct FixedBaseConfig {
-    unsigned window_bits = 18U;         // Default to 18-bit (511 MB cache, OPTIMAL: 11.755μs)
-    bool enable_glv = false;            // GLV disabled by default (decomposition overhead ~14μs makes it 2× slower!)
+    unsigned window_bits = 18U;         // Default to 18-bit (511 MB cache, OPTIMAL: 11.755us)
+    bool enable_glv = false;            // GLV disabled by default (decomposition overhead ~14us makes it 2x slower!)
     bool use_jsf = false;               // Use JSF-based Shamir for GLV (off by default)
     bool adaptive_glv = false;          // If true, automatically disable GLV for small window sizes
     unsigned glv_min_window_bits = 14U; // Minimum window_bits required to keep GLV enabled when adaptive_glv=true
@@ -169,22 +169,22 @@ Point multi_scalar_mul(const Scalar& k1, const Point& P,
 //   - K is constant (reused many times)
 //   - Q changes every operation
 // 
-// Performance: 336 μs → 190-260 μs (1.3-1.8x speedup)
+// Performance: 336 us -> 190-260 us (1.3-1.8x speedup)
 // 
 // Usage:
 //   1) ONCE (offline): PrecomputedScalar precomp = precompute_scalar_for_arbitrary(K);
 //   2) MANY TIMES:     Point result = scalar_mul_arbitrary_precomputed(Q, precomp);
 
 struct PrecomputedScalar {
-    // GLV decomposition: K → (k₁, k₂) where K ≡ k₁ + λ*k₂ (mod n)
+    // GLV decomposition: K -> (k_1, k_2) where K == k_1 + lambda*k_2 (mod n)
     Scalar k1;
     Scalar k2;
-    bool neg1;  // k₁ sign
-    bool neg2;  // k₂ sign
+    bool neg1;  // k_1 sign
+    bool neg2;  // k_2 sign
     
-    // Precomputed wNAF digits for k₁ and k₂
-    std::vector<int32_t> wnaf1;  // wNAF(k₁)
-    std::vector<int32_t> wnaf2;  // wNAF(k₂)
+    // Precomputed wNAF digits for k_1 and k_2
+    std::vector<int32_t> wnaf1;  // wNAF(k_1)
+    std::vector<int32_t> wnaf2;  // wNAF(k_2)
     
     unsigned window_bits;  // Window size used (typically 5)
     
@@ -199,11 +199,11 @@ struct PrecomputedScalarOptimized {
     struct Step {
         uint16_t num_doubles;  // How many consecutive doubles before additions
         
-        // Addition info for k₁ (Q table)
+        // Addition info for k_1 (Q table)
         uint8_t idx1;          // Point index [0..table_size-1], 0xFF = skip
         bool neg1;             // Negate Y coordinate?
         
-        // Addition info for k₂ (ψ(Q) table)
+        // Addition info for k_2 (psi(Q) table)
         uint8_t idx2;          // Point index [0..table_size-1], 0xFF = skip
         bool neg2;             // Negate Y coordinate?
         
@@ -220,29 +220,29 @@ struct PrecomputedScalarOptimized {
 
 // Precompute constant scalar K for repeated use with different points Q
 // This performs GLV decomposition and wNAF generation ONCE
-// Cost: ~14 μs one-time overhead, amortized over many operations
+// Cost: ~14 us one-time overhead, amortized over many operations
 // window_bits: typically 4-5 for optimal performance (4 recommended for speed)
 PrecomputedScalar precompute_scalar_for_arbitrary(const Scalar& K, unsigned window_bits = 4);
 
 // OPTIMIZED: Precompute with ALL calculations done once
 // Eliminates ALL runtime conditionals and arithmetic in main loop!
-// Additional cost: ~2 μs one-time, but removes ~30% overhead from main loop
+// Additional cost: ~2 us one-time, but removes ~30% overhead from main loop
 // Use this for MAXIMUM performance when K is truly constant
 PrecomputedScalarOptimized precompute_scalar_optimized(const Scalar& K, unsigned window_bits = 4);
 
 // Scalar multiplication with precomputed constant K
-// Cost: NO decomposition overhead, only ψ(Q) + 2D loop
-// Expected: 190-260 μs (1.3-1.8x faster than scalar_mul_arbitrary)
+// Cost: NO decomposition overhead, only psi(Q) + 2D loop
+// Expected: 190-260 us (1.3-1.8x faster than scalar_mul_arbitrary)
 Point scalar_mul_arbitrary_precomputed(const Point& Q, const PrecomputedScalar& precomp);
 
 // OPTIMIZED: Uses PrecomputedScalarOptimized for zero-overhead main loop
-// Expected: 120-160 μs with w=4 (2-3x faster than standard precomputed)
-// Target with assembly field ops: 18-24 μs (12x faster!)
+// Expected: 120-160 us with w=4 (2-3x faster than standard precomputed)
+// Target with assembly field ops: 18-24 us (12x faster!)
 Point scalar_mul_arbitrary_precomputed_optimized(const Point& Q, const PrecomputedScalarOptimized& precomp);
 
 // NO-TABLE MODE: For single-use Q (eliminates table building overhead!)
-// Uses direct ±Q and ±ψ(Q) without precomputed tables
-// Expected: ~199 μs (saves 12 μs from table building)
+// Uses direct +/-Q and +/-psi(Q) without precomputed tables
+// Expected: ~199 us (saves 12 us from table building)
 // Use when Q is used only once with constant K
 Point scalar_mul_arbitrary_precomputed_notable(const Point& Q, const PrecomputedScalarOptimized& precomp);
 

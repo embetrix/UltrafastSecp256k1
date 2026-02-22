@@ -1,5 +1,5 @@
 // =============================================================================
-// UltrafastSecp256k1 Metal — Bloom Filter (secp256k1_bloom.h)
+// UltrafastSecp256k1 Metal -- Bloom Filter (secp256k1_bloom.h)
 // =============================================================================
 // GPU-side bloom filter for candidate matching.
 // Matches CUDA DeviceBloom semantics using FNV-1a + SplitMix64 hashing.
@@ -19,7 +19,7 @@ using namespace metal;
 
 struct BloomParams {
     uint m_bits_lo;   // Total bit count (low 32)
-    uint m_bits_hi;   // Total bit count (high 32) — supports >4G bits
+    uint m_bits_hi;   // Total bit count (high 32) -- supports >4G bits
     uint k;           // Number of hash functions
     uint _pad;
     uint salt_lo;     // Salt low 32
@@ -67,7 +67,7 @@ inline u64 u64_shl(u64 a, uint n) {
     return u64_make(a.lo << n, (a.hi << n) | (a.lo >> (32 - n)));
 }
 
-// 64-bit multiply: a * b → 64-bit result (truncated)
+// 64-bit multiply: a * b -> 64-bit result (truncated)
 inline u64 u64_mul(u64 a, u64 b) {
     // (a.lo + a.hi<<32) * (b.lo + b.hi<<32)
     // lo*lo => full 64-bit
@@ -85,10 +85,10 @@ inline uint u64_bit(u64 a, uint n) {
     return (a.hi >> (n - 32)) & 1u;
 }
 
-// fast_reduce64: ((x * range) >> 64) — just need high 64 bits of 128-bit product
+// fast_reduce64: ((x * range) >> 64) -- just need high 64 bits of 128-bit product
 // This maps uniformly into [0, range)
 inline u64 u64_fast_reduce(u64 x, u64 range) {
-    // Full 64×64 → 128 bit, return high 64
+    // Full 64x64 -> 128 bit, return high 64
     // x = x.lo + x.hi*2^32
     // range = range.lo + range.hi*2^32
     // product = x*range = sum of cross products

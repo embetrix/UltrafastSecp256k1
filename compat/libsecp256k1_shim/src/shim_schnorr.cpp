@@ -1,5 +1,5 @@
 // ============================================================================
-// shim_schnorr.cpp — BIP-340 Schnorr sign/verify
+// shim_schnorr.cpp -- BIP-340 Schnorr sign/verify
 // ============================================================================
 #include "secp256k1_schnorrsig.h"
 #include "secp256k1_extrakeys.h"
@@ -15,7 +15,7 @@ using namespace secp256k1::fast;
 
 extern "C" {
 
-// ── BIP-340 nonce function (stub — sign uses internal BIP-340 nonce) ─────
+// -- BIP-340 nonce function (stub -- sign uses internal BIP-340 nonce) -----
 
 static int nonce_function_bip340_stub(unsigned char *, const unsigned char *,
     size_t, const unsigned char *, const unsigned char *,
@@ -25,7 +25,7 @@ static int nonce_function_bip340_stub(unsigned char *, const unsigned char *,
 const secp256k1_nonce_function_hardened secp256k1_nonce_function_bip340 =
     nonce_function_bip340_stub;
 
-// ── Sign ─────────────────────────────────────────────────────────────────
+// -- Sign -----------------------------------------------------------------
 
 int secp256k1_schnorrsig_sign32(
     const secp256k1_context *ctx,
@@ -59,7 +59,7 @@ int secp256k1_schnorrsig_sign32(
     } catch (...) { return 0; }
 }
 
-// ── Verify ───────────────────────────────────────────────────────────────
+// -- Verify ---------------------------------------------------------------
 
 int secp256k1_schnorrsig_verify(
     const secp256k1_context *ctx,

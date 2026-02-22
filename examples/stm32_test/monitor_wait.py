@@ -1,5 +1,5 @@
 """
-Monitor COM4 — open the port first, then power-cycle the board.
+Monitor COM4 -- open the port first, then power-cycle the board.
 Tries multiple baud rates sequentially: for each, opens port,
 you unplug+replug USB, and it captures whatever comes.
 

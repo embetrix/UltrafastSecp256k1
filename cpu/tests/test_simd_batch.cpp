@@ -198,9 +198,9 @@ static void test_batch_inv_with_scratch() {
 }
 
 int test_simd_batch_run() {
-    std::printf("═══════════════════════════════════════════════════════════════\n");
-    std::printf("  UltrafastSecp256k1 — SIMD + Batch Field Tests\n");
-    std::printf("═══════════════════════════════════════════════════════════════\n\n");
+    std::printf("===============================================================\n");
+    std::printf("  UltrafastSecp256k1 -- SIMD + Batch Field Tests\n");
+    std::printf("===============================================================\n\n");
 
     test_simd_detection();
     test_batch_add();
@@ -211,10 +211,10 @@ int test_simd_batch_run() {
     test_batch_inv_single();
     test_batch_inv_with_scratch();
 
-    std::printf("\n═══════════════════════════════════════════════════════════════\n");
+    std::printf("\n===============================================================\n");
     std::printf("  Results: %d passed, %d failed (total %d)\n",
                 g_pass, g_fail, g_pass + g_fail);
-    std::printf("═══════════════════════════════════════════════════════════════\n");
+    std::printf("===============================================================\n");
 
     return g_fail > 0 ? 1 : 0;
 }

@@ -3,16 +3,16 @@
 #pragma once
 
 // ============================================================================
-// UltrafastSecp256k1 — Built-in Test Framework
+// UltrafastSecp256k1 -- Built-in Test Framework
 // ============================================================================
 //
 // Self-contained test infrastructure that is an organic part of the library.
 // No external test frameworks needed. Portable to ANY platform.
 //
 // Architecture:
-//   TestCategory (enum) → groups related tests (field, scalar, point, ...)
-//   TestResult          → per-check pass/fail with message
-//   TestSuite           → collects results, runs categories, reports
+//   TestCategory (enum) -> groups related tests (field, scalar, point, ...)
+//   TestResult          -> per-check pass/fail with message
+//   TestSuite           -> collects results, runs categories, reports
 //
 // Usage:
 //   secp256k1::test::TestSuite suite;
@@ -23,7 +23,7 @@
 //   return suite.failed() ? 1 : 0;
 //
 // On embedded/RTOS, individual categories can run standalone without
-// any I/O dependency — results are stored in a POD counter struct.
+// any I/O dependency -- results are stored in a POD counter struct.
 // ============================================================================
 
 #include <cstdint>
@@ -31,17 +31,17 @@
 
 namespace secp256k1::test {
 
-// ── Test Categories ──────────────────────────────────────────────────────────
+// -- Test Categories ----------------------------------------------------------
 // Each enum maps to a logical group of tests. Port authors can select
 // which categories to run based on platform capabilities.
 
 enum class TestCategory : uint32_t {
-    // ── Core Arithmetic ──
+    // -- Core Arithmetic --
     FieldArith          = 0x0001,  // FieldElement +, -, *, sqr, inv, normalize
     FieldConversions    = 0x0002,  // from_hex, to_hex, from_bytes, to_bytes, from_limbs
     FieldEdgeCases      = 0x0004,  // zero, one, p-1, max limbs, double overflow
     FieldInverse        = 0x0008,  // standalone inverse, batch inverse, all algos
-    FieldRepresentations= 0x0010,  // 4×64 vs 5×52 vs 10×26 cross-check
+    FieldRepresentations= 0x0010,  // 4x64 vs 5x52 vs 10x26 cross-check
     FieldBranchless     = 0x0020,  // cmov, cmovznz, select, is_zero, eq
     FieldOptimal        = 0x0040,  // to_optimal / from_optimal roundtrip
     
@@ -50,37 +50,37 @@ enum class TestCategory : uint32_t {
     ScalarEdgeCases     = 0x0400,  // 0, 1, n-1, n (wraps to 0), n+1 (wraps to 1)
     ScalarEncoding      = 0x0800,  // NAF, wNAF encoding correctness
 
-    // ── Point Operations ──
+    // -- Point Operations --
     PointBasic          = 0x1000,  // add, dbl, negate, infinity, generator
     PointScalarMul      = 0x2000,  // scalar_mul, known vectors, iterated
     PointInplace        = 0x4000,  // next/prev/dbl/negate_inplace, add_inplace
     PointPrecomputed    = 0x8000,  // KPlan, predecomposed, precomputed_wnaf
     PointSerialization  = 0x00010000,  // to_compressed, to_uncompressed, from_affine
-    PointEdgeCases      = 0x00020000,  // P+O, O+P, P+(-P), O+O, 2·O, n·G=O
+    PointEdgeCases      = 0x00020000,  // P+O, O+P, P+(-P), O+O, 2*O, n*G=O
 
-    // ── Constant-Time Layer ──
+    // -- Constant-Time Layer --
     CTOps               = 0x00040000,  // cmov, cswap, select, masks
     CTField             = 0x00080000,  // ct field arithmetic
     CTScalar            = 0x00100000,  // ct scalar arithmetic
     CTPoint             = 0x00200000,  // complete add, ct scalar_mul
 
-    // ── Advanced Algorithms ──
+    // -- Advanced Algorithms --
     GLV                 = 0x00400000,  // GLV decomposition, endomorphism
     MSM                 = 0x00800000,  // Strauss, Pippenger, unified MSM
     CombGen             = 0x01000000,  // Comb generator, CT comb, cache I/O
     BatchInverse        = 0x02000000,  // Montgomery batch inverse, SIMD batch
 
-    // ── Protocols ──
+    // -- Protocols --
     ECDSA               = 0x04000000,  // sign, verify, deterministic nonce
     Schnorr             = 0x08000000,  // BIP-340 sign/verify
     ECDH                = 0x10000000,  // shared secret computation
     Recovery            = 0x20000000,  // recoverable sig, key recovery
     
-    // ── Aggregate categories ──
+    // -- Aggregate categories --
     // Use these helper values programmatically:
     AllField            = 0x007F,      // all field tests
     AllScalar           = 0x0F00,      // all scalar tests
-    AllPoint            = 0x003F0000 & 0xFFFF0000, // all point tests — computed below
+    AllPoint            = 0x003F0000 & 0xFFFF0000, // all point tests -- computed below
     AllCT               = 0x003C0000,  // all CT tests
     AllCore             = 0x0FFFFFFF,  // field + scalar + point + CT + algorithms
     
@@ -98,7 +98,7 @@ inline constexpr bool has_flag(TestCategory set, TestCategory flag) {
     return (static_cast<uint32_t>(set) & static_cast<uint32_t>(flag)) != 0;
 }
 
-// ── Test Counters (POD, embeddable) ──────────────────────────────────────────
+// -- Test Counters (POD, embeddable) ------------------------------------------
 struct TestCounters {
     uint32_t passed   = 0;
     uint32_t failed   = 0;
@@ -114,7 +114,7 @@ struct TestCounters {
     }
 };
 
-// ── Category name mapping ────────────────────────────────────────────────────
+// -- Category name mapping ----------------------------------------------------
 inline const char* category_name(TestCategory cat) {
     switch (cat) {
         case TestCategory::FieldArith:          return "Field Arithmetic";
@@ -150,7 +150,7 @@ inline const char* category_name(TestCategory cat) {
     }
 }
 
-// ── Complete list of individual categories for iteration ─────────────────────
+// -- Complete list of individual categories for iteration ---------------------
 inline constexpr TestCategory ALL_CATEGORIES[] = {
     TestCategory::FieldArith,
     TestCategory::FieldConversions,

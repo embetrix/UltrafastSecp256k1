@@ -5,7 +5,7 @@
 // Constant-Time Scalar Arithmetic
 // ============================================================================
 // Side-channel resistant scalar operations for secp256k1 curve order.
-// Operates on secp256k1::fast::Scalar — same data type, CT execution.
+// Operates on secp256k1::fast::Scalar -- same data type, CT execution.
 // ============================================================================
 
 #include <cstdint>
@@ -16,7 +16,7 @@ namespace secp256k1::ct {
 
 using Scalar = secp256k1::fast::Scalar;
 
-// ─── CT Scalar Arithmetic ────────────────────────────────────────────────────
+// --- CT Scalar Arithmetic ----------------------------------------------------
 
 // CT modular addition: r = (a + b) mod n
 Scalar scalar_add(const Scalar& a, const Scalar& b) noexcept;
@@ -30,7 +30,7 @@ Scalar scalar_neg(const Scalar& a) noexcept;
 // CT modular halving: r = a/2 mod n  (if a is odd: (a+n)/2, else a/2)
 Scalar scalar_half(const Scalar& a) noexcept;
 
-// ─── CT Conditional Operations ───────────────────────────────────────────────
+// --- CT Conditional Operations -----------------------------------------------
 
 // CT conditional move: if (mask) r = a; else r unchanged
 void scalar_cmov(Scalar* r, const Scalar& a, std::uint64_t mask) noexcept;
@@ -45,7 +45,7 @@ Scalar scalar_select(const Scalar& a, const Scalar& b,
 // CT conditional negate: if (mask) r = -a; else r = a
 Scalar scalar_cneg(const Scalar& a, std::uint64_t mask) noexcept;
 
-// ─── CT Comparison ───────────────────────────────────────────────────────────
+// --- CT Comparison -----------------------------------------------------------
 
 // Returns all-ones mask if a == 0, else 0.
 std::uint64_t scalar_is_zero(const Scalar& a) noexcept;
@@ -53,7 +53,7 @@ std::uint64_t scalar_is_zero(const Scalar& a) noexcept;
 // Returns all-ones mask if a == b, else 0.
 std::uint64_t scalar_eq(const Scalar& a, const Scalar& b) noexcept;
 
-// ─── CT Bit Access ───────────────────────────────────────────────────────────
+// --- CT Bit Access -----------------------------------------------------------
 
 // Returns bit at position 'index' (0 = LSB). CT (always same memory access).
 std::uint64_t scalar_bit(const Scalar& a, std::size_t index) noexcept;

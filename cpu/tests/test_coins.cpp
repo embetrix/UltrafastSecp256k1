@@ -2,14 +2,14 @@
 // Test: Coins Layer + Custom Generator + Ethereum + BIP-44
 // ============================================================================
 // Tests:
-//   1. CurveContext — custom generator, default context, derive_public_key
-//   2. CoinParams — registry, lookup, all coins defined
-//   3. Keccak-256 — known test vectors
-//   4. Ethereum address — EIP-55 checksum, known vectors
-//   5. Coin addresses — Bitcoin, Litecoin, Dogecoin, Ethereum P2PKH/P2WPKH
-//   6. WIF encoding — coin-specific WIF prefixes
-//   7. BIP-44 HD — path construction, key derivation, seed→address
-//   8. Custom generator — key derivation with non-standard G
+//   1. CurveContext -- custom generator, default context, derive_public_key
+//   2. CoinParams -- registry, lookup, all coins defined
+//   3. Keccak-256 -- known test vectors
+//   4. Ethereum address -- EIP-55 checksum, known vectors
+//   5. Coin addresses -- Bitcoin, Litecoin, Dogecoin, Ethereum P2PKH/P2WPKH
+//   6. WIF encoding -- coin-specific WIF prefixes
+//   7. BIP-44 HD -- path construction, key derivation, seed->address
+//   8. Custom generator -- key derivation with non-standard G
 // ============================================================================
 
 #include <cstdio>
@@ -103,7 +103,7 @@ static void test_context_derive_public_key() {
     auto expected = G.scalar_mul(privkey);
     ASSERT_TRUE(pub_default.x() == expected.x(), "default derive mismatch");
     
-    // Custom: pubkey = privkey * (2*G) ≠ privkey * G
+    // Custom: pubkey = privkey * (2*G) != privkey * G
     auto G2 = G.dbl();
     auto ctx = secp256k1::CurveContext::with_generator(G2);
     auto pub_custom = secp256k1::derive_public_key(privkey, &ctx);
@@ -121,7 +121,7 @@ static void test_context_effective_generator() {
     
     auto G = secp256k1::fast::Point::generator();
     
-    // nullptr → standard G
+    // nullptr -> standard G
     const auto& eff_default = secp256k1::effective_generator(nullptr);
     ASSERT_TRUE(eff_default.x() == G.x(), "nullptr should return standard G");
     
@@ -395,7 +395,7 @@ static void test_litecoin_wif() {
     
     auto wif = secp256k1::coins::coin_wif_encode(privkey, secp256k1::coins::Litecoin);
     ASSERT_TRUE(!wif.empty(), "WIF should not be empty");
-    // Litecoin WIF prefix 0xB0 → compressed starts with T
+    // Litecoin WIF prefix 0xB0 -> compressed starts with T
     ASSERT_TRUE(wif[0] == 'T', "Litecoin compressed WIF starts with T");
     
     PASS();
@@ -430,25 +430,25 @@ static void test_bip44_path_ethereum() {
 static void test_bip44_best_purpose() {
     TEST("BIP-44: best_purpose selection");
     
-    // Bitcoin → BIP86 (Taproot)
+    // Bitcoin -> BIP86 (Taproot)
     ASSERT_EQ(static_cast<int>(secp256k1::coins::best_purpose(secp256k1::coins::Bitcoin)),
-              static_cast<int>(secp256k1::coins::DerivationPurpose::BIP86), "Bitcoin → BIP86");
+              static_cast<int>(secp256k1::coins::DerivationPurpose::BIP86), "Bitcoin -> BIP86");
     
-    // Litecoin → BIP84 (SegWit but no Taproot)
+    // Litecoin -> BIP84 (SegWit but no Taproot)
     ASSERT_EQ(static_cast<int>(secp256k1::coins::best_purpose(secp256k1::coins::Litecoin)),
-              static_cast<int>(secp256k1::coins::DerivationPurpose::BIP84), "Litecoin → BIP84");
+              static_cast<int>(secp256k1::coins::DerivationPurpose::BIP84), "Litecoin -> BIP84");
     
-    // Dogecoin → BIP44 (no SegWit)
+    // Dogecoin -> BIP44 (no SegWit)
     ASSERT_EQ(static_cast<int>(secp256k1::coins::best_purpose(secp256k1::coins::Dogecoin)),
-              static_cast<int>(secp256k1::coins::DerivationPurpose::BIP44), "Dogecoin → BIP44");
+              static_cast<int>(secp256k1::coins::DerivationPurpose::BIP44), "Dogecoin -> BIP44");
     
     PASS();
 }
 
 static void test_bip44_key_derivation() {
-    TEST("BIP-44: seed → key derivation");
+    TEST("BIP-44: seed -> key derivation");
     
-    // BIP-39 test seed (all zeros, 16 bytes — minimal valid seed)
+    // BIP-39 test seed (all zeros, 16 bytes -- minimal valid seed)
     std::uint8_t seed[64] = {};
     seed[0] = 0x01; // Non-zero to avoid edge cases
     
@@ -464,7 +464,7 @@ static void test_bip44_key_derivation() {
 }
 
 static void test_bip44_seed_to_address() {
-    TEST("BIP-44: seed → Bitcoin address");
+    TEST("BIP-44: seed -> Bitcoin address");
     
     std::uint8_t seed[64] = {};
     seed[0] = 0x42;
@@ -481,7 +481,7 @@ static void test_bip44_seed_to_address() {
 }
 
 static void test_bip44_seed_to_eth_address() {
-    TEST("BIP-44: seed → Ethereum address");
+    TEST("BIP-44: seed -> Ethereum address");
     
     std::uint8_t seed[64] = {};
     seed[0] = 0x42;
@@ -545,7 +545,7 @@ static void test_custom_generator_deterministic() {
 // ============================================================================
 
 static void test_full_pipeline_multi_coin() {
-    TEST("Full pipeline: same key → different addresses per coin");
+    TEST("Full pipeline: same key -> different addresses per coin");
     
     auto privkey = secp256k1::fast::Scalar::from_uint64(999);
     auto pubkey = secp256k1::derive_public_key(privkey);

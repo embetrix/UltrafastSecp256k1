@@ -26,11 +26,11 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
 
     auto G = Point::generator();
 
-    // ── k*G must be on-curve ─────────────────────────────────────────────────
+    // -- k*G must be on-curve -------------------------------------------------
     auto P = G.scalar_mul(k);
     if (P.is_infinity()) return 0;
 
-    // Verify compressed → uncompressed round-trip consistency
+    // Verify compressed -> uncompressed round-trip consistency
     auto comp = P.to_compressed();
     auto uncomp = P.to_uncompressed();
     // First byte of uncompressed is 0x04
@@ -38,12 +38,12 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
     // Compressed first byte is 0x02 or 0x03
     if (comp[0] != 0x02 && comp[0] != 0x03) __builtin_trap();
 
-    // ── P + (-P) = infinity ──────────────────────────────────────────────────
+    // -- P + (-P) = infinity --------------------------------------------------
     auto neg_P = P.negate();
     auto sum = P.add(neg_P);
     if (!sum.is_infinity()) __builtin_trap();
 
-    // ── 2*P = P + P = P.dbl() ────────────────────────────────────────────────
+    // -- 2*P = P + P = P.dbl() ------------------------------------------------
     auto dbl = P.dbl();
     auto add_self = P.add(P);
     auto dbl_comp = dbl.to_compressed();

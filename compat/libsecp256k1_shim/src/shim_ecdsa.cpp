@@ -1,5 +1,5 @@
 // ============================================================================
-// shim_ecdsa.cpp — ECDSA sign/verify, signature parse/serialize
+// shim_ecdsa.cpp -- ECDSA sign/verify, signature parse/serialize
 // ============================================================================
 #include "secp256k1.h"
 
@@ -13,7 +13,7 @@
 
 using namespace secp256k1::fast;
 
-// ── Internal: opaque sig stores r (32 BE) || s (32 BE) ───────────────────
+// -- Internal: opaque sig stores r (32 BE) || s (32 BE) -------------------
 static void ecdsa_sig_to_data(const secp256k1::ECDSASignature& sig, unsigned char data[64]) {
     auto rb = sig.r.to_bytes();
     auto sb = sig.s.to_bytes();
@@ -28,7 +28,7 @@ static secp256k1::ECDSASignature ecdsa_sig_from_data(const unsigned char data[64
     return { Scalar::from_bytes(rb), Scalar::from_bytes(sb) };
 }
 
-// ── Internal: reconstruct Point from opaque pubkey ──────────────────────
+// -- Internal: reconstruct Point from opaque pubkey ----------------------
 static Point pubkey_data_to_point(const unsigned char data[64]) {
     std::array<uint8_t, 32> xb{}, yb{};
     std::memcpy(xb.data(), data, 32);
@@ -40,7 +40,7 @@ static Point pubkey_data_to_point(const unsigned char data[64]) {
 
 extern "C" {
 
-// ── Compact parse/serialize ──────────────────────────────────────────────
+// -- Compact parse/serialize ----------------------------------------------
 
 int secp256k1_ecdsa_signature_parse_compact(
     const secp256k1_context *ctx, secp256k1_ecdsa_signature *sig,
@@ -62,7 +62,7 @@ int secp256k1_ecdsa_signature_serialize_compact(
     return 1;
 }
 
-// ── DER parse/serialize ──────────────────────────────────────────────────
+// -- DER parse/serialize --------------------------------------------------
 
 static int parse_der_int(const unsigned char *&p, const unsigned char *end,
                          unsigned char out[32])
@@ -145,7 +145,7 @@ int secp256k1_ecdsa_signature_serialize_der(
     return 1;
 }
 
-// ── Normalize ────────────────────────────────────────────────────────────
+// -- Normalize ------------------------------------------------------------
 
 int secp256k1_ecdsa_signature_normalize(
     const secp256k1_context *ctx, secp256k1_ecdsa_signature *sigout,
@@ -163,7 +163,7 @@ int secp256k1_ecdsa_signature_normalize(
     } catch (...) { return 0; }
 }
 
-// ── Verify ───────────────────────────────────────────────────────────────
+// -- Verify ---------------------------------------------------------------
 
 int secp256k1_ecdsa_verify(
     const secp256k1_context *ctx, const secp256k1_ecdsa_signature *sig,
@@ -183,7 +183,7 @@ int secp256k1_ecdsa_verify(
     } catch (...) { return 0; }
 }
 
-// ── Sign ─────────────────────────────────────────────────────────────────
+// -- Sign -----------------------------------------------------------------
 
 int secp256k1_ecdsa_sign(
     const secp256k1_context *ctx, secp256k1_ecdsa_signature *sig,
@@ -207,7 +207,7 @@ int secp256k1_ecdsa_sign(
     } catch (...) { return 0; }
 }
 
-// ── RFC 6979 nonce function pointers (stubs — sign uses internal RFC 6979) ─
+// -- RFC 6979 nonce function pointers (stubs -- sign uses internal RFC 6979) -
 
 static int nonce_function_rfc6979_stub(unsigned char *, const unsigned char *,
     const unsigned char *, const unsigned char *, void *, unsigned int)

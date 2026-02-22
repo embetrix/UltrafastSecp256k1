@@ -344,7 +344,7 @@ int main(int argc, char* argv[]) {
         auto r_sqr = kernel_bench("Field Sqr", (cl_kernel)ctx->native_kernel("field_sqr"), false);
         print_result(r_sqr); results.push_back(r_sqr);
 
-        // Field Inv (kernel-only) — single-input kernel like field_sqr
+        // Field Inv (kernel-only) -- single-input kernel like field_sqr
         auto r_inv = kernel_bench("Field Inv", (cl_kernel)ctx->native_kernel("field_inv"), false);
         print_result(r_inv); results.push_back(r_inv);
 
@@ -484,7 +484,7 @@ int main(int argc, char* argv[]) {
                 }
             }
 
-            // Jacobian → Affine conversion
+            // Jacobian -> Affine conversion
             {
                 cl_kernel kern = (cl_kernel)ctx->native_kernel("jacobian_to_affine");
                 if (kern) {
@@ -508,7 +508,7 @@ int main(int argc, char* argv[]) {
 
                     double ns = std::chrono::duration_cast<std::chrono::nanoseconds>(t1 - t0).count();
                     double total_ops = static_cast<double>(point_batch) * k_iters;
-                    BenchResult r = {"Jac→Affine (per-pt)", ns / total_ops, total_ops / (ns * 1e-9)};
+                    BenchResult r = {"Jac->Affine (per-pt)", ns / total_ops, total_ops / (ns * 1e-9)};
                     print_result(r); results.push_back(r);
                 } else {
                     std::cout << "  [SKIP] jacobian_to_affine kernel not found\n";
@@ -594,7 +594,7 @@ int main(int argc, char* argv[]) {
             print_result(r); results.push_back(r);
         }
 
-        // Scalar Mul Generator (kernel-only) — smaller batch due to cost
+        // Scalar Mul Generator (kernel-only) -- smaller batch due to cost
         {
             std::size_t smk_batch = std::min(point_batch, static_cast<std::size_t>(65536));
             cl_uint smk_cnt = static_cast<cl_uint>(smk_batch);

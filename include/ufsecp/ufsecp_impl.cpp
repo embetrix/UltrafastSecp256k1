@@ -1,9 +1,9 @@
 /* ============================================================================
- * UltrafastSecp256k1 — ufsecp C ABI Implementation
+ * UltrafastSecp256k1 -- ufsecp C ABI Implementation
  * ============================================================================
  * Wraps the C++ UltrafastSecp256k1 library behind the opaque ufsecp_ctx and
  * the ufsecp_* function surface.  All conversions between opaque byte arrays
- * and internal C++ types happen here — nothing leaks.
+ * and internal C++ types happen here -- nothing leaks.
  *
  * Build with:  -DUFSECP_BUILDING   (sets dllexport on Windows)
  * ============================================================================ */
@@ -21,7 +21,7 @@
 #include <string>
 #include <new>
 
-/* ── UltrafastSecp256k1 C++ headers ──────────────────────────────────────── */
+/* -- UltrafastSecp256k1 C++ headers ---------------------------------------- */
 #include "secp256k1/scalar.hpp"
 #include "secp256k1/point.hpp"
 #include "secp256k1/field.hpp"
@@ -39,9 +39,9 @@ using Scalar = secp256k1::fast::Scalar;
 using Point  = secp256k1::fast::Point;
 using FE     = secp256k1::fast::FieldElement;
 
-/* ═══════════════════════════════════════════════════════════════════════════
+/* ===========================================================================
  * Context definition (opaque to callers)
- * ═══════════════════════════════════════════════════════════════════════════ */
+ * =========================================================================== */
 
 struct ufsecp_ctx {
     ufsecp_error_t   last_err;
@@ -68,9 +68,9 @@ static ufsecp_error_t ctx_set_err(ufsecp_ctx* ctx, ufsecp_error_t err, const cha
     return err;
 }
 
-/* ═══════════════════════════════════════════════════════════════════════════
+/* ===========================================================================
  * Internal helpers (same pattern as existing c_api, but with error model)
- * ═══════════════════════════════════════════════════════════════════════════ */
+ * =========================================================================== */
 
 static inline Scalar scalar_from_bytes(const uint8_t b[32]) {
     std::array<uint8_t, 32> arr;
@@ -88,7 +88,7 @@ static inline Point point_from_compressed(const uint8_t pub[33]) {
     std::memcpy(x_bytes.data(), pub + 1, 32);
     auto x = FE::from_bytes(x_bytes);
 
-    /* y² = x³ + 7 */
+    /* y^2 = x^3 + 7 */
     auto x2 = x * x;
     auto x3 = x2 * x;
     auto y2 = x3 + FE::from_uint64(7);
@@ -142,9 +142,9 @@ static secp256k1::Network to_network(int n) {
                                    : secp256k1::Network::Mainnet;
 }
 
-/* ═══════════════════════════════════════════════════════════════════════════
+/* ===========================================================================
  * Version / error (stateless, no ctx needed)
- * ═══════════════════════════════════════════════════════════════════════════ */
+ * =========================================================================== */
 
 unsigned int ufsecp_version(void) {
     return UFSECP_VERSION_PACKED;
@@ -175,9 +175,9 @@ const char* ufsecp_error_str(ufsecp_error_t err) {
     }
 }
 
-/* ═══════════════════════════════════════════════════════════════════════════
+/* ===========================================================================
  * Context lifecycle
- * ═══════════════════════════════════════════════════════════════════════════ */
+ * =========================================================================== */
 
 ufsecp_error_t ufsecp_ctx_create(ufsecp_ctx** ctx_out) {
     if (!ctx_out) return UFSECP_ERR_NULL_ARG;
@@ -231,9 +231,9 @@ size_t ufsecp_ctx_size(void) {
     return sizeof(ufsecp_ctx);
 }
 
-/* ═══════════════════════════════════════════════════════════════════════════
+/* ===========================================================================
  * Private key utilities
- * ═══════════════════════════════════════════════════════════════════════════ */
+ * =========================================================================== */
 
 ufsecp_error_t ufsecp_seckey_verify(const ufsecp_ctx* ctx,
                                     const uint8_t privkey[32]) {
@@ -277,9 +277,9 @@ ufsecp_error_t ufsecp_seckey_tweak_mul(ufsecp_ctx* ctx, uint8_t privkey[32],
     return UFSECP_OK;
 }
 
-/* ═══════════════════════════════════════════════════════════════════════════
+/* ===========================================================================
  * Public key
- * ═══════════════════════════════════════════════════════════════════════════ */
+ * =========================================================================== */
 
 ufsecp_error_t ufsecp_pubkey_create(ufsecp_ctx* ctx,
                                     const uint8_t privkey[32],
@@ -361,9 +361,9 @@ ufsecp_error_t ufsecp_pubkey_xonly(ufsecp_ctx* ctx,
     return UFSECP_OK;
 }
 
-/* ═══════════════════════════════════════════════════════════════════════════
+/* ===========================================================================
  * ECDSA
- * ═══════════════════════════════════════════════════════════════════════════ */
+ * =========================================================================== */
 
 ufsecp_error_t ufsecp_ecdsa_sign(ufsecp_ctx* ctx,
                                  const uint8_t msg32[32],
@@ -475,7 +475,7 @@ ufsecp_error_t ufsecp_ecdsa_sig_from_der(ufsecp_ctx* ctx,
     return UFSECP_OK;
 }
 
-/* ── ECDSA Recovery ──────────────────────────────────────────────────────── */
+/* -- ECDSA Recovery -------------------------------------------------------- */
 
 ufsecp_error_t ufsecp_ecdsa_sign_recoverable(ufsecp_ctx* ctx,
                                              const uint8_t msg32[32],
@@ -522,9 +522,9 @@ ufsecp_error_t ufsecp_ecdsa_recover(ufsecp_ctx* ctx,
     return UFSECP_OK;
 }
 
-/* ═══════════════════════════════════════════════════════════════════════════
+/* ===========================================================================
  * Schnorr (BIP-340)
- * ═══════════════════════════════════════════════════════════════════════════ */
+ * =========================================================================== */
 
 ufsecp_error_t ufsecp_schnorr_sign(ufsecp_ctx* ctx,
                                    const uint8_t msg32[32],
@@ -569,9 +569,9 @@ ufsecp_error_t ufsecp_schnorr_verify(ufsecp_ctx* ctx,
     return UFSECP_OK;
 }
 
-/* ═══════════════════════════════════════════════════════════════════════════
+/* ===========================================================================
  * ECDH
- * ═══════════════════════════════════════════════════════════════════════════ */
+ * =========================================================================== */
 
 ufsecp_error_t ufsecp_ecdh(ufsecp_ctx* ctx,
                            const uint8_t privkey[32],
@@ -615,9 +615,9 @@ ufsecp_error_t ufsecp_ecdh_raw(ufsecp_ctx* ctx,
     return UFSECP_OK;
 }
 
-/* ═══════════════════════════════════════════════════════════════════════════
- * Hashing (stateless — no ctx required, but returns error_t for consistency)
- * ═══════════════════════════════════════════════════════════════════════════ */
+/* ===========================================================================
+ * Hashing (stateless -- no ctx required, but returns error_t for consistency)
+ * =========================================================================== */
 
 ufsecp_error_t ufsecp_sha256(const uint8_t* data, size_t len,
                              uint8_t digest32_out[32]) {
@@ -646,9 +646,9 @@ ufsecp_error_t ufsecp_tagged_hash(const char* tag,
     return UFSECP_OK;
 }
 
-/* ═══════════════════════════════════════════════════════════════════════════
+/* ===========================================================================
  * Bitcoin addresses
- * ═══════════════════════════════════════════════════════════════════════════ */
+ * =========================================================================== */
 
 ufsecp_error_t ufsecp_addr_p2pkh(ufsecp_ctx* ctx,
                                  const uint8_t pubkey33[33], int network,
@@ -702,9 +702,9 @@ ufsecp_error_t ufsecp_addr_p2tr(ufsecp_ctx* ctx,
     return UFSECP_OK;
 }
 
-/* ═══════════════════════════════════════════════════════════════════════════
+/* ===========================================================================
  * WIF
- * ═══════════════════════════════════════════════════════════════════════════ */
+ * =========================================================================== */
 
 ufsecp_error_t ufsecp_wif_encode(ufsecp_ctx* ctx,
                                  const uint8_t privkey[32],
@@ -744,9 +744,9 @@ ufsecp_error_t ufsecp_wif_decode(ufsecp_ctx* ctx,
     return UFSECP_OK;
 }
 
-/* ═══════════════════════════════════════════════════════════════════════════
+/* ===========================================================================
  * BIP-32
- * ═══════════════════════════════════════════════════════════════════════════ */
+ * =========================================================================== */
 
 static void extkey_to_uf(const secp256k1::ExtendedKey& ek, ufsecp_bip32_key* out) {
     auto serialized = ek.serialize();
@@ -848,9 +848,9 @@ ufsecp_error_t ufsecp_bip32_pubkey(ufsecp_ctx* ctx,
     return UFSECP_OK;
 }
 
-/* ═══════════════════════════════════════════════════════════════════════════
+/* ===========================================================================
  * Taproot (BIP-341)
- * ═══════════════════════════════════════════════════════════════════════════ */
+ * =========================================================================== */
 
 ufsecp_error_t ufsecp_taproot_output_key(ufsecp_ctx* ctx,
                                          const uint8_t internal_x[32],

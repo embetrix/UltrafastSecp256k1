@@ -24,24 +24,24 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
     auto a = FieldElement::from_bytes(buf_a);
     auto b = FieldElement::from_bytes(buf_b);
 
-    // ── Closure: add/sub round-trip ──────────────────────────────────────────
+    // -- Closure: add/sub round-trip ------------------------------------------
     auto c = a + b;
     auto d = c - b;
     auto a_rt = d.to_bytes();
     auto a_orig = a.to_bytes();
     if (a_rt != a_orig) __builtin_trap();
 
-    // ── Closure: mul by 1 = identity ─────────────────────────────────────────
+    // -- Closure: mul by 1 = identity -----------------------------------------
     auto one = FieldElement::one();
     auto e = a * one;
     if (e.to_bytes() != a_orig) __builtin_trap();
 
-    // ── Closure: a * a == a.square() ─────────────────────────────────────────
+    // -- Closure: a * a == a.square() -----------------------------------------
     auto f = a * a;
     auto g = a.square();
     if (f.to_bytes() != g.to_bytes()) __builtin_trap();
 
-    // ── Closure: a * a^-1 == 1 (if a != 0) ──────────────────────────────────
+    // -- Closure: a * a^-1 == 1 (if a != 0) ----------------------------------
     if (a != FieldElement::zero()) {
         auto inv = a.inverse();
         auto prod = a * inv;
