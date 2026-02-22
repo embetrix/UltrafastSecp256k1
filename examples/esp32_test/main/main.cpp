@@ -306,13 +306,14 @@ static double bench_ecdsa_verify(int N) {
 
 static double bench_schnorr_sign(int N) {
     Scalar key = random_scalar();
+    auto kp = secp256k1::schnorr_keypair_create(key);
     auto msg = random_msg();
     std::array<uint8_t,32> aux{};
-    volatile auto w = secp256k1::schnorr_sign(key, msg, aux); (void)w;
+    volatile auto w = secp256k1::schnorr_sign(kp, msg, aux); (void)w;
 
     int64_t t0 = esp_timer_get_time();
     for (int i = 0; i < N; i++) {
-        volatile auto sig = secp256k1::schnorr_sign(key, msg, aux); (void)sig;
+        volatile auto sig = secp256k1::schnorr_sign(kp, msg, aux); (void)sig;
     }
     int64_t dt = esp_timer_get_time() - t0;
     return (double)dt * 1000.0 / N;
@@ -331,6 +332,54 @@ static double bench_schnorr_verify(int N) {
         volatile bool ok = secp256k1::schnorr_verify(xpk, msg, sig); (void)ok;
     }
     int64_t dt = esp_timer_get_time() - t0;
+    return (double)dt * 1000.0 / N;
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  3b. ECDSA BOTTLENECK PROFILING
+// ════════════════════════════════════════════════════════════════════════════
+
+static double bench_scalar_inverse(int N) {
+    Scalar k = random_scalar();
+    volatile auto w = k.inverse(); (void)w;
+
+    int64_t t0 = esp_timer_get_time();
+    Scalar r = k;
+    for (int i = 0; i < N; i++) r = k.inverse();
+    int64_t dt = esp_timer_get_time() - t0;
+    volatile auto sink = r.limbs()[0]; (void)sink;
+    return (double)dt * 1000.0 / N;
+}
+
+static double bench_scalar_modmul(int N) {
+    Scalar a = random_scalar();
+    Scalar b = random_scalar();
+    volatile auto w = a * b; (void)w;
+
+    int64_t t0 = esp_timer_get_time();
+    Scalar r = a;
+    for (int i = 0; i < N; i++) r = a * b;
+    int64_t dt = esp_timer_get_time() - t0;
+    volatile auto sink = r.limbs()[0]; (void)sink;
+    return (double)dt * 1000.0 / N;
+}
+
+#include "secp256k1/sha256.hpp"
+static double bench_sha256_hash32(int N) {
+    std::array<uint8_t,32> msg{};
+    msg[0] = 0x42;
+    secp256k1::SHA256 sha;
+    sha.update(msg.data(), 32);
+    auto d = sha.finalize();
+
+    int64_t t0 = esp_timer_get_time();
+    for (int i = 0; i < N; i++) {
+        sha.reset();
+        sha.update(msg.data(), 32);
+        d = sha.finalize();
+    }
+    int64_t dt = esp_timer_get_time() - t0;
+    volatile auto sink = d[0]; (void)sink;
     return (double)dt * 1000.0 / N;
 }
 
@@ -625,6 +674,33 @@ extern "C" void app_main() {
         t = median3(bench_schnorr_verify(3), bench_schnorr_verify(3), bench_schnorr_verify(3));
         record("Schnorr Verify (BIP-340)", t);
         print_result("Schnorr Verify (BIP-340)", t);
+    }
+    WDT_YIELD();
+    printf("\n");
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  3b. ECDSA BOTTLENECK PROFILING
+    // ══════════════════════════════════════════════════════════════════════════
+    printf("================================================================\n");
+    printf("  3b. ECDSA BOTTLENECK PROFILING\n");
+    printf("================================================================\n");
+    {
+        double t;
+
+        WDT_YIELD();
+        t = median3(bench_scalar_inverse(3), bench_scalar_inverse(3), bench_scalar_inverse(3));
+        record("Scalar Inverse", t);
+        print_result("Scalar Inverse", t);
+        WDT_YIELD();
+
+        t = median3(bench_scalar_modmul(10), bench_scalar_modmul(10), bench_scalar_modmul(10));
+        record("Scalar Mul (a*b mod n)", t);
+        print_result("Scalar Mul (a*b mod n)", t);
+        WDT_YIELD();
+
+        t = median3(bench_sha256_hash32(20), bench_sha256_hash32(20), bench_sha256_hash32(20));
+        record("SHA-256 (32-byte)", t);
+        print_result("SHA-256 (32-byte)", t);
     }
     WDT_YIELD();
     printf("\n");

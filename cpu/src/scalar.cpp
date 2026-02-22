@@ -744,28 +744,296 @@ Scalar Scalar::inverse() const {
 
 #else // !__SIZEOF_INT128__
 
-// Fermat inverse: fallback for platforms without __int128
-static Scalar fermat_inverse(const Scalar& self) {
-    constexpr uint64_t nm2[4] = {
-        0xBFD25E8CD036413FULL,
-        0xBAAEDCE6AF48A03BULL,
-        0xFFFFFFFFFFFFFFFEULL,
-        0xFFFFFFFFFFFFFFFFULL
-    };
-    Scalar result = Scalar::one();
-    Scalar base = self;
-    for (int i = 255; i >= 0; --i) {
-        result *= result;
-        if ((nm2[i / 64] >> (i % 64)) & 1) {
-            result *= base;
+// ============================================================================
+// SafeGCD scalar modular inverse — 30-bit divsteps (no __int128 needed)
+// Port of bitcoin-core/secp256k1 modinv32 for 32-bit platforms (ESP32, etc.)
+// Uses int32_t[9] signed-30 representation; intermediates fit in int64_t.
+// ============================================================================
+namespace scalar_safegcd30 {
+
+struct S30  { int32_t v[9]; };
+struct T2x2 { int32_t u, v, q, r; };
+struct ModInfo { S30 modulus; uint32_t modulus_inv30; };
+
+// secp256k1 order n in signed-30 form + modular inverse mod 2^30.
+// n = FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141
+// Matches bitcoin-core secp256k1_const_modinfo_scalar (8x32) exactly.
+static constexpr ModInfo NINFO = {
+    {{0x10364141, 0x3F497A33, 0x348A03BB, 0x2BB739AB,
+      -0x146, 0, 0, 0, 65536}},
+    0x2A774EC1u
+};
+
+// Count trailing zeros (32-bit, variable-time)
+static inline int ctz32_var(uint32_t x) {
+#if defined(__GNUC__) || defined(__clang__)
+    return __builtin_ctz(x);
+#elif defined(_MSC_VER)
+    unsigned long idx;
+    _BitScanForward(&idx, x);
+    return (int)idx;
+#else
+    int c = 0; while (!(x & 1)) { x >>= 1; ++c; } return c;
+#endif
+}
+
+// Lookup table: secp256k1_modinv32_inv256[i] = -(2*i+1)^{-1} mod 256
+static const uint8_t inv256[128] = {
+    0xFF,0x55,0x33,0x49,0xC7,0x5D,0x3B,0x11,0x0F,0xE5,0xC3,0x59,
+    0xD7,0xED,0xCB,0x21,0x1F,0x75,0x53,0x69,0xE7,0x7D,0x5B,0x31,
+    0x2F,0x05,0xE3,0x79,0xF7,0x0D,0xEB,0x41,0x3F,0x95,0x73,0x89,
+    0x07,0x9D,0x7B,0x51,0x4F,0x25,0x03,0x99,0x17,0x2D,0x0B,0x61,
+    0x5F,0xB5,0x93,0xA9,0x27,0xBD,0x9B,0x71,0x6F,0x45,0x23,0xB9,
+    0x37,0x4D,0x2B,0x81,0x7F,0xD5,0xB3,0xC9,0x47,0xDD,0xBB,0x91,
+    0x8F,0x65,0x43,0xD9,0x57,0x6D,0x4B,0xA1,0x9F,0xF5,0xD3,0xE9,
+    0x67,0xFD,0xDB,0xB1,0xAF,0x85,0x63,0xF9,0x77,0x8D,0x6B,0xC1,
+    0xBF,0x15,0xF3,0x09,0x87,0x1D,0xFB,0xD1,0xCF,0xA5,0x83,0x19,
+    0x97,0xAD,0x8B,0xE1,0xDF,0x35,0x13,0x29,0xA7,0x3D,0x1B,0xF1,
+    0xEF,0xC5,0xA3,0x39,0xB7,0xCD,0xAB,0x01
+};
+
+// Variable-time 30 divsteps (matches secp256k1_modinv32_divsteps_30_var)
+static int32_t divsteps_30_var(int32_t eta, uint32_t f0, uint32_t g0, T2x2& t) {
+    uint32_t u = 1, v = 0, q = 0, r = 1;
+    uint32_t f = f0, g = g0, m;
+    uint16_t w;
+    int i = 30, limit, zeros;
+
+    for (;;) {
+        zeros = ctz32_var(g | (UINT32_MAX << i));
+        g >>= zeros;
+        u <<= zeros;
+        v <<= zeros;
+        eta -= zeros;
+        i -= zeros;
+        if (i == 0) break;
+
+        if (eta < 0) {
+            uint32_t tmp;
+            eta = -eta;
+            tmp = f; f = g; g = (uint32_t)(-(int32_t)tmp);
+            tmp = u; u = q; q = (uint32_t)(-(int32_t)tmp);
+            tmp = v; v = r; r = (uint32_t)(-(int32_t)tmp);
+        }
+        limit = ((int)eta + 1) > i ? i : ((int)eta + 1);
+        m = (UINT32_MAX >> (32 - limit)) & 255U;
+        w = (uint16_t)((g * inv256[(f >> 1) & 127]) & m);
+        g += f * (uint32_t)w;
+        q += u * (uint32_t)w;
+        r += v * (uint32_t)w;
+    }
+
+    t.u = (int32_t)u; t.v = (int32_t)v;
+    t.q = (int32_t)q; t.r = (int32_t)r;
+    return eta;
+}
+
+// (t/2^30) * [d, e] mod modulus (matches secp256k1_modinv32_update_de_30)
+static void update_de_30(S30& d, S30& e, const T2x2& t, const ModInfo& mod) {
+    const int32_t M30 = (int32_t)(UINT32_MAX >> 2);
+    const int32_t u = t.u, v = t.v, q = t.q, r = t.r;
+    int32_t di, ei, md, me, sd, se;
+    int64_t cd, ce;
+
+    sd = d.v[8] >> 31;
+    se = e.v[8] >> 31;
+    md = (u & sd) + (v & se);
+    me = (q & sd) + (r & se);
+
+    di = d.v[0]; ei = e.v[0];
+    cd = (int64_t)u * di + (int64_t)v * ei;
+    ce = (int64_t)q * di + (int64_t)r * ei;
+
+    md -= (int32_t)((mod.modulus_inv30 * (uint32_t)cd + (uint32_t)md) & (uint32_t)M30);
+    me -= (int32_t)((mod.modulus_inv30 * (uint32_t)ce + (uint32_t)me) & (uint32_t)M30);
+
+    cd += (int64_t)mod.modulus.v[0] * md;
+    ce += (int64_t)mod.modulus.v[0] * me;
+    cd >>= 30; ce >>= 30;
+
+    for (int i = 1; i < 9; ++i) {
+        di = d.v[i]; ei = e.v[i];
+        cd += (int64_t)u * di + (int64_t)v * ei;
+        ce += (int64_t)q * di + (int64_t)r * ei;
+        cd += (int64_t)mod.modulus.v[i] * md;
+        ce += (int64_t)mod.modulus.v[i] * me;
+        d.v[i - 1] = (int32_t)cd & M30; cd >>= 30;
+        e.v[i - 1] = (int32_t)ce & M30; ce >>= 30;
+    }
+    d.v[8] = (int32_t)cd;
+    e.v[8] = (int32_t)ce;
+}
+
+// (t/2^30) * [f, g] variable-length (matches secp256k1_modinv32_update_fg_30_var)
+static void update_fg_30_var(int len, S30& f, S30& g, const T2x2& t) {
+    const int32_t M30 = (int32_t)(UINT32_MAX >> 2);
+    const int32_t u = t.u, v = t.v, q = t.q, r = t.r;
+    int32_t fi, gi;
+    int64_t cf, cg;
+
+    fi = f.v[0]; gi = g.v[0];
+    cf = (int64_t)u * fi + (int64_t)v * gi;
+    cg = (int64_t)q * fi + (int64_t)r * gi;
+    cf >>= 30; cg >>= 30;
+
+    for (int j = 1; j < len; ++j) {
+        fi = f.v[j]; gi = g.v[j];
+        cf += (int64_t)u * fi + (int64_t)v * gi;
+        cg += (int64_t)q * fi + (int64_t)r * gi;
+        f.v[j - 1] = (int32_t)((uint32_t)cf & (uint32_t)M30); cf >>= 30;
+        g.v[j - 1] = (int32_t)((uint32_t)cg & (uint32_t)M30); cg >>= 30;
+    }
+    f.v[len - 1] = (int32_t)cf;
+    g.v[len - 1] = (int32_t)cg;
+    for (int j = len; j < 9; ++j) { f.v[j] = 0; g.v[j] = 0; }
+}
+
+// Normalize to [0, modulus) (matches secp256k1_modinv32_normalize_30)
+static void normalize_30(S30& r, int32_t sign, const ModInfo& mod) {
+    const int32_t M30 = (int32_t)(UINT32_MAX >> 2);
+    int32_t r0=r.v[0], r1=r.v[1], r2=r.v[2], r3=r.v[3], r4=r.v[4],
+            r5=r.v[5], r6=r.v[6], r7=r.v[7], r8=r.v[8];
+    int32_t cond_add, cond_negate;
+
+    cond_add = r8 >> 31;
+    r0 += mod.modulus.v[0] & cond_add;
+    r1 += mod.modulus.v[1] & cond_add;
+    r2 += mod.modulus.v[2] & cond_add;
+    r3 += mod.modulus.v[3] & cond_add;
+    r4 += mod.modulus.v[4] & cond_add;
+    r5 += mod.modulus.v[5] & cond_add;
+    r6 += mod.modulus.v[6] & cond_add;
+    r7 += mod.modulus.v[7] & cond_add;
+    r8 += mod.modulus.v[8] & cond_add;
+    cond_negate = sign >> 31;
+    r0 = (r0 ^ cond_negate) - cond_negate;
+    r1 = (r1 ^ cond_negate) - cond_negate;
+    r2 = (r2 ^ cond_negate) - cond_negate;
+    r3 = (r3 ^ cond_negate) - cond_negate;
+    r4 = (r4 ^ cond_negate) - cond_negate;
+    r5 = (r5 ^ cond_negate) - cond_negate;
+    r6 = (r6 ^ cond_negate) - cond_negate;
+    r7 = (r7 ^ cond_negate) - cond_negate;
+    r8 = (r8 ^ cond_negate) - cond_negate;
+    r1 += r0 >> 30; r0 &= M30;
+    r2 += r1 >> 30; r1 &= M30;
+    r3 += r2 >> 30; r2 &= M30;
+    r4 += r3 >> 30; r3 &= M30;
+    r5 += r4 >> 30; r4 &= M30;
+    r6 += r5 >> 30; r5 &= M30;
+    r7 += r6 >> 30; r6 &= M30;
+    r8 += r7 >> 30; r7 &= M30;
+
+    cond_add = r8 >> 31;
+    r0 += mod.modulus.v[0] & cond_add;
+    r1 += mod.modulus.v[1] & cond_add;
+    r2 += mod.modulus.v[2] & cond_add;
+    r3 += mod.modulus.v[3] & cond_add;
+    r4 += mod.modulus.v[4] & cond_add;
+    r5 += mod.modulus.v[5] & cond_add;
+    r6 += mod.modulus.v[6] & cond_add;
+    r7 += mod.modulus.v[7] & cond_add;
+    r8 += mod.modulus.v[8] & cond_add;
+    r1 += r0 >> 30; r0 &= M30;
+    r2 += r1 >> 30; r1 &= M30;
+    r3 += r2 >> 30; r2 &= M30;
+    r4 += r3 >> 30; r3 &= M30;
+    r5 += r4 >> 30; r4 &= M30;
+    r6 += r5 >> 30; r5 &= M30;
+    r7 += r6 >> 30; r6 &= M30;
+    r8 += r7 >> 30; r7 &= M30;
+
+    r.v[0]=r0; r.v[1]=r1; r.v[2]=r2; r.v[3]=r3; r.v[4]=r4;
+    r.v[5]=r5; r.v[6]=r6; r.v[7]=r7; r.v[8]=r8;
+}
+
+// Convert 4×64-bit limbs → signed-30 representation
+static S30 limbs_to_s30(const limbs4& x) {
+    S30 r{};
+    // Pack 256 bits (4×64) into 9×30-bit signed limbs
+    // Total: 9×30 = 270 bits, top limb holds remaining 256 - 8×30 = 16 bits
+    const uint32_t M30 = 0x3FFFFFFFu;
+    uint64_t acc = x[0];
+    r.v[0] = (int32_t)(acc & M30); acc >>= 30;
+    r.v[1] = (int32_t)(acc & M30); acc >>= 30;
+    // acc has 4 bits left from x[0]; need 26 more from x[1]
+    acc |= (x[1] << 4);
+    r.v[2] = (int32_t)(acc & M30); acc >>= 30;
+    r.v[3] = (int32_t)(acc & M30); acc >>= 30;
+    // acc has 8 bits left; need 22 from x[2]
+    acc |= (x[2] << 8);
+    r.v[4] = (int32_t)(acc & M30); acc >>= 30;
+    r.v[5] = (int32_t)(acc & M30); acc >>= 30;
+    // acc has 12 bits left; need 18 from x[3]
+    acc |= (x[3] << 12);
+    r.v[6] = (int32_t)(acc & M30); acc >>= 30;
+    r.v[7] = (int32_t)(acc & M30); acc >>= 30;
+    r.v[8] = (int32_t)(acc);       // remaining 16 bits
+    return r;
+}
+
+// Convert signed-30 → 4×64-bit limbs
+static limbs4 s30_to_limbs(const S30& s) {
+    limbs4 r{};
+    // Reassemble 9 x 30-bit limbs into 4 x 64-bit limbs
+    // v[0]: bits 0-29, v[1]: bits 30-59, v[2]: bits 60-89, ...
+    r[0] = ((uint64_t)(uint32_t)s.v[0])
+         | ((uint64_t)(uint32_t)s.v[1] << 30)
+         | ((uint64_t)(uint32_t)s.v[2] << 60);
+    r[1] = ((uint64_t)(uint32_t)s.v[2] >> 4)
+         | ((uint64_t)(uint32_t)s.v[3] << 26)
+         | ((uint64_t)(uint32_t)s.v[4] << 56);
+    r[2] = ((uint64_t)(uint32_t)s.v[4] >> 8)
+         | ((uint64_t)(uint32_t)s.v[5] << 22)
+         | ((uint64_t)(uint32_t)s.v[6] << 52);
+    r[3] = ((uint64_t)(uint32_t)s.v[6] >> 12)
+         | ((uint64_t)(uint32_t)s.v[7] << 18)
+         | ((uint64_t)(uint32_t)s.v[8] << 48);
+    return r;
+}
+
+// Main entry: variable-time modular inverse (matches secp256k1_modinv32_var)
+static limbs4 inverse_impl(const limbs4& x) {
+    S30 d{};                  // d = 0
+    S30 e{}; e.v[0] = 1;     // e = 1
+    S30 f = NINFO.modulus;    // f = n
+    S30 g = limbs_to_s30(x); // g = x
+    int len = 9;
+    int32_t eta = -1;         // eta = -delta; delta starts at 1
+
+    while (1) {
+        T2x2 t;
+        eta = divsteps_30_var(eta, (uint32_t)f.v[0], (uint32_t)g.v[0], t);
+
+        update_de_30(d, e, t, NINFO);
+        update_fg_30_var(len, f, g, t);
+
+        if (g.v[0] == 0) {
+            int32_t cond = 0;
+            for (int j = 1; j < len; ++j) cond |= g.v[j];
+            if (cond == 0) break;
+        }
+
+        int32_t fn = f.v[len - 1], gn = g.v[len - 1];
+        int32_t cond = ((int32_t)len - 2) >> 31;
+        cond |= fn ^ (fn >> 31);
+        cond |= gn ^ (gn >> 31);
+        if (cond == 0) {
+            f.v[len - 2] |= (uint32_t)fn << 30;
+            g.v[len - 2] |= (uint32_t)gn << 30;
+            --len;
         }
     }
-    return result;
+
+    normalize_30(d, f.v[len - 1], NINFO);
+    return s30_to_limbs(d);
 }
+
+} // namespace scalar_safegcd30
 
 Scalar Scalar::inverse() const {
     if (is_zero()) return Scalar::zero();
-    return fermat_inverse(*this);
+    return from_limbs(scalar_safegcd30::inverse_impl(limbs_));
 }
 
 #endif // __SIZEOF_INT128__

@@ -84,40 +84,127 @@ bool ECDSASignature::is_low_s() const {
 }
 
 // ── RFC 6979 Deterministic Nonce ─────────────────────────────────────────────
-// Simplified RFC 6979 using HMAC-SHA256.
+// Optimized RFC 6979 using HMAC-SHA256 with precomputed ipad/opad midstates.
+// Calls sha256_compress_dispatch() directly — no SHA256 object overhead,
+// no per-byte finalize() padding. Saves ~4 compress calls via midstate reuse.
 
 namespace {
 
-// HMAC-SHA256
-struct HMAC_SHA256 {
-    static std::array<uint8_t, 32> compute(const uint8_t* key, size_t key_len,
-                                            const uint8_t* msg, size_t msg_len) {
-        uint8_t ipad[64]{}, opad[64]{};
-        uint8_t k_buf[64]{};
+// ── SHA-256 IV ───────────────────────────────────────────────────────────────
+static constexpr std::uint32_t SHA256_IV[8] = {
+    0x6a09e667u, 0xbb67ae85u, 0x3c6ef372u, 0xa54ff53au,
+    0x510e527fu, 0x9b05688cu, 0x1f83d9abu, 0x5be0cd19u
+};
 
-        if (key_len > 64) {
-            auto h = SHA256::hash(key, key_len);
-            std::memcpy(k_buf, h.data(), 32);
-        } else {
-            std::memcpy(k_buf, key, key_len);
-        }
+// ── Serialize 8×uint32 state → 32 bytes (big-endian) ─────────────────────────
+static inline void state_to_bytes(const std::uint32_t st[8], std::uint8_t out[32]) {
+    for (int i = 0; i < 8; i++) {
+        out[i*4+0] = static_cast<uint8_t>(st[i] >> 24);
+        out[i*4+1] = static_cast<uint8_t>(st[i] >> 16);
+        out[i*4+2] = static_cast<uint8_t>(st[i] >> 8);
+        out[i*4+3] = static_cast<uint8_t>(st[i]);
+    }
+}
 
-        for (int i = 0; i < 64; ++i) {
-            ipad[i] = k_buf[i] ^ 0x36;
-            opad[i] = k_buf[i] ^ 0x5c;
-        }
+// ── Write big-endian 64-bit length at block[56..63] ──────────────────────────
+static inline void write_be_len(std::uint8_t block[64], std::uint64_t bits) {
+    block[56] = static_cast<uint8_t>(bits >> 56);
+    block[57] = static_cast<uint8_t>(bits >> 48);
+    block[58] = static_cast<uint8_t>(bits >> 40);
+    block[59] = static_cast<uint8_t>(bits >> 32);
+    block[60] = static_cast<uint8_t>(bits >> 24);
+    block[61] = static_cast<uint8_t>(bits >> 16);
+    block[62] = static_cast<uint8_t>(bits >> 8);
+    block[63] = static_cast<uint8_t>(bits);
+}
 
-        // inner = SHA256(ipad || msg)
-        SHA256 inner;
-        inner.update(ipad, 64);
-        inner.update(msg, msg_len);
-        auto inner_hash = inner.finalize();
+// ── HMAC-SHA256 with precomputed ipad/opad midstates ─────────────────────────
+// Key is always 32 bytes in RFC-6979.
+// Midstates are computed once per key and can be reused across multiple
+// HMAC calls with the same key (e.g. steps e+f share K, steps g+h share K).
 
-        // outer = SHA256(opad || inner)
-        SHA256 outer;
-        outer.update(opad, 64);
-        outer.update(inner_hash.data(), 32);
-        return outer.finalize();
+struct HMAC_Ctx {
+    std::uint32_t inner_mid[8];  // SHA256(IV, ipad_block) midstate
+    std::uint32_t outer_mid[8];  // SHA256(IV, opad_block) midstate
+
+    void init_key32(const std::uint8_t key[32]) noexcept {
+        alignas(16) std::uint8_t pad[64];
+        // ipad = key ^ 0x36 (padded to 64 bytes)
+        for (int i = 0; i < 32; i++) pad[i] = key[i] ^ 0x36;
+        std::memset(pad + 32, 0x36, 32);
+        std::memcpy(inner_mid, SHA256_IV, 32);
+        detail::sha256_compress_dispatch(pad, inner_mid);
+        // opad = key ^ 0x5c (padded to 64 bytes)
+        for (int i = 0; i < 32; i++) pad[i] = key[i] ^ 0x5c;
+        std::memset(pad + 32, 0x5c, 32);
+        std::memcpy(outer_mid, SHA256_IV, 32);
+        detail::sha256_compress_dispatch(pad, outer_mid);
+    }
+
+    // HMAC for short messages (msg_len ≤ 55): 1 inner compress + 1 outer
+    // Total inner input: 64 (ipad midstate) + msg_len
+    void compute_short(const std::uint8_t* msg, std::size_t msg_len,
+                       std::uint8_t out[32]) const noexcept {
+        std::uint32_t st[8];
+        alignas(16) std::uint8_t block[64];
+
+        // Inner: compress(midstate, [msg | 0x80 | zeros | len])
+        std::memcpy(st, inner_mid, 32);
+        std::memcpy(block, msg, msg_len);
+        block[msg_len] = 0x80;
+        std::memset(block + msg_len + 1, 0, 55 - msg_len);
+        write_be_len(block, static_cast<uint64_t>(64 + msg_len) * 8);
+        detail::sha256_compress_dispatch(block, st);
+
+        // Serialize inner result
+        std::uint8_t ihash[32];
+        state_to_bytes(st, ihash);
+
+        // Outer: compress(outer_mid, [ihash | 0x80 | zeros | 0x0300])
+        std::memcpy(st, outer_mid, 32);
+        std::memcpy(block, ihash, 32);
+        block[32] = 0x80;
+        std::memset(block + 33, 0, 23);
+        // length = (64 + 32) * 8 = 768 = 0x0300
+        block[56] = 0; block[57] = 0; block[58] = 0; block[59] = 0;
+        block[60] = 0; block[61] = 0; block[62] = 0x03; block[63] = 0x00;
+        detail::sha256_compress_dispatch(block, st);
+
+        state_to_bytes(st, out);
+    }
+
+    // HMAC for medium messages (55 < msg_len ≤ 119): 2 inner compress + 1 outer
+    void compute_two_block(const std::uint8_t* msg, std::size_t msg_len,
+                           std::uint8_t out[32]) const noexcept {
+        std::uint32_t st[8];
+        alignas(16) std::uint8_t block[64];
+
+        // Inner block 1: msg[0..63]
+        std::memcpy(st, inner_mid, 32);
+        detail::sha256_compress_dispatch(msg, st);
+
+        // Inner block 2: msg[64..] + padding
+        std::size_t rem = msg_len - 64;
+        std::memcpy(block, msg + 64, rem);
+        block[rem] = 0x80;
+        std::memset(block + rem + 1, 0, 55 - rem);
+        write_be_len(block, static_cast<uint64_t>(64 + msg_len) * 8);
+        detail::sha256_compress_dispatch(block, st);
+
+        // Serialize inner
+        std::uint8_t ihash[32];
+        state_to_bytes(st, ihash);
+
+        // Outer
+        std::memcpy(st, outer_mid, 32);
+        std::memcpy(block, ihash, 32);
+        block[32] = 0x80;
+        std::memset(block + 33, 0, 23);
+        block[56] = 0; block[57] = 0; block[58] = 0; block[59] = 0;
+        block[60] = 0; block[61] = 0; block[62] = 0x03; block[63] = 0x00;
+        detail::sha256_compress_dispatch(block, st);
+
+        state_to_bytes(st, out);
     }
 };
 
@@ -125,78 +212,63 @@ struct HMAC_SHA256 {
 
 Scalar rfc6979_nonce(const Scalar& private_key,
                      const std::array<uint8_t, 32>& msg_hash) {
-    // RFC 6979 Section 3.2
+    // RFC 6979 Section 3.2 — optimized with HMAC midstate caching.
     auto x_bytes = private_key.to_bytes();
 
-    // Step a: h1 = msg_hash (already hashed)
     // Step b: V = 0x01 * 32
-    uint8_t V[32];
+    alignas(16) uint8_t V[32];
     std::memset(V, 0x01, 32);
 
     // Step c: K = 0x00 * 32
-    uint8_t K[32];
+    alignas(16) uint8_t K[32];
     std::memset(K, 0x00, 32);
 
-    // Step d: K = HMAC(K, V || 0x00 || x || h1)
-    {
-        uint8_t buf[97]; // 32 + 1 + 32 + 32
-        std::memcpy(buf, V, 32);
-        buf[32] = 0x00;
-        std::memcpy(buf + 33, x_bytes.data(), 32);
-        std::memcpy(buf + 65, msg_hash.data(), 32);
-        auto h = HMAC_SHA256::compute(K, 32, buf, 97);
-        std::memcpy(K, h.data(), 32);
-    }
+    // Reusable message buffer for 97-byte messages (V||byte||x||h1)
+    alignas(16) uint8_t buf97[97];
 
-    // Step e: V = HMAC(K, V)
-    {
-        auto h = HMAC_SHA256::compute(K, 32, V, 32);
-        std::memcpy(V, h.data(), 32);
-    }
+    // Steps d+e: K1 = HMAC(K0, V||0x00||x||h1), V = HMAC(K1, V)
+    HMAC_Ctx hmac;
+    hmac.init_key32(K);
 
-    // Step f: K = HMAC(K, V || 0x01 || x || h1)
-    {
-        uint8_t buf[97];
-        std::memcpy(buf, V, 32);
-        buf[32] = 0x01;
-        std::memcpy(buf + 33, x_bytes.data(), 32);
-        std::memcpy(buf + 65, msg_hash.data(), 32);
-        auto h = HMAC_SHA256::compute(K, 32, buf, 97);
-        std::memcpy(K, h.data(), 32);
-    }
+    std::memcpy(buf97, V, 32);
+    buf97[32] = 0x00;
+    std::memcpy(buf97 + 33, x_bytes.data(), 32);
+    std::memcpy(buf97 + 65, msg_hash.data(), 32);
+    hmac.compute_two_block(buf97, 97, K);  // K = HMAC(K0, V||0||x||h1)
 
-    // Step g: V = HMAC(K, V)
-    {
-        auto h = HMAC_SHA256::compute(K, 32, V, 32);
-        std::memcpy(V, h.data(), 32);
-    }
+    // Steps e+f share the same K — precompute midstate once
+    hmac.init_key32(K);
+    hmac.compute_short(V, 32, V);          // V = HMAC(K1, V)
 
-    // Step h: loop
+    // Step f: K = HMAC(K1, V||0x01||x||h1) — reuses K1 midstate!
+    std::memcpy(buf97, V, 32);
+    buf97[32] = 0x01;
+    std::memcpy(buf97 + 33, x_bytes.data(), 32);
+    std::memcpy(buf97 + 65, msg_hash.data(), 32);
+    hmac.compute_two_block(buf97, 97, K);  // K = HMAC(K1, V||1||x||h1)
+
+    // Steps g+h share the same K — precompute midstate once
+    hmac.init_key32(K);
+    hmac.compute_short(V, 32, V);          // V = HMAC(K2, V)
+
+    // Step h: generate candidate — reuses K2 midstate!
     for (int attempt = 0; attempt < 100; ++attempt) {
-        // V = HMAC(K, V)
-        auto h = HMAC_SHA256::compute(K, 32, V, 32);
-        std::memcpy(V, h.data(), 32);
+        hmac.compute_short(V, 32, V);      // V = HMAC(K2, V)
 
         std::array<uint8_t, 32> t;
         std::memcpy(t.data(), V, 32);
-
         auto candidate = Scalar::from_bytes(t);
         if (!candidate.is_zero()) {
-            // Check candidate < order (from_bytes already reduces mod n,
-            // but we also need to ensure it wasn't zero before reduction)
             return candidate;
         }
 
-        // K = HMAC(K, V || 0x00)
-        uint8_t buf[33];
-        std::memcpy(buf, V, 32);
-        buf[32] = 0x00;
-        auto k2 = HMAC_SHA256::compute(K, 32, buf, 33);
-        std::memcpy(K, k2.data(), 32);
-
-        // V = HMAC(K, V)
-        auto v2 = HMAC_SHA256::compute(K, 32, V, 32);
-        std::memcpy(V, v2.data(), 32);
+        // Retry: K = HMAC(K, V||0x00), V = HMAC(K, V)
+        uint8_t buf33[33];
+        std::memcpy(buf33, V, 32);
+        buf33[32] = 0x00;
+        hmac.compute_short(buf33, 33, K);
+        hmac.init_key32(K);
+        hmac.compute_short(V, 32, V);
     }
 
     return Scalar::zero(); // should never reach

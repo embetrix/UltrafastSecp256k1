@@ -70,21 +70,30 @@ public:
     digest_type finalize() noexcept {
         std::uint64_t bits = total_ * 8;
 
-        // Pad
-        std::uint8_t pad = static_cast<std::uint8_t>(0x80);
-        update(&pad, 1);
-        std::uint8_t zero = 0;
-        while (buf_len_ != 56) {
-            update(&zero, 1);
+        // ── Direct in-place padding (no per-byte update() calls) ─────────
+        buf_[buf_len_++] = 0x80;
+
+        if (buf_len_ > 56) {
+            // No room for 8-byte length — pad, compress, start fresh block
+            std::memset(buf_ + buf_len_, 0, 64 - buf_len_);
+            detail::sha256_compress_dispatch(buf_, state_);
+            buf_len_ = 0;
         }
 
-        // Append length (big-endian)
-        std::uint8_t len_be[8];
-        for (int i = 7; i >= 0; --i) {
-            len_be[i] = static_cast<std::uint8_t>(bits);
-            bits >>= 8;
-        }
-        update(len_be, 8);
+        // Zero-pad to byte 56
+        std::memset(buf_ + buf_len_, 0, 56 - buf_len_);
+
+        // Append bit-length big-endian at bytes 56..63
+        buf_[56] = static_cast<std::uint8_t>(bits >> 56);
+        buf_[57] = static_cast<std::uint8_t>(bits >> 48);
+        buf_[58] = static_cast<std::uint8_t>(bits >> 40);
+        buf_[59] = static_cast<std::uint8_t>(bits >> 32);
+        buf_[60] = static_cast<std::uint8_t>(bits >> 24);
+        buf_[61] = static_cast<std::uint8_t>(bits >> 16);
+        buf_[62] = static_cast<std::uint8_t>(bits >> 8);
+        buf_[63] = static_cast<std::uint8_t>(bits);
+
+        detail::sha256_compress_dispatch(buf_, state_);
 
         digest_type out{};
         for (int i = 0; i < 8; ++i) {
