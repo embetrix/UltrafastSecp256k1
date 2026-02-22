@@ -13,52 +13,15 @@
 #include "secp256k1/field_52.hpp"
 #include "secp256k1/field.hpp"
 #include "secp256k1/selftest.hpp"
+#include "secp256k1/benchmark_harness.hpp"
 
-#include <chrono>
 #include <cstdio>
 #include <cstdint>
-#include <algorithm>
-#include <array>
-
-#if defined(_WIN32)
-#define NOMINMAX
-#include <windows.h>
-#endif
 
 using namespace secp256k1::fast;
-using Clock = std::chrono::high_resolution_clock;
 
-// ── Benchmark Harness ────────────────────────────────────────────────────────
-
-static constexpr int WARMUP   = 500;
-static constexpr int PASSES   = 7;       // median-of-7 for stability
-
-template<typename Func>
-double bench_ns(Func&& f, int iterations) {
-    // Warmup
-    for (int i = 0; i < WARMUP; ++i) f();
-
-    std::array<double, PASSES> runs;
-    for (int p = 0; p < PASSES; ++p) {
-        auto t0 = Clock::now();
-        for (int i = 0; i < iterations; ++i) {
-            f();
-        }
-        auto t1 = Clock::now();
-        runs[p] = static_cast<double>(
-            std::chrono::duration_cast<std::chrono::nanoseconds>(t1 - t0).count()
-        ) / iterations;
-    }
-    std::sort(runs.begin(), runs.end());
-    return runs[PASSES / 2];  // median
-}
-
-// Prevent dead-code elimination
-static volatile uint64_t sink;
-
-static void escape(const void* p) {
-    sink = reinterpret_cast<uintptr_t>(p);
-}
+// Unified harness: 500 warmup, 11 passes, RDTSC on x86, IQR outlier removal
+static bench::Harness H(500, 11);
 
 // ── Test Data ────────────────────────────────────────────────────────────────
 
@@ -88,9 +51,9 @@ static void print_header() {
     std::printf("\n");
     std::printf("=================================================================\n");
     std::printf("  FieldElement (4x64) vs FieldElement52 (5x52) Benchmark\n");
-    std::printf("  Median of %d passes, %d warmup iterations\n", PASSES, WARMUP);
-    std::printf("=================================================================\n\n");
-    std::printf("%-36s %10s %10s %10s\n", "Operation", "4x64 (ns)", "5x52 (ns)", "Ratio");
+    std::printf("=================================================================\n");
+    H.print_config();
+    std::printf("\n%-36s %10s %10s %10s\n", "Operation", "4x64 (ns)", "5x52 (ns)", "Ratio");
     std::printf("%-36s %10s %10s %10s\n", "────────────────────────────────────",
                 "──────────", "──────────", "──────────");
 }
@@ -116,12 +79,7 @@ int main() {
     secp256k1::fast::Selftest(false);
     std::printf("[bench_field_52] Validation OK\n");
 
-#if defined(_WIN32)
-    // Pin to CPU 0 and elevate priority for stable timings
-    SetThreadAffinityMask(GetCurrentThread(), 1ULL);
-    SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS);
-    SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_HIGHEST);
-#endif
+    bench::pin_thread_and_elevate();
 
     // ── Prepare test data ────────────────────────────────────────────────────
     FieldElement fe_a = make_fe(GX_LIMBS);
@@ -138,16 +96,16 @@ int main() {
         constexpr int ITERS = 500000;
 
         FieldElement r4;
-        double ns4 = bench_ns([&]() {
+        double ns4 = H.run(ITERS, [&]() {
             r4 = fe_a + fe_b;
-            escape(&r4);
-        }, ITERS);
+            bench::DoNotOptimize(r4);
+        });
 
         FieldElement52 r5;
-        double ns5 = bench_ns([&]() {
+        double ns5 = H.run(ITERS, [&]() {
             r5 = fe52_a + fe52_b;
-            escape(&r5);
-        }, ITERS);
+            bench::DoNotOptimize(r5);
+        });
 
         print_result({"Addition (single)", ns4, ns5});
     }
@@ -157,16 +115,16 @@ int main() {
         constexpr int ITERS = 200000;
 
         FieldElement r4;
-        double ns4 = bench_ns([&]() {
+        double ns4 = H.run(ITERS, [&]() {
             r4 = fe_a * fe_b;
-            escape(&r4);
-        }, ITERS);
+            bench::DoNotOptimize(r4);
+        });
 
         FieldElement52 r5;
-        double ns5 = bench_ns([&]() {
+        double ns5 = H.run(ITERS, [&]() {
             r5 = fe52_a * fe52_b;
-            escape(&r5);
-        }, ITERS);
+            bench::DoNotOptimize(r5);
+        });
 
         print_result({"Multiplication (single)", ns4, ns5});
     }
@@ -176,16 +134,16 @@ int main() {
         constexpr int ITERS = 200000;
 
         FieldElement r4;
-        double ns4 = bench_ns([&]() {
+        double ns4 = H.run(ITERS, [&]() {
             r4 = fe_a.square();
-            escape(&r4);
-        }, ITERS);
+            bench::DoNotOptimize(r4);
+        });
 
         FieldElement52 r5;
-        double ns5 = bench_ns([&]() {
+        double ns5 = H.run(ITERS, [&]() {
             r5 = fe52_a.square();
-            escape(&r5);
-        }, ITERS);
+            bench::DoNotOptimize(r5);
+        });
 
         print_result({"Squaring (single)", ns4, ns5});
     }
@@ -197,17 +155,17 @@ int main() {
         // Create slightly un-normalized element for 5×52
         FieldElement52 acc52 = fe52_a + fe52_b;
 
-        double ns5_weak = bench_ns([&]() {
+        double ns5_weak = H.run(ITERS, [&]() {
             FieldElement52 tmp = acc52;
             tmp.normalize_weak();
-            escape(&tmp);
-        }, ITERS);
+            bench::DoNotOptimize(tmp);
+        });
 
-        double ns5_full = bench_ns([&]() {
+        double ns5_full = H.run(ITERS, [&]() {
             FieldElement52 tmp = acc52;
             tmp.normalize();
-            escape(&tmp);
-        }, ITERS);
+            bench::DoNotOptimize(tmp);
+        });
 
         std::printf("%-36s %9s  %9.2f\n", "Normalize (weak, 5x52 only)", "N/A", ns5_weak);
         std::printf("%-36s %9s  %9.2f\n", "Normalize (full, 5x52 only)", "N/A", ns5_full);
@@ -218,16 +176,16 @@ int main() {
         constexpr int ITERS = 500000;
 
         FieldElement r4;
-        double ns4 = bench_ns([&]() {
+        double ns4 = H.run(ITERS, [&]() {
             r4 = FieldElement{} - fe_a;
-            escape(&r4);
-        }, ITERS);
+            bench::DoNotOptimize(r4);
+        });
 
         FieldElement52 r5;
-        double ns5 = bench_ns([&]() {
+        double ns5 = H.run(ITERS, [&]() {
             r5 = fe52_a.negate(1);
-            escape(&r5);
-        }, ITERS);
+            bench::DoNotOptimize(r5);
+        });
 
         print_result({"Negation", ns4, ns5});
     }
@@ -236,14 +194,11 @@ int main() {
     {
         constexpr int ITERS = 500000;
 
-        // 4×64 has no half() – skip comparison
-        double ns4 = 0.0;
-
         FieldElement52 r5;
-        double ns5 = bench_ns([&]() {
+        double ns5 = H.run(ITERS, [&]() {
             r5 = fe52_a.half();
-            escape(&r5);
-        }, ITERS);
+            bench::DoNotOptimize(r5);
+        });
 
         std::printf("%-36s %9s  %9.2f\n", "Half (5x52 only)", "N/A", ns5);
     }
@@ -253,16 +208,16 @@ int main() {
         constexpr int ITERS = 500000;
 
         FieldElement52 r52;
-        double ns_to52 = bench_ns([&]() {
+        double ns_to52 = H.run(ITERS, [&]() {
             r52 = FieldElement52::from_fe(fe_a);
-            escape(&r52);
-        }, ITERS);
+            bench::DoNotOptimize(r52);
+        });
 
         FieldElement r4;
-        double ns_to4 = bench_ns([&]() {
+        double ns_to4 = H.run(ITERS, [&]() {
             r4 = fe52_a.to_fe();
-            escape(&r4);
-        }, ITERS);
+            bench::DoNotOptimize(r4);
+        });
 
         std::printf("%-36s %9s  %9.2f\n", "Convert 4x64 -> 5x52", "N/A", ns_to52);
         std::printf("%-36s %9.2f  %9s\n", "Convert 5x52 -> 4x64", ns_to4, "N/A");
@@ -279,23 +234,23 @@ int main() {
         constexpr int ITERS = 50000;
 
         // 4×64: each add does carry + conditional reduction
-        double ns4 = bench_ns([&]() {
+        double ns4 = H.run(ITERS, [&]() {
             FieldElement acc = fe_a;
             for (int i = 0; i < chain_len; ++i) {
                 acc = acc + fe_b;
             }
-            escape(&acc);
-        }, ITERS);
+            bench::DoNotOptimize(acc);
+        });
 
         // 5×52: N plain adds, ONE normalize at end
-        double ns5 = bench_ns([&]() {
+        double ns5 = H.run(ITERS, [&]() {
             FieldElement52 acc = fe52_a;
             for (int i = 0; i < chain_len; ++i) {
                 acc.add_assign(fe52_b);
             }
             acc.normalize_weak();
-            escape(&acc);
-        }, ITERS);
+            bench::DoNotOptimize(acc);
+        });
 
         char name[64];
         std::snprintf(name, sizeof(name), "Add chain (%d adds + norm)", chain_len);
@@ -311,7 +266,7 @@ int main() {
         constexpr int ITERS = 50000;
 
         // 4×64 version
-        double ns4 = bench_ns([&]() {
+        double ns4 = H.run(ITERS, [&]() {
             FieldElement t0 = fe_a, t1 = fe_b;
             // Simulate point-add field ops
             FieldElement u1 = t0 * t1;
@@ -326,11 +281,11 @@ int main() {
             FieldElement w  = (rz + rx) * ry;
             FieldElement v  = (w + (FieldElement{} - rz)).square();
             FieldElement out = v * w;
-            escape(&out);
-        }, ITERS);
+            bench::DoNotOptimize(out);
+        });
 
         // 5×52 version
-        double ns5 = bench_ns([&]() {
+        double ns5 = H.run(ITERS, [&]() {
             FieldElement52 t0 = fe52_a, t1 = fe52_b;
             FieldElement52 u1 = t0 * t1;
             FieldElement52 u2 = t1.square();
@@ -344,8 +299,8 @@ int main() {
             FieldElement52 w  = (rz + rx) * ry;                 // lazy + mul
             FieldElement52 v  = (w + rz.negate(1)).square();
             FieldElement52 out = v * w;
-            escape(&out);
-        }, ITERS);
+            bench::DoNotOptimize(out);
+        });
 
         print_result({"Point-Add simulation (12M+4S+7A)", ns4, ns5});
     }
@@ -355,21 +310,21 @@ int main() {
         constexpr int ITERS = 10000;
         constexpr int CHAIN = 256;   // ~256 squarings like in Fermat inverse
 
-        double ns4 = bench_ns([&]() {
+        double ns4 = H.run(ITERS, [&]() {
             FieldElement acc = fe_a;
             for (int i = 0; i < CHAIN; ++i) {
                 acc.square_inplace();
             }
-            escape(&acc);
-        }, ITERS);
+            bench::DoNotOptimize(acc);
+        });
 
-        double ns5 = bench_ns([&]() {
+        double ns5 = H.run(ITERS, [&]() {
             FieldElement52 acc = fe52_a;
             for (int i = 0; i < CHAIN; ++i) {
                 acc.square_inplace();
             }
-            escape(&acc);
-        }, ITERS);
+            bench::DoNotOptimize(acc);
+        });
 
         print_result({"Sqr chain (256 squarings)", ns4, ns5});
     }
@@ -379,24 +334,24 @@ int main() {
         constexpr int ITERS = 20000;
         constexpr int CHAIN = 32;
 
-        double ns4 = bench_ns([&]() {
+        double ns4 = H.run(ITERS, [&]() {
             FieldElement acc = fe_a;
             for (int i = 0; i < CHAIN; ++i) {
                 acc = acc * fe_b;
                 acc = acc + fe_a;
             }
-            escape(&acc);
-        }, ITERS);
+            bench::DoNotOptimize(acc);
+        });
 
-        double ns5 = bench_ns([&]() {
+        double ns5 = H.run(ITERS, [&]() {
             FieldElement52 acc = fe52_a;
             for (int i = 0; i < CHAIN; ++i) {
                 acc.mul_assign(fe52_b);
                 acc.add_assign(fe52_a);     // lazy - no normalize needed
             }
             acc.normalize_weak();
-            escape(&acc);
-        }, ITERS);
+            bench::DoNotOptimize(acc);
+        });
 
         print_result({"Mul+Add alternating (32 iters)", ns4, ns5});
     }
@@ -406,21 +361,21 @@ int main() {
         constexpr int ITERS = 20000;
         constexpr int CHAIN = 32;
 
-        double ns4 = bench_ns([&]() {
+        double ns4 = H.run(ITERS, [&]() {
             FieldElement acc = fe_a;
             for (int i = 0; i < CHAIN; ++i) {
                 acc *= fe_b;
             }
-            escape(&acc);
-        }, ITERS);
+            bench::DoNotOptimize(acc);
+        });
 
-        double ns5 = bench_ns([&]() {
+        double ns5 = H.run(ITERS, [&]() {
             FieldElement52 acc = fe52_a;
             for (int i = 0; i < CHAIN; ++i) {
                 acc.mul_assign(fe52_b);
             }
-            escape(&acc);
-        }, ITERS);
+            bench::DoNotOptimize(acc);
+        });
 
         print_result({"Mul chain (32 muls)", ns4, ns5});
     }
@@ -434,15 +389,15 @@ int main() {
         constexpr int ITERS = 500000;
 
         // Mul throughput
-        double mul4_ns = bench_ns([&]() {
+        double mul4_ns = H.run(ITERS, [&]() {
             FieldElement r = fe_a * fe_b;
-            escape(&r);
-        }, ITERS);
+            bench::DoNotOptimize(r);
+        });
 
-        double mul5_ns = bench_ns([&]() {
+        double mul5_ns = H.run(ITERS, [&]() {
             FieldElement52 r = fe52_a * fe52_b;
-            escape(&r);
-        }, ITERS);
+            bench::DoNotOptimize(r);
+        });
 
         double mul4_mops = 1000.0 / mul4_ns;
         double mul5_mops = 1000.0 / mul5_ns;
@@ -452,15 +407,15 @@ int main() {
                     mul4_mops, mul5_mops, mul5_mops / mul4_mops);
 
         // Add throughput
-        double add4_ns = bench_ns([&]() {
+        double add4_ns = H.run(ITERS, [&]() {
             FieldElement r = fe_a + fe_b;
-            escape(&r);
-        }, ITERS);
+            bench::DoNotOptimize(r);
+        });
 
-        double add5_ns = bench_ns([&]() {
+        double add5_ns = H.run(ITERS, [&]() {
             FieldElement52 r = fe52_a + fe52_b;
-            escape(&r);
-        }, ITERS);
+            bench::DoNotOptimize(r);
+        });
 
         double add4_mops = 1000.0 / add4_ns;
         double add5_mops = 1000.0 / add5_ns;
@@ -470,15 +425,15 @@ int main() {
                     add4_mops, add5_mops, add5_mops / add4_mops);
 
         // Sqr throughput
-        double sqr4_ns = bench_ns([&]() {
+        double sqr4_ns = H.run(ITERS, [&]() {
             FieldElement r = fe_a.square();
-            escape(&r);
-        }, ITERS);
+            bench::DoNotOptimize(r);
+        });
 
-        double sqr5_ns = bench_ns([&]() {
+        double sqr5_ns = H.run(ITERS, [&]() {
             FieldElement52 r = fe52_a.square();
-            escape(&r);
-        }, ITERS);
+            bench::DoNotOptimize(r);
+        });
 
         double sqr4_mops = 1000.0 / sqr4_ns;
         double sqr5_mops = 1000.0 / sqr5_ns;

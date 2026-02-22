@@ -12,34 +12,33 @@
 #include "secp256k1/ct/field.hpp"
 #include "secp256k1/ct/scalar.hpp"
 #include "secp256k1/ct/point.hpp"
+#include "secp256k1/benchmark_harness.hpp"
 
-#include <chrono>
 #include <cstdio>
 #include <cstdint>
 
 using namespace secp256k1::fast;
 namespace ct = secp256k1::ct;
 
-// ── timing helper ────────────────────────────────────────────────────────────
+// Unified harness: 500 warmup, 11 passes, RDTSC on x86, IQR outlier removal
+static bench::Harness H(500, 11);
 
+// Convenience: run and return microseconds/iter
 template <typename Func>
 static double bench_us(Func&& f, int iters) {
-    // warmup
-    for (int i = 0; i < 10; ++i) f();
-
-    auto t0 = std::chrono::high_resolution_clock::now();
-    for (int i = 0; i < iters; ++i) f();
-    auto t1 = std::chrono::high_resolution_clock::now();
-    double us = std::chrono::duration<double, std::micro>(t1 - t0).count();
-    return us / iters;
+    return H.run(iters, std::forward<Func>(f)) / 1000.0;
 }
 
 // ── main ─────────────────────────────────────────────────────────────────────
 
 int main() {
+    bench::pin_thread_and_elevate();
+
     printf("================================================================\n");
     printf("  CT Layer Benchmark  (fast:: vs ct::)\n");
-    printf("================================================================\n\n");
+    printf("================================================================\n");
+    H.print_config();
+    printf("\n");
 
     // Fixed test data — all 256-bit, representative of real workloads
     auto G  = Point::generator();
@@ -83,36 +82,39 @@ int main() {
     printf("--- Field Arithmetic ---\n");
 
     double fast_field_mul = bench_us([&]() {
-        volatile auto r = fe_a * fe_b;
+        auto r = fe_a * fe_b;
+        bench::DoNotOptimize(r);
     }, N_FIELD_OPS);
 
     double ct_field_mul = bench_us([&]() {
         auto r = ct::field_mul(fe_a, fe_b);
-        (void)r;
+        bench::DoNotOptimize(r);
     }, N_FIELD_OPS);
 
     printf("  field_mul    fast: %8.3f us   ct: %8.3f us   ratio: %.2fx\n",
            fast_field_mul, ct_field_mul, ct_field_mul / fast_field_mul);
 
     double fast_field_sq = bench_us([&]() {
-        volatile auto r = fe_a.square();
+        auto r = fe_a.square();
+        bench::DoNotOptimize(r);
     }, N_FIELD_OPS);
 
     double ct_field_sq = bench_us([&]() {
         auto r = ct::field_sqr(fe_a);
-        (void)r;
+        bench::DoNotOptimize(r);
     }, N_FIELD_OPS);
 
     printf("  field_square fast: %8.3f us   ct: %8.3f us   ratio: %.2fx\n",
            fast_field_sq, ct_field_sq, ct_field_sq / fast_field_sq);
 
     double fast_field_inv = bench_us([&]() {
-        volatile auto r = fe_a.inverse();
+        auto r = fe_a.inverse();
+        bench::DoNotOptimize(r);
     }, N_FIELD_OPS / 10);
 
     double ct_field_inv = bench_us([&]() {
         auto r = ct::field_inv(fe_a);
-        (void)r;
+        bench::DoNotOptimize(r);
     }, N_FIELD_OPS / 10);
 
     printf("  field_inv    fast: %8.3f us   ct: %8.3f us   ratio: %.2fx\n\n",
@@ -123,24 +125,26 @@ int main() {
     printf("--- Scalar Arithmetic ---\n");
 
     double fast_scalar_add = bench_us([&]() {
-        volatile auto r = k + k2;
+        auto r = k + k2;
+        bench::DoNotOptimize(r);
     }, N_SCALAR_OPS);
 
     double ct_scalar_add = bench_us([&]() {
         auto r = ct::scalar_add(k, k2);
-        (void)r;
+        bench::DoNotOptimize(r);
     }, N_SCALAR_OPS);
 
     printf("  scalar_add   fast: %8.3f us   ct: %8.3f us   ratio: %.2fx\n",
            fast_scalar_add, ct_scalar_add, ct_scalar_add / fast_scalar_add);
 
     double fast_scalar_sub = bench_us([&]() {
-        volatile auto r = k - k2;
+        auto r = k - k2;
+        bench::DoNotOptimize(r);
     }, N_SCALAR_OPS);
 
     double ct_scalar_sub = bench_us([&]() {
         auto r = ct::scalar_sub(k, k2);
-        (void)r;
+        bench::DoNotOptimize(r);
     }, N_SCALAR_OPS);
 
     printf("  scalar_sub   fast: %8.3f us   ct: %8.3f us   ratio: %.2fx\n\n",
@@ -154,12 +158,13 @@ int main() {
     auto ct_g = ct::CTJacobianPoint::from_point(G);
 
     double fast_point_add = bench_us([&]() {
-        volatile auto r = P.add(G);
+        auto r = P.add(G);
+        bench::DoNotOptimize(r);
     }, N_POINT_OPS);
 
     double ct_point_add = bench_us([&]() {
         auto r = ct::point_add_complete(ct_p, ct_g);
-        (void)r;
+        bench::DoNotOptimize(r);
     }, N_POINT_OPS);
 
     printf("  point_add    fast: %8.3f us   ct: %8.3f us   ratio: %.2fx\n",
@@ -170,19 +175,20 @@ int main() {
 
     double ct_mixed_add = bench_us([&]() {
         auto r = ct::point_add_mixed_complete(ct_p, ct_aff_g);
-        (void)r;
+        bench::DoNotOptimize(r);
     }, N_POINT_OPS);
 
     printf("  mixed_add    fast: %8.3f us   ct: %8.3f us   ratio: %.2fx\n",
            fast_point_add, ct_mixed_add, ct_mixed_add / fast_point_add);
 
     double fast_point_dbl = bench_us([&]() {
-        volatile auto r = P.dbl();
+        auto r = P.dbl();
+        bench::DoNotOptimize(r);
     }, N_POINT_OPS);
 
     double ct_point_dbl = bench_us([&]() {
         auto r = ct::point_dbl(ct_p);
-        (void)r;
+        bench::DoNotOptimize(r);
     }, N_POINT_OPS);
 
     printf("  point_dbl    fast: %8.3f us   ct: %8.3f us   ratio: %.2fx\n\n",
@@ -194,14 +200,15 @@ int main() {
 
     int idx_fast_mul = 0;
     double fast_mul = bench_us([&]() {
-        volatile auto r = point_pool[idx_fast_mul % POOL].scalar_mul(scalar_pool[idx_fast_mul % POOL]);
+        auto r = point_pool[idx_fast_mul % POOL].scalar_mul(scalar_pool[idx_fast_mul % POOL]);
+        bench::DoNotOptimize(r);
         ++idx_fast_mul;
     }, N_SCALAR_MUL);
 
     int idx_ct_mul = 0;
     double ct_mul = bench_us([&]() {
         auto r = ct::scalar_mul(point_pool[idx_ct_mul % POOL], scalar_pool[idx_ct_mul % POOL]);
-        (void)r;
+        bench::DoNotOptimize(r);
         ++idx_ct_mul;
     }, N_SCALAR_MUL);
 
@@ -214,14 +221,15 @@ int main() {
 
     int idx_fast_gen = 0;
     double fast_gen = bench_us([&]() {
-        volatile auto r = G.scalar_mul(scalar_pool[idx_fast_gen % POOL]);
+        auto r = G.scalar_mul(scalar_pool[idx_fast_gen % POOL]);
+        bench::DoNotOptimize(r);
         ++idx_fast_gen;
     }, N_SCALAR_MUL);
 
     int idx_ct_gen = 0;
     double ct_gen = bench_us([&]() {
         auto r = ct::generator_mul(scalar_pool[idx_ct_gen % POOL]);
-        (void)r;
+        bench::DoNotOptimize(r);
         ++idx_ct_gen;
     }, N_SCALAR_MUL);
 

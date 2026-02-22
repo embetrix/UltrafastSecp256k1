@@ -26,8 +26,12 @@
 #include "secp256k1/field_optimal.hpp"
 #include "secp256k1/ecdsa.hpp"
 #include "secp256k1/schnorr.hpp"
+#include "secp256k1/benchmark_harness.hpp"
 
 using namespace secp256k1::fast;
+
+// Unified harness: 500 warmup, 11 passes, RDTSC on x86, IQR outlier removal
+static bench::Harness H(500, 11);
 
 // Platform detection helpers
 namespace platform_detect {
@@ -223,123 +227,49 @@ static void warmup_benchmark(const std::vector<FieldElement>& fields,
     (void)prevent_opt;
 }
 
-// Helper to run benchmark with warmup and median filtering
-template <typename Func>
-double measure_with_warmup(Func&& func, int warmup_runs, int measure_runs) {
-    std::vector<double> timings;
-    timings.reserve(measure_runs);
-
-    // Warmup runs (discard result)
-    for (int i = 0; i < warmup_runs; ++i) {
-        func();
-    }
-
-    // Measurement runs
-    for (int i = 0; i < measure_runs; ++i) {
-        timings.push_back(func());
-    }
-
-    // Sort to find median
-    std::sort(timings.begin(), timings.end());
-
-    if (measure_runs % 2 == 0) {
-        return (timings[measure_runs / 2 - 1] + timings[measure_runs / 2]) / 2.0;
-    } else {
-        return timings[measure_runs / 2];
-    }
-}
-
 // ============================================================
 // FIELD OPERATION BENCHMARKS (uses OptimalFieldElement — what point ops actually use)
 // ============================================================
 
 double bench_field_mul(const std::vector<OFE>& elements, size_t iterations) {
     OFE result = elements[0];
-
-    for (size_t i = 0; i < 1000; ++i)
-        result = result * elements[i % elements.size()];
-
-    auto start = std::chrono::high_resolution_clock::now();
-    for (size_t i = 0; i < iterations; ++i)
-        result = result * elements[i % elements.size()];
-    auto end = std::chrono::high_resolution_clock::now();
-
-    volatile auto prevent_opt = secp256k1::fast::from_optimal(result).limbs()[0];
-    (void)prevent_opt;
-    return static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count()) / iterations;
+    return H.run(static_cast<int>(iterations), [&]() {
+        result = result * elements[1 % elements.size()];
+        bench::DoNotOptimize(result);
+    });
 }
 
 double bench_field_square(const std::vector<OFE>& elements, size_t iterations) {
     OFE result = elements[0];
-
-    for (size_t i = 0; i < 1000; ++i)
+    return H.run(static_cast<int>(iterations), [&]() {
         result = result.square();
-
-    auto start = std::chrono::high_resolution_clock::now();
-    for (size_t i = 0; i < iterations; ++i)
-        result = result.square();
-    auto end = std::chrono::high_resolution_clock::now();
-
-    volatile auto prevent_opt = secp256k1::fast::from_optimal(result).limbs()[0];
-    (void)prevent_opt;
-    return static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count()) / iterations;
+        bench::DoNotOptimize(result);
+    });
 }
 
 double bench_field_add(const std::vector<OFE>& elements, size_t iterations) {
     OFE result = elements[0];
-
-    for (size_t i = 0; i < 1000; ++i)
-        result = result + elements[i % elements.size()];
-
-    auto start = std::chrono::high_resolution_clock::now();
-    for (size_t i = 0; i < iterations; ++i)
-        result = result + elements[i % elements.size()];
-    auto end = std::chrono::high_resolution_clock::now();
-
-    volatile auto prevent_opt = secp256k1::fast::from_optimal(result).limbs()[0];
-    (void)prevent_opt;
-    return static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count()) / iterations;
+    return H.run(static_cast<int>(iterations), [&]() {
+        result = result + elements[1 % elements.size()];
+        bench::DoNotOptimize(result);
+    });
 }
 
 double bench_field_negate(const std::vector<OFE>& elements, size_t iterations) {
     OFE result = elements[0];
-
-    for (size_t i = 0; i < 1000; ++i)
+    return H.run(static_cast<int>(iterations), [&]() {
         result = result.negate(1);
-
-    auto start = std::chrono::high_resolution_clock::now();
-    for (size_t i = 0; i < iterations; ++i)
-        result = result.negate(1);
-    auto end = std::chrono::high_resolution_clock::now();
-
-    volatile auto prevent_opt = secp256k1::fast::from_optimal(result).limbs()[0];
-    (void)prevent_opt;
-    return static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count()) / iterations;
+        bench::DoNotOptimize(result);
+    });
 }
 
 double bench_field_inverse(const std::vector<FieldElement>& elements, size_t iterations) {
-    std::vector<FieldElement> results;
-    results.reserve(iterations);
-
-    // Warmup
-    for (size_t i = 0; i < 10; ++i) {
-        volatile auto r = elements[i % elements.size()].inverse();
-        (void)r;
-    }
-
-    auto start = std::chrono::high_resolution_clock::now();
-
-    for (size_t i = 0; i < iterations; ++i) {
-        results.push_back(elements[i % elements.size()].inverse());
-    }
-
-    auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
-
-    volatile auto prevent_opt = results[0].limbs()[0];
-    (void)prevent_opt;
-
-    return static_cast<double>(duration.count()) / iterations;
+    size_t idx = 0;
+    return H.run(static_cast<int>(iterations), [&]() {
+        auto r = elements[idx % elements.size()].inverse();
+        bench::DoNotOptimize(r);
+        ++idx;
+    });
 }
 
 // ============================================================
@@ -349,30 +279,14 @@ double bench_field_inverse(const std::vector<FieldElement>& elements, size_t ite
 double bench_point_add(size_t iterations) {
     Point G = Point::generator();
     Point P = G.scalar_mul(Scalar::from_uint64(7));
-    // Q is affine (z=1) — this is the common case: precomputed tables, loaded
-    // points, etc.  Mixed Jacobian+Affine addition is 7M+4S vs 12M+5S general.
     Point Q_jac = G.scalar_mul(Scalar::from_uint64(11));
     Point Q = Point::from_affine(Q_jac.x(), Q_jac.y());
     Point result = P;
 
-    // Warmup
-    for (size_t i = 0; i < 1000; ++i) {
+    return H.run(static_cast<int>(iterations), [&]() {
         result.add_inplace(Q);
-    }
-
-    auto start = std::chrono::high_resolution_clock::now();
-
-    for (size_t i = 0; i < iterations; ++i) {
-        result.add_inplace(Q);
-    }
-
-    auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
-
-    volatile auto prevent_opt = result.x_raw().limbs()[0];
-    (void)prevent_opt;
-
-    return static_cast<double>(duration.count()) / iterations;
+        bench::DoNotOptimize(result);
+    });
 }
 
 double bench_point_double(size_t iterations) {
@@ -380,73 +294,35 @@ double bench_point_double(size_t iterations) {
     Point P = G.scalar_mul(Scalar::from_uint64(7));
     Point result = P;
 
-    // Warmup
-    for (size_t i = 0; i < 1000; ++i) {
+    return H.run(static_cast<int>(iterations), [&]() {
         result.dbl_inplace();
-    }
-
-    auto start = std::chrono::high_resolution_clock::now();
-
-    for (size_t i = 0; i < iterations; ++i) {
-        result.dbl_inplace();
-    }
-
-    auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
-
-    volatile auto prevent_opt = result.x_raw().limbs()[0];
-    (void)prevent_opt;
-
-    return static_cast<double>(duration.count()) / iterations;
+        bench::DoNotOptimize(result);
+    });
 }
 
 double bench_point_scalar_mul(const std::vector<Scalar>& scalars, size_t iterations) {
     Point G = Point::generator();
     Point Q = G.scalar_mul(Scalar::from_uint64(12345));
     Point result = Q;
+    size_t idx = 0;
 
-    // Warmup
-    for (size_t i = 0; i < 10; ++i) {
-        result = Q.scalar_mul(scalars[i % scalars.size()]);
-    }
-
-    auto start = std::chrono::high_resolution_clock::now();
-
-    for (size_t i = 0; i < iterations; ++i) {
-        result = Q.scalar_mul(scalars[i % scalars.size()]);
-    }
-
-    auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
-
-    volatile auto prevent_opt = result.x_raw().limbs()[0];
-    (void)prevent_opt;
-
-    return static_cast<double>(duration.count()) / iterations;
+    return H.run(static_cast<int>(iterations), [&]() {
+        result = Q.scalar_mul(scalars[idx % scalars.size()]);
+        bench::DoNotOptimize(result);
+        ++idx;
+    });
 }
 
 double bench_generator_mul(const std::vector<Scalar>& scalars, size_t iterations) {
     Point G = Point::generator();
     Point result = G;
+    size_t idx = 0;
 
-    // Warmup
-    for (size_t i = 0; i < 10; ++i) {
-        result = G.scalar_mul(scalars[i % scalars.size()]);
-    }
-
-    auto start = std::chrono::high_resolution_clock::now();
-
-    for (size_t i = 0; i < iterations; ++i) {
-        result = G.scalar_mul(scalars[i % scalars.size()]);
-    }
-
-    auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
-
-    volatile auto prevent_opt = result.x_raw().limbs()[0];
-    (void)prevent_opt;
-
-    return static_cast<double>(duration.count()) / iterations;
+    return H.run(static_cast<int>(iterations), [&]() {
+        result = G.scalar_mul(scalars[idx % scalars.size()]);
+        bench::DoNotOptimize(result);
+        ++idx;
+    });
 }
 
 // ============================================================
@@ -456,77 +332,48 @@ double bench_generator_mul(const std::vector<Scalar>& scalars, size_t iterations
 double bench_ecdsa_sign(const std::vector<Scalar>& keys,
                         const std::vector<std::array<uint8_t,32>>& msgs,
                         size_t iterations) {
-    // Warmup
-    for (size_t i = 0; i < 10; ++i) {
-        volatile auto sig = secp256k1::ecdsa_sign(msgs[i % msgs.size()], keys[i % keys.size()]);
-        (void)sig;
-    }
-
-    auto start = std::chrono::high_resolution_clock::now();
-    for (size_t i = 0; i < iterations; ++i) {
-        volatile auto sig = secp256k1::ecdsa_sign(msgs[i % msgs.size()], keys[i % keys.size()]);
-        (void)sig;
-    }
-    auto end = std::chrono::high_resolution_clock::now();
-    return static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count()) / iterations;
+    size_t idx = 0;
+    return H.run(static_cast<int>(iterations), [&]() {
+        auto sig = secp256k1::ecdsa_sign(msgs[idx % msgs.size()], keys[idx % keys.size()]);
+        bench::DoNotOptimize(sig);
+        ++idx;
+    });
 }
 
 double bench_ecdsa_verify(const std::vector<secp256k1::ECDSASignature>& sigs,
                           const std::vector<std::array<uint8_t,32>>& msgs,
                           const std::vector<Point>& pubkeys,
                           size_t iterations) {
-    // Warmup
-    for (size_t i = 0; i < 10; ++i) {
-        volatile bool ok = secp256k1::ecdsa_verify(msgs[i % msgs.size()], pubkeys[i % pubkeys.size()], sigs[i % sigs.size()]);
-        (void)ok;
-    }
-
-    auto start = std::chrono::high_resolution_clock::now();
-    for (size_t i = 0; i < iterations; ++i) {
-        volatile bool ok = secp256k1::ecdsa_verify(msgs[i % msgs.size()], pubkeys[i % pubkeys.size()], sigs[i % sigs.size()]);
-        (void)ok;
-    }
-    auto end = std::chrono::high_resolution_clock::now();
-    return static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count()) / iterations;
+    size_t idx = 0;
+    return H.run(static_cast<int>(iterations), [&]() {
+        bool ok = secp256k1::ecdsa_verify(msgs[idx % msgs.size()], pubkeys[idx % pubkeys.size()], sigs[idx % sigs.size()]);
+        bench::DoNotOptimize(ok);
+        ++idx;
+    });
 }
 
 double bench_schnorr_sign(const std::vector<Scalar>& keys,
                           const std::vector<std::array<uint8_t,32>>& msgs,
                           size_t iterations) {
     std::array<uint8_t,32> aux{}; // zero aux for deterministic bench
-
-    // Warmup
-    for (size_t i = 0; i < 10; ++i) {
-        volatile auto sig = secp256k1::schnorr_sign(keys[i % keys.size()], msgs[i % msgs.size()], aux);
-        (void)sig;
-    }
-
-    auto start = std::chrono::high_resolution_clock::now();
-    for (size_t i = 0; i < iterations; ++i) {
-        volatile auto sig = secp256k1::schnorr_sign(keys[i % keys.size()], msgs[i % msgs.size()], aux);
-        (void)sig;
-    }
-    auto end = std::chrono::high_resolution_clock::now();
-    return static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count()) / iterations;
+    size_t idx = 0;
+    return H.run(static_cast<int>(iterations), [&]() {
+        auto sig = secp256k1::schnorr_sign(keys[idx % keys.size()], msgs[idx % msgs.size()], aux);
+        bench::DoNotOptimize(sig);
+        ++idx;
+    });
 }
 
 double bench_schnorr_verify(const std::vector<secp256k1::SchnorrSignature>& sigs,
                             const std::vector<std::array<uint8_t,32>>& msgs,
                             const std::vector<std::array<uint8_t,32>>& xonly_pks,
                             size_t iterations) {
-    // Warmup
-    for (size_t i = 0; i < 10; ++i) {
-        volatile bool ok = secp256k1::schnorr_verify(xonly_pks[i % xonly_pks.size()], msgs[i % msgs.size()], sigs[i % sigs.size()]);
-        (void)ok;
-    }
-
-    auto start = std::chrono::high_resolution_clock::now();
-    for (size_t i = 0; i < iterations; ++i) {
-        volatile bool ok = secp256k1::schnorr_verify(xonly_pks[i % xonly_pks.size()], msgs[i % msgs.size()], sigs[i % sigs.size()]);
-        (void)ok;
-    }
-    auto end = std::chrono::high_resolution_clock::now();
-    return static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count()) / iterations;
+    size_t idx = 0;
+    return H.run(static_cast<int>(iterations), [&]() {
+        bool ok = secp256k1::schnorr_verify(xonly_pks[idx % xonly_pks.size()], msgs[idx % msgs.size()], sigs[idx % sigs.size()]);
+        bench::DoNotOptimize(ok);
+        ++idx;
+    });
 }
 
 // ============================================================
@@ -536,17 +383,10 @@ double bench_schnorr_verify(const std::vector<secp256k1::SchnorrSignature>& sigs
 double bench_batch_inversion(size_t batch_size) {
     auto fields = generate_random_fields(batch_size);
 
-    // Warmup
-    fe_batch_inverse(fields.data(), batch_size);
-
-    auto start = std::chrono::high_resolution_clock::now();
-
-    fe_batch_inverse(fields.data(), batch_size);
-
-    auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
-
-    return static_cast<double>(duration.count()) / batch_size;
+    return H.run(1, [&]() {
+        fe_batch_inverse(fields.data(), batch_size);
+        bench::DoNotOptimize(fields[0]);
+    }) / static_cast<double>(batch_size);
 }
 
 // ============================================================
@@ -602,13 +442,12 @@ int main()
 
     std::cout << "Warming up benchmark...\n";
     warmup_benchmark(fields, opt_fields, scalars);
+    bench::pin_thread_and_elevate();
     std::cout << "Warm-up done.\n\n";
 
-    constexpr int kBenchWarmupRuns = 1;
-    constexpr int kBenchMeasureRuns = 3;
-    std::cout << "Benchmark runs: warmup=" << kBenchWarmupRuns
-              << ", measure=" << kBenchMeasureRuns
-              << " (median)\n\n";
+    std::cout << "Benchmark Configuration:\n";
+    H.print_config();
+    std::cout << "\n";
 
     // Store results for logging
     struct BenchResult {
@@ -624,45 +463,35 @@ int main()
 
     {
         const size_t iterations = 100000;
-        double time = measure_with_warmup([&]() {
-            return bench_field_mul(opt_fields, iterations);
-        }, kBenchWarmupRuns, kBenchMeasureRuns);
+        double time = bench_field_mul(opt_fields, iterations);
         results.push_back({"Field Mul", time});
         std::cout << "Field Mul:       " << std::setw(10) << format_time(time) << "\n";
     }
 
     {
         const size_t iterations = 100000;
-        double time = measure_with_warmup([&]() {
-            return bench_field_square(opt_fields, iterations);
-        }, kBenchWarmupRuns, kBenchMeasureRuns);
+        double time = bench_field_square(opt_fields, iterations);
         results.push_back({"Field Square", time});
         std::cout << "Field Square:    " << std::setw(10) << format_time(time) << "\n";
     }
 
     {
         const size_t iterations = 100000;
-        double time = measure_with_warmup([&]() {
-            return bench_field_add(opt_fields, iterations);
-        }, kBenchWarmupRuns, kBenchMeasureRuns);
+        double time = bench_field_add(opt_fields, iterations);
         results.push_back({"Field Add", time});
         std::cout << "Field Add:       " << std::setw(10) << format_time(time) << "\n";
     }
 
     {
         const size_t iterations = 100000;
-        double time = measure_with_warmup([&]() {
-            return bench_field_negate(opt_fields, iterations);
-        }, kBenchWarmupRuns, kBenchMeasureRuns);
+        double time = bench_field_negate(opt_fields, iterations);
         results.push_back({"Field Negate", time});
         std::cout << "Field Negate:    " << std::setw(10) << format_time(time) << "\n";
     }
 
     {
         const size_t iterations = 1000;
-        double time = measure_with_warmup([&]() {
-            return bench_field_inverse(fields, iterations);
-        }, kBenchWarmupRuns, kBenchMeasureRuns);
+        double time = bench_field_inverse(fields, iterations);
         results.push_back({"Field Inverse", time});
         std::cout << "Field Inverse:   " << std::setw(10) << format_time(time) << "\n";
     }
@@ -676,36 +505,28 @@ int main()
 
     {
         const size_t iterations = 10000;
-        double time = measure_with_warmup([&]() {
-            return bench_point_add(iterations);
-        }, kBenchWarmupRuns, kBenchMeasureRuns);
+        double time = bench_point_add(iterations);
         results.push_back({"Point Add", time});
         std::cout << "Point Add:       " << std::setw(10) << format_time(time) << "\n";
     }
 
     {
         const size_t iterations = 10000;
-        double time = measure_with_warmup([&]() {
-            return bench_point_double(iterations);
-        }, kBenchWarmupRuns, kBenchMeasureRuns);
+        double time = bench_point_double(iterations);
         results.push_back({"Point Double", time});
         std::cout << "Point Double:    " << std::setw(10) << format_time(time) << "\n";
     }
 
     {
         const size_t iterations = 100;
-        double time = measure_with_warmup([&]() {
-            return bench_point_scalar_mul(scalars, iterations);
-        }, kBenchWarmupRuns, kBenchMeasureRuns);
+        double time = bench_point_scalar_mul(scalars, iterations);
         results.push_back({"Point Scalar Mul", time});
         std::cout << "Point Scalar Mul:" << std::setw(10) << format_time(time) << "\n";
     }
 
     {
         const size_t iterations = 100;
-        double time = measure_with_warmup([&]() {
-            return bench_generator_mul(scalars, iterations);
-        }, kBenchWarmupRuns, kBenchMeasureRuns);
+        double time = bench_generator_mul(scalars, iterations);
         results.push_back({"Generator Mul", time});
         std::cout << "Generator Mul:   " << std::setw(10) << format_time(time) << "\n";
     }
@@ -756,36 +577,28 @@ int main()
 
     {
         const size_t iterations = 100;
-        double time = measure_with_warmup([&]() {
-            return bench_ecdsa_sign(sign_keys, msg_hashes, iterations);
-        }, kBenchWarmupRuns, kBenchMeasureRuns);
+        double time = bench_ecdsa_sign(sign_keys, msg_hashes, iterations);
         results.push_back({"ECDSA Sign", time});
         std::cout << "ECDSA Sign:      " << std::setw(10) << format_time(time) << "\n";
     }
 
     {
         const size_t iterations = 100;
-        double time = measure_with_warmup([&]() {
-            return bench_ecdsa_verify(ecdsa_sigs, msg_hashes, sign_pubkeys, iterations);
-        }, kBenchWarmupRuns, kBenchMeasureRuns);
+        double time = bench_ecdsa_verify(ecdsa_sigs, msg_hashes, sign_pubkeys, iterations);
         results.push_back({"ECDSA Verify", time});
         std::cout << "ECDSA Verify:    " << std::setw(10) << format_time(time) << "\n";
     }
 
     {
         const size_t iterations = 100;
-        double time = measure_with_warmup([&]() {
-            return bench_schnorr_sign(sign_keys, msg_hashes, iterations);
-        }, kBenchWarmupRuns, kBenchMeasureRuns);
+        double time = bench_schnorr_sign(sign_keys, msg_hashes, iterations);
         results.push_back({"Schnorr Sign", time});
         std::cout << "Schnorr Sign:    " << std::setw(10) << format_time(time) << "\n";
     }
 
     {
         const size_t iterations = 100;
-        double time = measure_with_warmup([&]() {
-            return bench_schnorr_verify(schnorr_sigs, msg_hashes, xonly_pks, iterations);
-        }, kBenchWarmupRuns, kBenchMeasureRuns);
+        double time = bench_schnorr_verify(schnorr_sigs, msg_hashes, xonly_pks, iterations);
         results.push_back({"Schnorr Verify", time});
         std::cout << "Schnorr Verify:  " << std::setw(10) << format_time(time) << "\n";
     }
@@ -799,18 +612,14 @@ int main()
 
     {
         const size_t batch_size = 100;
-        double time = measure_with_warmup([&]() {
-            return bench_batch_inversion(batch_size);
-        }, kBenchWarmupRuns, kBenchMeasureRuns);
+        double time = bench_batch_inversion(batch_size);
         results.push_back({"Batch Inverse (n=100)", time});
         std::cout << "Batch Inverse (n=100): " << std::setw(10) << format_time(time) << " per element\n";
     }
 
     {
         const size_t batch_size = 1000;
-        double time = measure_with_warmup([&]() {
-            return bench_batch_inversion(batch_size);
-        }, kBenchWarmupRuns, kBenchMeasureRuns);
+        double time = bench_batch_inversion(batch_size);
         results.push_back({"Batch Inverse (n=1000)", time});
         std::cout << "Batch Inverse (n=1000):" << std::setw(10) << format_time(time) << " per element\n";
     }
@@ -876,9 +685,10 @@ int main()
         logfile << "  SIMD:         " << platform_detect::get_simd_status() << "\n";
         logfile << "\n";
 
-        logfile << "Benchmark Runs:\n";
-        logfile << "  Warmup:  " << kBenchWarmupRuns << "\n";
-        logfile << "  Measure: " << kBenchMeasureRuns << " (median)\n\n";
+        logfile << "Benchmark Configuration:\n";
+        logfile << "  Timer:   " << bench::Timer::timer_name() << "\n";
+        logfile << "  Warmup:  " << H.warmup_iters << "\n";
+        logfile << "  Passes:  " << H.passes << " (IQR outlier removal + median)\n\n";
 
         logfile << "Benchmark Results:\n";
         logfile << "-----------------------------------------------------------------\n";

@@ -6,14 +6,17 @@
  */
 
 #include <iostream>
-#include <chrono>
 #include <random>
 #include <cstring>
 #include <vector>
 #include <iomanip>
 #include "secp256k1/fast.hpp"
+#include "secp256k1/benchmark_harness.hpp"
 
 using namespace secp256k1::fast;
+
+// Unified harness: 500 warmup, 11 passes, RDTSC on x86, IQR outlier removal
+static bench::Harness H(500, 11);
 
 // Generate random scalars
 std::vector<Scalar> generate_scalars(size_t count) {
@@ -40,21 +43,13 @@ std::vector<Scalar> generate_scalars(size_t count) {
 double bench_k_times_generator(const std::vector<Scalar>& scalars, size_t iterations) {
     Point G = Point::generator();
     Point result = G;
+    size_t idx = 0;
     
-    auto start = std::chrono::high_resolution_clock::now();
-    
-    for (size_t i = 0; i < iterations; ++i) {
-        result = G.scalar_mul(scalars[i % scalars.size()]);
-    }
-    
-    auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
-    
-    // Prevent optimization
-    volatile auto prevent_opt = result.x_raw().limbs()[0];
-    (void)prevent_opt;
-    
-    return static_cast<double>(duration.count()) / iterations;
+    return H.run(static_cast<int>(iterations), [&]() {
+        result = G.scalar_mul(scalars[idx % scalars.size()]);
+        bench::DoNotOptimize(result);
+        ++idx;
+    });
 }
 
 // Benchmark K*Q (arbitrary point multiplication)
@@ -62,21 +57,13 @@ double bench_k_times_point(const std::vector<Scalar>& scalars, size_t iterations
     Point G = Point::generator();
     Point Q = G.scalar_mul(Scalar::from_uint64(12345)); // Arbitrary point
     Point result = Q;
+    size_t idx = 0;
     
-    auto start = std::chrono::high_resolution_clock::now();
-    
-    for (size_t i = 0; i < iterations; ++i) {
-        result = Q.scalar_mul(scalars[i % scalars.size()]);
-    }
-    
-    auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
-    
-    // Prevent optimization
-    volatile auto prevent_opt = result.x_raw().limbs()[0];
-    (void)prevent_opt;
-    
-    return static_cast<double>(duration.count()) / iterations;
+    return H.run(static_cast<int>(iterations), [&]() {
+        result = Q.scalar_mul(scalars[idx % scalars.size()]);
+        bench::DoNotOptimize(result);
+        ++idx;
+    });
 }
 
 // Benchmark point addition (used in wNAF loop)
@@ -86,20 +73,10 @@ double bench_point_add(size_t iterations) {
     Point Q = G.scalar_mul(Scalar::from_uint64(11));
     Point result = P;
     
-    auto start = std::chrono::high_resolution_clock::now();
-    
-    for (size_t i = 0; i < iterations; ++i) {
+    return H.run(static_cast<int>(iterations), [&]() {
         result = result.add(Q);
-    }
-    
-    auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
-    
-    // Prevent optimization
-    volatile auto prevent_opt = result.x_raw().limbs()[0];
-    (void)prevent_opt;
-    
-    return static_cast<double>(duration.count()) / iterations;
+        bench::DoNotOptimize(result);
+    });
 }
 
 // Benchmark point doubling
@@ -108,20 +85,10 @@ double bench_point_double(size_t iterations) {
     Point P = G.scalar_mul(Scalar::from_uint64(7));
     Point result = P;
     
-    auto start = std::chrono::high_resolution_clock::now();
-    
-    for (size_t i = 0; i < iterations; ++i) {
+    return H.run(static_cast<int>(iterations), [&]() {
         result = result.dbl();
-    }
-    
-    auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
-    
-    // Prevent optimization
-    volatile auto prevent_opt = result.x_raw().limbs()[0];
-    (void)prevent_opt;
-    
-    return static_cast<double>(duration.count()) / iterations;
+        bench::DoNotOptimize(result);
+    });
 }
 
 void print_header() {
@@ -149,20 +116,20 @@ int main() {
     std::cout << "\n";
     
     SECP256K1_INIT();  // Run integrity check
+    bench::pin_thread_and_elevate();
     
     print_header();
+    
+    std::cout << "Benchmark Configuration:\n";
+    H.print_config();
+    std::cout << "\n";
     
     constexpr size_t NUM_SCALARS = 20;
     constexpr size_t SCALAR_MUL_ITERATIONS = 1000;
     constexpr size_t POINT_OP_ITERATIONS = 100000;
-    constexpr size_t WARMUP = 500;  // Increased for Turbo Boost activation
     
     std::cout << "Generating " << NUM_SCALARS << " random scalars...\n";
     auto scalars = generate_scalars(NUM_SCALARS);
-    
-    std::cout << "Warmup...\n";
-    bench_k_times_point(scalars, WARMUP);
-    bench_point_add(WARMUP);
     
     std::cout << "\nRunning benchmarks...\n\n";
     std::cout << "═══════════════════════════════════════════════════════\n";
@@ -201,12 +168,6 @@ int main() {
     std::cout << "  • Overhead (wNAF, precompute): " << std::fixed << std::setprecision(1);
     std::cout << overhead << "%\n";
     
-    std::cout << "\n";
-    std::cout << "Note: This benchmark includes lazy reduction in jacobian_add_mixed.\n";
-    std::cout << "      Compare with previous results to measure improvement.\n";
-    std::cout << "\nPrevious baseline (eager reduction):\n";
-    std::cout << "  • K*Q: ~18.34 μs (under Turbo Boost)\n";
-    std::cout << "  • Expected with lazy: ~15-16 μs (12-18% improvement)\n";
-    
+
     return 0;
 }
