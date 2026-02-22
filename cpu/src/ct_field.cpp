@@ -4,33 +4,34 @@
 // All operations have data-independent execution traces.
 // p = 2^256 - 2^32 - 977 = FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F
 //
-// FAST-PATH ASM INTEGRATION (x86_64):
-//   field_mul and field_sqr call the BMI2+ADX assembly directly
-//   (field_mul_full_asm / field_sqr_full_asm) which already produce
-//   fully normalized results in [0, p) via branchless cmovc.
-//   This bypasses the operator* wrapper chain and eliminates
-//   the redundant field_normalize pass — ~2.5× faster field_mul.
+// PLATFORM DISPATCH (field_mul / field_sqr):
+//   x86-64:  Inline FE52 5×52 multiply — zero call overhead, best codegen.
+//   ARM64:   fast::operator* → native ASM (already fastest for ARM64).
+//   Generic: fast::operator* + field_normalize (MSVC, 32-bit — not perf-critical).
+//
+// PLATFORM DISPATCH (field_inv):
+//   x86-64 / ARM64 (__int128): SafeGCD 10×59=590 divsteps (CT, matches libsecp).
+//   Generic:                   Fermat chain a^(p-2) via field_mul/field_sqr.
 // ============================================================================
 
 #include "secp256k1/ct/field.hpp"
 #include "secp256k1/ct/ops.hpp"
+#include "secp256k1/config.hpp"
 #include <cstring>
+#include <cstdint>
 
-// ─── Direct ASM declarations (bypass wrapper overhead) ───────────────────────
-// These are the fused multiply+reduce functions from field_asm_x64_gas.S.
-// They produce output in [0, p) using branchless normalization (cmovc).
-// Signature: (const uint64_t a[4], const uint64_t b[4], uint64_t result[4])
-//        sqr: (const uint64_t a[4], uint64_t result[4])
-#if defined(SECP256K1_HAS_ASM) && (defined(__x86_64__) || defined(_M_X64))
-extern "C" {
-    void field_mul_full_asm(const std::uint64_t* a, const std::uint64_t* b,
-                            std::uint64_t* result);
-    void field_sqr_full_asm(const std::uint64_t* a, std::uint64_t* result);
-}
-#define SECP256K1_CT_HAS_DIRECT_ASM 1
-#else
-#define SECP256K1_CT_HAS_DIRECT_ASM 0
+// Include 5×52 inline implementations for __int128 platforms.
+// The inline 5×52 C path produces identical asm to hand-written mul/sqr
+// but with zero function-call overhead and superior register allocation.
+#if defined(__SIZEOF_INT128__)
+#include "secp256k1/field_52.hpp"
+#include "secp256k1/field_52_impl.hpp"
 #endif
+
+// ─── Platform dispatch ───────────────────────────────────────────────────────
+// x86-64 (Clang/GCC): inline FE52 5×52 multiply — zero call overhead, best codegen.
+// ARM64 (Clang/GCC): operator* delegates to native ASM via fast:: — already optimal.
+// Generic (MSVC/32-bit): operator* + field_normalize (functional, not perf-critical).
 
 namespace secp256k1::ct {
 
@@ -138,32 +139,24 @@ FieldElement field_sub(const FieldElement& a, const FieldElement& b) noexcept {
 }
 
 FieldElement field_mul(const FieldElement& a, const FieldElement& b) noexcept {
-#if SECP256K1_CT_HAS_DIRECT_ASM
-    // Direct ASM: field_mul_full_asm does 4×4 schoolbook multiplication
-    // + secp256k1 reduction + branchless normalization (cmovc) in one call.
-    // Output is always in [0, p) — no extra normalize needed.
-    // Bypasses operator* wrapper chain: saves ~15ns call/memcpy overhead
-    // + ~20ns redundant field_normalize = ~35ns savings per mul.
-    std::uint64_t result[4];
-    field_mul_full_asm(a.limbs().data(), b.limbs().data(), result);
-    return FieldElement::from_limbs_raw({result[0], result[1], result[2], result[3]});
+#if defined(__SIZEOF_INT128__) && (defined(__x86_64__) || defined(_M_X64))
+    // x86-64: inline FE52 5×52 multiply — zero call overhead, best codegen.
+    using FE52 = secp256k1::fast::FieldElement52;
+    return (FE52::from_fe(a) * FE52::from_fe(b)).to_fe();
 #else
-    // Fallback: use operator* (platform-specific mul) + CT normalize.
-    // operator* always produces a value in [0, p) but the reduce step
-    // may use data-dependent loops, so we CT-normalize afterward.
+    // ARM64 / generic: fast:: operator* (ARM64 delegates to native ASM internally).
     FieldElement r = a * b;
     return field_normalize(r);
 #endif
 }
 
 FieldElement field_sqr(const FieldElement& a) noexcept {
-#if SECP256K1_CT_HAS_DIRECT_ASM
-    // Direct ASM: fused squaring + reduction + branchless normalization.
-    // Output always in [0, p). No extra normalize needed.
-    std::uint64_t result[4];
-    field_sqr_full_asm(a.limbs().data(), result);
-    return FieldElement::from_limbs_raw({result[0], result[1], result[2], result[3]});
+#if defined(__SIZEOF_INT128__) && (defined(__x86_64__) || defined(_M_X64))
+    // x86-64: inline FE52 5×52 square — zero call overhead.
+    using FE52 = secp256k1::fast::FieldElement52;
+    return FE52::from_fe(a).square().to_fe();
 #else
+    // ARM64 / generic: fast:: square (ARM64 delegates to native ASM internally).
     FieldElement r = a.square();
     return field_normalize(r);
 #endif
@@ -183,7 +176,224 @@ FieldElement field_neg(const FieldElement& a) noexcept {
     return FieldElement::from_limbs_raw({r[0], r[1], r[2], r[3]});
 }
 
+// ── CT SafeGCD building blocks (extracted for register allocation) ──────────
+#if defined(__SIZEOF_INT128__)
+namespace {
+
+struct SG62   { int64_t v[5]; };
+struct SGTrans { int64_t u, v, q, r; };
+
+// secp256k1 prime in signed-62:  p = 2^256 − 2^32 − 977
+static constexpr SG62 SGP = {{
+    -(int64_t)0x1000003D1LL, 0, 0, 0, 256
+}};
+// (-p)^{-1} mod 2^62
+static constexpr uint64_t P_INV62 = 0x27C7F6E22DDACACFULL;
+
+// CT batch of 59 divsteps using conditional-add pattern (not conditional-swap).
+// Result matrix is scaled by 2^62 (initial 8×identity + 59 halvings).
+// zeta = -(delta + 1/2); swap condition is zeta < 0 (i.e., delta > 0).
+// Matches libsecp: 10 × 59 = 590 divsteps (proven sufficient for 256-bit).
+static int64_t ct_divsteps_59(int64_t zeta, uint64_t f0, uint64_t g0,
+                               SGTrans& t) noexcept {
+    // Start with 8×identity (2^3) so output is scaled by 2^62 (3 + 59 = 62).
+    uint64_t u = 8, v = 0, q = 0, r = 8;
+    uint64_t f = f0, g = g0;
+
+    for (int i = 3; i < 62; ++i) {
+        uint64_t c1 = (uint64_t)(zeta >> 63);    // all-ones if zeta < 0
+        uint64_t c2 = -(g & 1);                   // all-ones if g odd
+
+        // Conditionally negate (f,u,v) based on zeta sign
+        uint64_t x = (f ^ c1) - c1;
+        uint64_t y = (u ^ c1) - c1;
+        uint64_t z = (v ^ c1) - c1;
+
+        // Conditionally add to (g,q,r) if g is odd
+        g += x & c2;
+        q += y & c2;
+        r += z & c2;
+
+        // Combined mask: zeta < 0 AND g was odd
+        c1 &= c2;
+
+        // zeta update: swap → -zeta-2, no-swap → zeta-1
+        zeta = (zeta ^ (int64_t)c1) - 1;
+
+        // Conditionally add (g,q,r) into (f,u,v) when both conditions met
+        f += g & c1;
+        u += q & c1;
+        v += r & c1;
+
+        g >>= 1;
+        u <<= 1;
+        v <<= 1;
+    }
+
+    t.u = (int64_t)u; t.v = (int64_t)v;
+    t.q = (int64_t)q; t.r = (int64_t)r;
+    return zeta;
+}
+
+// Apply transition matrix to (d,e) mod p.
+// Exploits secp256k1 prime structure: p.v[1..3]=0, p.v[4]=256=2^8.
+static void ct_update_de(SG62& d, SG62& e, const SGTrans& t) noexcept {
+    const uint64_t M62 = UINT64_MAX >> 2;
+    const int64_t d0=d.v[0], d1=d.v[1], d2=d.v[2], d3=d.v[3], d4=d.v[4];
+    const int64_t e0=e.v[0], e1=e.v[1], e2=e.v[2], e3=e.v[3], e4=e.v[4];
+    int64_t md, me;
+    __int128 cd, ce;
+
+    md = (t.u & (d4 >> 63)) + (t.v & (e4 >> 63));
+    me = (t.q & (d4 >> 63)) + (t.r & (e4 >> 63));
+
+    cd = (__int128)t.u * d0 + (__int128)t.v * e0;
+    ce = (__int128)t.q * d0 + (__int128)t.r * e0;
+
+    md -= (int64_t)((P_INV62 * (uint64_t)cd + (uint64_t)md) & M62);
+    me -= (int64_t)((P_INV62 * (uint64_t)ce + (uint64_t)me) & M62);
+
+    cd += (__int128)SGP.v[0] * md;
+    ce += (__int128)SGP.v[0] * me;
+    cd >>= 62;
+    ce >>= 62;
+
+    cd += (__int128)t.u * d1 + (__int128)t.v * e1;
+    ce += (__int128)t.q * d1 + (__int128)t.r * e1;
+    d.v[0] = (int64_t)((uint64_t)cd & M62); cd >>= 62;
+    e.v[0] = (int64_t)((uint64_t)ce & M62); ce >>= 62;
+
+    cd += (__int128)t.u * d2 + (__int128)t.v * e2;
+    ce += (__int128)t.q * d2 + (__int128)t.r * e2;
+    d.v[1] = (int64_t)((uint64_t)cd & M62); cd >>= 62;
+    e.v[1] = (int64_t)((uint64_t)ce & M62); ce >>= 62;
+
+    cd += (__int128)t.u * d3 + (__int128)t.v * e3;
+    ce += (__int128)t.q * d3 + (__int128)t.r * e3;
+    d.v[2] = (int64_t)((uint64_t)cd & M62); cd >>= 62;
+    e.v[2] = (int64_t)((uint64_t)ce & M62); ce >>= 62;
+
+    cd += (__int128)t.u * d4 + (__int128)t.v * e4 + ((__int128)md << 8);
+    ce += (__int128)t.q * d4 + (__int128)t.r * e4 + ((__int128)me << 8);
+    d.v[3] = (int64_t)((uint64_t)cd & M62); cd >>= 62;
+    e.v[3] = (int64_t)((uint64_t)ce & M62); ce >>= 62;
+
+    d.v[4] = (int64_t)cd;
+    e.v[4] = (int64_t)ce;
+}
+
+// Apply transition matrix to full-precision (f,g).  Always 5 limbs.
+static void ct_update_fg(SG62& f, SG62& g, const SGTrans& t) noexcept {
+    const int64_t M62 = (int64_t)((uint64_t)(-1) >> 2);
+    __int128 cf, cg;
+
+    cf = (__int128)t.u * f.v[0] + (__int128)t.v * g.v[0];
+    cg = (__int128)t.q * f.v[0] + (__int128)t.r * g.v[0];
+    cf >>= 62;
+    cg >>= 62;
+
+    cf += (__int128)t.u * f.v[1] + (__int128)t.v * g.v[1];
+    cg += (__int128)t.q * f.v[1] + (__int128)t.r * g.v[1];
+    f.v[0] = (int64_t)cf & M62; cf >>= 62;
+    g.v[0] = (int64_t)cg & M62; cg >>= 62;
+
+    cf += (__int128)t.u * f.v[2] + (__int128)t.v * g.v[2];
+    cg += (__int128)t.q * f.v[2] + (__int128)t.r * g.v[2];
+    f.v[1] = (int64_t)cf & M62; cf >>= 62;
+    g.v[1] = (int64_t)cg & M62; cg >>= 62;
+
+    cf += (__int128)t.u * f.v[3] + (__int128)t.v * g.v[3];
+    cg += (__int128)t.q * f.v[3] + (__int128)t.r * g.v[3];
+    f.v[2] = (int64_t)cf & M62; cf >>= 62;
+    g.v[2] = (int64_t)cg & M62; cg >>= 62;
+
+    cf += (__int128)t.u * f.v[4] + (__int128)t.v * g.v[4];
+    cg += (__int128)t.q * f.v[4] + (__int128)t.r * g.v[4];
+    f.v[3] = (int64_t)cf & M62; cf >>= 62;
+    g.v[3] = (int64_t)cg & M62; cg >>= 62;
+
+    f.v[4] = (int64_t)cf;
+    g.v[4] = (int64_t)cg;
+}
+
+// Normalize result to [0, p): conditional add/negate/carry propagation.
+static void ct_sg_normalize(SG62& r, int64_t f_sign) noexcept {
+    const int64_t M62 = (int64_t)(UINT64_MAX >> 2);
+    int64_t r0=r.v[0], r1=r.v[1], r2=r.v[2], r3=r.v[3], r4=r.v[4];
+
+    int64_t ca = r4 >> 63;
+    r0 += SGP.v[0] & ca;
+    r4 += SGP.v[4] & ca;
+
+    int64_t cn = f_sign >> 63;
+    r0 = (r0 ^ cn) - cn;
+    r1 = (r1 ^ cn) - cn;
+    r2 = (r2 ^ cn) - cn;
+    r3 = (r3 ^ cn) - cn;
+    r4 = (r4 ^ cn) - cn;
+
+    r1 += r0 >> 62; r0 &= M62;
+    r2 += r1 >> 62; r1 &= M62;
+    r3 += r2 >> 62; r2 &= M62;
+    r4 += r3 >> 62; r3 &= M62;
+
+    ca = r4 >> 63;
+    r0 += SGP.v[0] & ca;
+    r4 += SGP.v[4] & ca;
+
+    r1 += r0 >> 62; r0 &= M62;
+    r2 += r1 >> 62; r1 &= M62;
+    r3 += r2 >> 62; r2 &= M62;
+    r4 += r3 >> 62; r3 &= M62;
+
+    r.v[0]=r0; r.v[1]=r1; r.v[2]=r2; r.v[3]=r3; r.v[4]=r4;
+}
+
+} // anonymous namespace
+#endif // __SIZEOF_INT128__
+
 FieldElement field_inv(const FieldElement& a) noexcept {
+#if defined(__SIZEOF_INT128__)
+    // ── CT SafeGCD inverse ───────────────────────────────────────────────
+    // Bernstein-Yang divstep: 10 × 59 = 590 branchless divsteps.
+    // Matches bitcoin-core/secp256k1 proven bound for 256-bit modular inverse.
+
+    // fe → s62
+    const auto& al = a.limbs();
+    constexpr uint64_t M = (1ULL << 62) - 1;
+
+    SG62 d = {{0,0,0,0,0}};
+    SG62 e = {{1,0,0,0,0}};
+    SG62 f = SGP;
+    SG62 g = {{
+        (int64_t)(al[0] & M),
+        (int64_t)(((al[0] >> 62) | (al[1] << 2)) & M),
+        (int64_t)(((al[1] >> 60) | (al[2] << 4)) & M),
+        (int64_t)(((al[2] >> 58) | (al[3] << 6)) & M),
+        (int64_t)(al[3] >> 56)
+    }};
+    int64_t zeta = -1;  // zeta = -(delta + 1/2); delta starts at 1/2
+
+    // 10 × 59 = 590 divsteps (proven sufficient for 256-bit; same as libsecp)
+    for (int iter = 0; iter < 10; ++iter) {
+        SGTrans t;
+        zeta = ct_divsteps_59(zeta, (uint64_t)f.v[0], (uint64_t)g.v[0], t);
+        ct_update_de(d, e, t);
+        ct_update_fg(f, g, t);
+    }
+
+    ct_sg_normalize(d, f.v[4]);
+
+    // s62 → fe
+    return FieldElement::from_limbs({
+        (uint64_t)d.v[0] | ((uint64_t)d.v[1] << 62),
+        ((uint64_t)d.v[1] >> 2)  | ((uint64_t)d.v[2] << 60),
+        ((uint64_t)d.v[2] >> 4)  | ((uint64_t)d.v[3] << 58),
+        ((uint64_t)d.v[3] >> 6)  | ((uint64_t)d.v[4] << 56)
+    });
+
+#else
+    // ── Generic 4×64 path (x86_64 ASM or fallback) ──────────────────────
     // Fermat's little theorem: a^(p-2) mod p
     // Using addition chain optimized for secp256k1:
     // p-2 = FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2D
@@ -284,6 +494,7 @@ FieldElement field_inv(const FieldElement& a) noexcept {
     t = field_mul(t, x);
 
     return t;
+#endif  // __SIZEOF_INT128__
 }
 
 // ─── Conditional Operations ──────────────────────────────────────────────────

@@ -185,6 +185,7 @@ if(SECP256K1_USE_ASM)
         list(APPEND SECP256K1_SOURCES
             src/field_asm_arm64.cpp
             src/field_asm52_arm64.cpp
+            src/field_asm52_arm64_v2.cpp
         )
         
         add_compile_definitions(SECP256K1_HAS_ARM64_ASM=1)
@@ -363,9 +364,12 @@ if(CMAKE_SYSTEM_PROCESSOR MATCHES "riscv64|RISCV64")
     set(ARCH_FLAGS "-march=rv64gc_zba_zbb")
 elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|ARM64|arm64")
     if(ANDROID)
-        # Android NDK: target ARMv8-A with crypto extensions (NEON is implicit)
-        set(ARCH_FLAGS "-march=armv8-a+crypto")
-        message(STATUS "Secp256k1: Android ARM64 target (ARMv8-A + crypto + NEON)")
+        # Android NDK: target Cortex-A76 specifically for optimal scheduling
+        # -mcpu=cortex-a76 implies armv8.2-a + crypto + lse + rdm + fp16
+        # This tells Clang the exact pipeline (3c MUL, 4c UMULH, 1/cycle)
+        # so it can interleave MUL/UMULH in __int128 field multiplications.
+        set(ARCH_FLAGS "-mcpu=cortex-a76")
+        message(STATUS "Secp256k1: Android ARM64 target (Cortex-A76 tuned + crypto + NEON)")
     elseif(APPLE)
         # Apple Silicon: AppleClang uses -mcpu implicitly, not -march
         set(ARCH_FLAGS "")
@@ -410,8 +414,9 @@ target_compile_options(${SECP256K1_LIB_NAME} PRIVATE
     -fomit-frame-pointer     # Remove frame pointers for speed
     -fno-stack-protector     # Disable stack canaries (no security)
     $<$<NOT:$<PLATFORM_ID:Darwin>>:-fno-plt>  # No PLT (ELF only, not macOS Mach-O)
-    -ftree-vectorize         # Auto-vectorization (AVX2/SSE)
-    -fno-lto                 # Explicitly disable LTO to avoid linker format errors
+    -ftree-vectorize         # Auto-vectorization (AVX2/SSE/NEON)
+    # Note: LTO is controlled separately by SECP256K1_USE_LTO option
+    # Do NOT add -fno-lto here — it would override the LTO setting
 )
 endif()
 

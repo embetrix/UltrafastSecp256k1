@@ -98,22 +98,22 @@ struct CTAffinePoint {
 };
 
 // ─── Complete Addition ───────────────────────────────────────────────────────
+// Brier-Joye unified addition/doubling for general Jacobian+Jacobian.
 // Handles ALL cases in a single branchless codepath:
 //   P + Q,  P + P (doubling),  P + O,  O + Q,  P + (-P) = O
-// No secret-dependent branches. Fixed 13M + 9S cost.
+// No secret-dependent branches. Cost: 11M + 6S.
 
 CTJacobianPoint point_add_complete(const CTJacobianPoint& p,
                                    const CTJacobianPoint& q) noexcept;
 
 // ─── Mixed Jacobian+Affine Complete Addition ─────────────────────────────────
-// Same complete formula but optimized for Q in affine (Z2=1).
-// Saves ~4 field multiplications vs general Jacobian+Jacobian.
-// Cost: 9M + 8S (fixed, no branches)
+// Brier-Joye unified addition/doubling for Jacobian+Affine (Z2=1).
+// Cost: 7M + 5S (fixed, no branches)
 CTJacobianPoint point_add_mixed_complete(const CTJacobianPoint& p,
                                          const CTAffinePoint& q) noexcept;
 
 // ─── CT Point Doubling ───────────────────────────────────────────────────────
-// Branchless doubling (handles identity via cmov, no branch)
+// Libsecp-style 3M+4S+1half doubling (low magnitudes, handles identity via cmov)
 CTJacobianPoint point_dbl(const CTJacobianPoint& p) noexcept;
 
 // ─── Brier-Joye Unified Mixed Addition (Jacobian + Affine, a=0) ─────────────

@@ -30,6 +30,25 @@
 // NOT on 32-bit (ESP32 Xtensa, Cortex-M, etc.) even though __GNUC__ is set.
 #if defined(__SIZEOF_INT128__)
 
+// ── ARM64 optimized field kernels ────────────────────────────────────────
+// With -mcpu=cortex-a76, Clang already knows the A76 pipeline and schedules
+// MUL/UMULH interleaving optimally from __int128 C code. The hand-scheduled
+// ARM64 v2 ASM (field_asm52_arm64_v2.cpp) is kept for reference but disabled:
+// separate asm volatile blocks act as compiler barriers that PREVENT optimal
+// scheduling, and cross-TU calls add function-call overhead.
+//
+// To re-enable: uncomment the #define below.
+// #define SECP256K1_ARM64_FE52_V2 1
+#if 0 && defined(__aarch64__) && defined(SECP256K1_HAS_ARM64_FE52_ASM)
+namespace secp256k1::fast::arm64_v2 {
+    void fe52_mul_arm64_v2(std::uint64_t* __restrict r,
+                           const std::uint64_t* __restrict a,
+                           const std::uint64_t* __restrict b) noexcept;
+    void fe52_sqr_arm64_v2(std::uint64_t* __restrict r,
+                           const std::uint64_t* __restrict a) noexcept;
+} // namespace secp256k1::fast::arm64_v2
+#endif
+
 // Force-inline attribute — ensures zero call overhead for field ops.
 // The compiler generates MULX assembly automatically with -mbmi2.
 #if defined(__GNUC__) || defined(__clang__)
@@ -62,6 +81,10 @@ SECP256K1_FE52_FORCE_INLINE
 void fe52_mul_inner(std::uint64_t* __restrict__ r,
                     const std::uint64_t* __restrict__ a,
                     const std::uint64_t* __restrict__ b) noexcept {
+#if defined(SECP256K1_ARM64_FE52_V2)
+    // ARM64: hand-scheduled MUL/UMULH interleaving for Cortex-A76 class cores
+    arm64_v2::fe52_mul_arm64_v2(r, a, b);
+#else
     using u128 = unsigned __int128;
     u128 c, d;
     std::uint64_t t3, t4, tx, u0;
@@ -131,6 +154,7 @@ void fe52_mul_inner(std::uint64_t* __restrict__ r,
     c >>= 52;
     c += t4;
     r[4] = (std::uint64_t)c;
+#endif // SECP256K1_ARM64_FE52_V2 (mul)
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -143,6 +167,9 @@ void fe52_mul_inner(std::uint64_t* __restrict__ r,
 SECP256K1_FE52_FORCE_INLINE
 void fe52_sqr_inner(std::uint64_t* __restrict__ r,
                     const std::uint64_t* __restrict__ a) noexcept {
+#if defined(SECP256K1_ARM64_FE52_V2)
+    arm64_v2::fe52_sqr_arm64_v2(r, a);
+#else
     using u128 = unsigned __int128;
     u128 c, d;
     std::uint64_t t3, t4, tx, u0;
@@ -202,6 +229,7 @@ void fe52_sqr_inner(std::uint64_t* __restrict__ r,
     c >>= 52;
     c += t4;
     r[4] = (std::uint64_t)c;
+#endif // SECP256K1_ARM64_FE52_V2 (sqr)
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

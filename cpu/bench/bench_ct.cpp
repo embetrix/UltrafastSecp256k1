@@ -165,6 +165,17 @@ int main() {
     printf("  point_add    fast: %8.3f us   ct: %8.3f us   ratio: %.2fx\n",
            fast_point_add, ct_point_add, ct_point_add / fast_point_add);
 
+    // Mixed add (J+A) — comparable to libsecp's group_add_affine
+    auto ct_aff_g = ct::CTAffinePoint::from_point(G);
+
+    double ct_mixed_add = bench_us([&]() {
+        auto r = ct::point_add_mixed_complete(ct_p, ct_aff_g);
+        (void)r;
+    }, N_POINT_OPS);
+
+    printf("  mixed_add    fast: %8.3f us   ct: %8.3f us   ratio: %.2fx\n",
+           fast_point_add, ct_mixed_add, ct_mixed_add / fast_point_add);
+
     double fast_point_dbl = bench_us([&]() {
         volatile auto r = P.dbl();
     }, N_POINT_OPS);
