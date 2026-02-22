@@ -1,3 +1,5 @@
+cmake_minimum_required(VERSION 3.18)
+
 set(SECP256K1_LIB_NAME fastsecp256k1)
 
 # Core sources (always available - Tier 1: Portable C++)
@@ -223,13 +225,17 @@ if(NOT TARGET ${SECP256K1_LIB_NAME})
 
     if(SECP256K1_USE_LTO)
         if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-            # Clang ThinLTO - requires lld linker (set via CMAKE_EXE_LINKER_FLAGS)
+            # Clang ThinLTO - requires lld linker.
+            # PRIVATE: compile library sources with LTO (bitcode objects)
+            # INTERFACE: propagate LTO link flags to ALL consumers automatically
+            #   (any exe that links against this lib gets -flto=thin -fuse-ld=lld)
             target_compile_options(${SECP256K1_LIB_NAME} PRIVATE -flto=thin)
-            message(STATUS "Secp256k1: ✓ LTO ENABLED (ThinLTO with Clang, expect 5-15% improvement)")
+            target_link_options(${SECP256K1_LIB_NAME} INTERFACE -flto=thin -fuse-ld=lld)
+            message(STATUS "Secp256k1: ✓ LTO ENABLED (ThinLTO with Clang + lld, INTERFACE propagated)")
         elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
             target_compile_options(${SECP256K1_LIB_NAME} PRIVATE -flto)
-            target_link_options(${SECP256K1_LIB_NAME} PRIVATE -flto)
-            message(STATUS "Secp256k1: ✓ LTO ENABLED (GCC LTO, expect 5-15% improvement)")
+            target_link_options(${SECP256K1_LIB_NAME} INTERFACE -flto)
+            message(STATUS "Secp256k1: ✓ LTO ENABLED (GCC LTO, INTERFACE propagated)")
         else()
             message(STATUS "Secp256k1: LTO not available for compiler ${CMAKE_CXX_COMPILER_ID}")
         endif()
@@ -529,14 +535,11 @@ if(BUILD_TESTING)
     add_executable(bench_comprehensive_riscv bench/bench_comprehensive_riscv.cpp)
     target_link_libraries(bench_comprehensive_riscv PRIVATE ${SECP256K1_LIB_NAME})
 
-    # LTO link options for benchmarks (must use lld for Clang LTO)
+    # LTO compile options for benchmark sources (link flags auto-propagate via INTERFACE)
     if(SECP256K1_USE_LTO AND CMAKE_CXX_COMPILER_ID MATCHES "Clang")
         target_compile_options(bench_comprehensive PRIVATE -flto=thin)
-        target_link_options(bench_comprehensive PRIVATE -flto=thin -fuse-ld=lld)
         target_compile_options(bench_comprehensive_riscv PRIVATE -flto=thin)
-        target_link_options(bench_comprehensive_riscv PRIVATE -flto=thin -fuse-ld=lld)
         target_compile_options(bench_atomic_operations PRIVATE -flto=thin)
-        target_link_options(bench_atomic_operations PRIVATE -flto=thin -fuse-ld=lld)
     endif()
 
     # NOTE: Benchmarks use default optimization (-O3 from CMAKE_CXX_FLAGS_RELEASE)
