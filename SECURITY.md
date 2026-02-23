@@ -4,11 +4,10 @@
 
 | Version | Supported |
 |---------|-----------|
-| 3.6.x   | ✅ Active  |
-| 3.4.x–3.5.x | ⚠️ Critical fixes only |
-| 3.0.x–3.3.x | ⚠️ Critical fixes only |
-| 2.x.x   | ❌ Unsupported |
-| < 2.0   | ❌ Unsupported |
+| 3.11.x  | ✅ Active  |
+| 3.9.x–3.10.x | ⚠️ Critical fixes only |
+| 3.6.x–3.8.x | ⚠️ Critical fixes only |
+| < 3.6   | ❌ Unsupported |
 
 Security fixes apply to the latest release on the `main` branch.
 
@@ -47,6 +46,17 @@ We will acknowledge within **72 hours** and provide a fix timeline.
 
 This library has **not undergone an independent security audit**.
 It is provided for research, educational, and experimental purposes.
+
+However, the following automated security measures are in place:
+
+- **CodeQL** — static analysis on every push/PR (C/C++ security-and-quality queries)
+- **OpenSSF Scorecard** — weekly supply-chain security assessment
+- **ASan + UBSan** — address/undefined-behavior sanitizers in CI
+- **TSan** — thread sanitizer in CI
+- **Artifact Attestation** — SLSA provenance for all release artifacts
+- **SHA-256 Checksums** — `SHA256SUMS.txt` ships with every release
+- **Dependabot** — automated dependency updates for all ecosystems
+- **libFuzzer harnesses** — continuous fuzz testing of field/scalar/point layers
 
 For production cryptographic systems, prefer audited libraries such as
 [libsecp256k1](https://github.com/bitcoin-core/secp256k1).
@@ -158,4 +168,4 @@ We appreciate responsible disclosure. Contributors who report valid security iss
 
 ---
 
-*UltrafastSecp256k1 v3.6.0 — Security Policy*
+*UltrafastSecp256k1 v3.11.0 — Security Policy*

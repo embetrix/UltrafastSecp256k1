@@ -13,6 +13,8 @@ on:
 permissions:
   contents: write
   packages: write
+  id-token: write
+  attestations: write
 
 env:
   CMAKE_BUILD_TYPE: Release
@@ -1464,6 +1466,28 @@ jobs:
       - name: List collected artifacts
         run: find dist -type f | sort
 
+      - name: Generate SHA-256 checksums
+        run: |
+          cd dist
+          find . -type f \( -name '*.tar.gz' -o -name '*.zip' -o -name '*.whl' \
+            -o -name '*.nupkg' -o -name '*.tgz' -o -name '*.gem' -o -name '*.jar' \) \
+            | sort | while read -r f; do
+              sha256sum "$f"
+            done > ../SHA256SUMS.txt
+          cd ..
+          echo "=== SHA256SUMS.txt ==="
+          cat SHA256SUMS.txt
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            dist/**/*.tar.gz
+            dist/**/*.zip
+            dist/**/*.whl
+            dist/**/*.nupkg
+            dist/**/*.tgz
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -1472,6 +1496,8 @@ jobs:
           body: ${{ steps.notes.outputs.NOTES }}
           draft: false
           prerelease: ${{ contains(github.ref_name, '-rc') || contains(github.ref_name, '-beta') || contains(github.ref_name, '-alpha') }}
-          files: dist/**/*
+          files: |
+            dist/**/*
+            SHA256SUMS.txt
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

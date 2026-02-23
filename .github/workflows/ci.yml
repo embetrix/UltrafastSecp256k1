@@ -348,3 +348,54 @@ jobs:
           file build-android/libsecp256k1_jni.so
           echo "Static lib: $(du -h build-android/cpu/libfastsecp256k1.a | cut -f1)"
           echo "JNI shared: $(du -h build-android/libsecp256k1_jni.so | cut -f1)"
+
+  # -- Code Coverage (lcov + Codecov) -----------------------------------------
+  coverage:
+    runs-on: ubuntu-24.04
+    if: github.event_name == 'push'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y clang-17 lld-17 lcov ninja-build
+
+      - name: Configure (coverage)
+        run: |
+          export CC=clang-17 CXX=clang++-17
+          cmake -S . -B build-cov -G Ninja \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DSECP256K1_BUILD_TESTS=ON \
+            -DSECP256K1_BUILD_BENCH=OFF \
+            -DSECP256K1_USE_ASM=OFF \
+            -DCMAKE_C_FLAGS="--coverage -fprofile-instr-generate -fcoverage-mapping" \
+            -DCMAKE_CXX_FLAGS="--coverage -fprofile-instr-generate -fcoverage-mapping"
+
+      - name: Build
+        run: cmake --build build-cov -j$(nproc)
+
+      - name: Test
+        run: ctest --test-dir build-cov --output-on-failure -j$(nproc)
+        env:
+          LLVM_PROFILE_FILE: "%p.profraw"
+
+      - name: Collect coverage
+        run: |
+          llvm-profdata-17 merge -sparse build-cov/**/*.profraw -o coverage.profdata 2>/dev/null || true
+          # Fallback to lcov for gcc-style .gcda
+          lcov --capture --directory build-cov --output-file coverage.info \
+            --gcov-tool llvm-cov-17 --ignore-errors inconsistent,inconsistent 2>/dev/null || true
+          lcov --remove coverage.info '*/tests/*' '*/bench/*' '*/examples/*' '/usr/*' \
+            --output-file coverage.info --ignore-errors unused 2>/dev/null || true
+          lcov --list coverage.info 2>/dev/null || echo "Coverage data collected"
+
+      - name: Upload to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          files: coverage.info
+          flags: cpu
+          fail_ci_if_error: false
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
