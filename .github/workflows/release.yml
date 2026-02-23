@@ -231,7 +231,7 @@ jobs:
   # ==========================================================================
   # 3) Android (NDK arm64-v8a -- .so + JNI .so + static .a)
   # ==========================================================================
-  build/android:
+  build-android:
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
@@ -363,7 +363,7 @@ jobs:
   # ==========================================================================
   # 5) WebAssembly (Emscripten -- .wasm + .js + .mjs + .d.ts)
   # ==========================================================================
-  build/wasm:
+  build-wasm:
     runs-on: ubuntu-24.04
     steps:
       - name: Harden the runner (Audit all outbound calls)
@@ -825,7 +825,7 @@ jobs:
   # 10) Package bindings -- Java JNI JAR (multi-platform native libs)
   # ==========================================================================
   pack-java:
-    needs: [build-desktop, build-linux-arm64, build/android]
+    needs: [build-desktop, build-linux-arm64, build-android]
     runs-on: ubuntu-24.04
     steps:
       - name: Harden the runner (Audit all outbound calls)
@@ -1116,7 +1116,7 @@ jobs:
   # 13) Package bindings -- Dart/Flutter (source + native libs)
   # ==========================================================================
   pack-dart:
-    needs: [build-desktop, build-linux-arm64, build/android, build-ios]
+    needs: [build-desktop, build-linux-arm64, build-android, build-ios]
     runs-on: ubuntu-24.04
     steps:
       - name: Harden the runner (Audit all outbound calls)
@@ -1263,7 +1263,7 @@ jobs:
   # 15) Package bindings -- React Native (npm + Android/iOS native libs)
   # ==========================================================================
   pack-react-native:
-    needs: [build-desktop, build/android, build-ios]
+    needs: [build-desktop, build-android, build-ios]
     runs-on: ubuntu-24.04
     steps:
       - name: Harden the runner (Audit all outbound calls)
@@ -1510,7 +1510,7 @@ jobs:
   # 18) Create GitHub Release (collects ALL artifacts)
   # ==========================================================================
   release:
-    needs: [build-desktop, build-linux-arm64, build/android, build-ios, build/wasm, pack-python, pack-npm, pack-nuget, pack-gem, pack-java, pack-go, pack-rust, pack-dart, pack-php, pack-react-native, pack-swift, pack-c-headers]
+    needs: [build-desktop, build-linux-arm64, build-android, build-ios, build-wasm, pack-python, pack-npm, pack-nuget, pack-gem, pack-java, pack-go, pack-rust, pack-dart, pack-php, pack-react-native, pack-swift, pack-c-headers]
     if: ${{ always() && !cancelled() }}
     runs-on: ubuntu-24.04
     permissions:
