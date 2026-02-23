@@ -1,0 +1,105 @@
+version: 2
+updates:
+  # ── GitHub Actions ──
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    labels:
+      - "dependencies"
+      - "ci"
+    commit-message:
+      prefix: "ci"
+      include: "scope"
+
+  # ── npm: WASM package ──
+  - package-ecosystem: "npm"
+    directory: "/wasm"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    labels:
+      - "dependencies"
+      - "javascript"
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+
+  # ── npm: Node.js binding ──
+  - package-ecosystem: "npm"
+    directory: "/bindings/nodejs"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    labels:
+      - "dependencies"
+      - "javascript"
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+
+  # ── npm: React Native binding ──
+  - package-ecosystem: "npm"
+    directory: "/bindings/react-native"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    labels:
+      - "dependencies"
+      - "javascript"
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+
+  # ── NuGet: C# bindings ──
+  - package-ecosystem: "nuget"
+    directory: "/bindings/csharp"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    labels:
+      - "dependencies"
+      - "csharp"
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+
+  # ── Cargo: Rust bindings ──
+  - package-ecosystem: "cargo"
+    directory: "/bindings/rust"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    labels:
+      - "dependencies"
+      - "rust"
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+
+  # ── pip: Python binding ──
+  - package-ecosystem: "pip"
+    directory: "/bindings/python"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    labels:
+      - "dependencies"
+      - "python"
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+
+  # ── Gradle: Android example ──
+  - package-ecosystem: "gradle"
+    directory: "/android/example"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    labels:
+      - "dependencies"
+      - "java"
+    commit-message:
+      prefix: "deps"
+      include: "scope"
