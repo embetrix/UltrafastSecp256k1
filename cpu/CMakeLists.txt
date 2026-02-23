@@ -651,6 +651,7 @@ if(BUILD_TESTING)
         tests/test_comprehensive.cpp
         tests/test_bip340_vectors.cpp
         tests/test_rfc6979_vectors.cpp
+        tests/test_ecc_properties.cpp
     )
     target_link_libraries(run_selftest PRIVATE ${SECP256K1_LIB_NAME})
 
@@ -732,4 +733,27 @@ if(BUILD_TESTING)
     target_link_libraries(test_rfc6979_vectors_standalone PRIVATE ${SECP256K1_LIB_NAME})
     target_compile_definitions(test_rfc6979_vectors_standalone PRIVATE STANDALONE_TEST)
     add_test(NAME rfc6979_vectors COMMAND test_rfc6979_vectors_standalone)
+
+    # Standalone ECC property-based algebraic invariant tests
+    add_executable(test_ecc_properties_standalone
+        tests/test_ecc_properties.cpp
+    )
+    target_link_libraries(test_ecc_properties_standalone PRIVATE ${SECP256K1_LIB_NAME})
+    target_compile_definitions(test_ecc_properties_standalone PRIVATE STANDALONE_TEST)
+    if(MSVC OR (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND WIN32))
+        target_link_options(test_ecc_properties_standalone PRIVATE "LINKER:/STACK:8388608")
+    endif()
+    add_test(NAME ecc_properties COMMAND test_ecc_properties_standalone)
+
+    # Standalone dudect side-channel timing test (from top-level tests/)
+    add_executable(test_ct_sidechannel_standalone
+        ${CMAKE_CURRENT_SOURCE_DIR}/../tests/test_ct_sidechannel.cpp
+    )
+    target_link_libraries(test_ct_sidechannel_standalone PRIVATE ${SECP256K1_LIB_NAME})
+    target_compile_definitions(test_ct_sidechannel_standalone PRIVATE STANDALONE_TEST)
+    if(MSVC OR (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND WIN32))
+        target_link_options(test_ct_sidechannel_standalone PRIVATE "LINKER:/STACK:8388608")
+    endif()
+    add_test(NAME ct_sidechannel COMMAND test_ct_sidechannel_standalone)
+    set_tests_properties(ct_sidechannel PROPERTIES TIMEOUT 300)
 endif()
