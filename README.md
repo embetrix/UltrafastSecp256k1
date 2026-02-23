@@ -23,6 +23,7 @@
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 [![C++20](https://img.shields.io/badge/C%2B%2B-20-blue.svg)](https://en.cppreference.com/w/cpp/20)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/shrec/UltrafastSecp256k1/badge)](https://scorecard.dev/viewer/?uri=github.com/shrec/UltrafastSecp256k1)
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/12011/badge)](https://www.bestpractices.dev/projects/12011)
 [![CodeQL](https://github.com/shrec/UltrafastSecp256k1/actions/workflows/codeql.yml/badge.svg)](https://github.com/shrec/UltrafastSecp256k1/actions/workflows/codeql.yml)
 [![Security Audit](https://github.com/shrec/UltrafastSecp256k1/actions/workflows/security-audit.yml/badge.svg)](https://github.com/shrec/UltrafastSecp256k1/actions/workflows/security-audit.yml)
 [![Clang-Tidy](https://github.com/shrec/UltrafastSecp256k1/actions/workflows/clang-tidy.yml/badge.svg)](https://github.com/shrec/UltrafastSecp256k1/actions/workflows/clang-tidy.yml)
