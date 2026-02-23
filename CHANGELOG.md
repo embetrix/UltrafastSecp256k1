@@ -5,6 +5,44 @@ All notable changes to UltrafastSecp256k1 are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.12.1] - 2026-02-23
+
+### Security
+- **bump wheel 0.45.1 → 0.46.2** — fixes CVE-2026-24049 (path traversal in `wheel unpack`)
+- **bump setuptools 75.8.0 → 78.1.1** — fixes CVE-2025-47273 (path traversal via vendored wheel)
+
+### Changed
+- **VERSION.txt** updated to 3.12.1
+
+---
+
+## [3.12.0] - 2026-02-23
+
+### Security — CI/CD Hardening & Supply-Chain Protection
+- **SHA-pinned all GitHub Actions** — every action uses immutable commit SHA instead of mutable tags
+- **Harden Runner** — `step-security/harden-runner` v2.14.2 on every CI job (egress audit)
+- **CodeQL** — upgraded to v4.32.4, job-level `security-events: write`, custom query filters
+- **OpenSSF Scorecard** — daily scorecard workflow with SARIF upload
+- **SonarCloud** — CI-based code quality analysis with build-wrapper
+- **pip hash pinning** — `--require-hashes` on all pip install steps in release/CI workflows
+- **Dependabot** — configured for GitHub Actions, pip, npm, NuGet, Cargo ecosystems
+- **Branch protection** — required reviews, dismiss stale, strict status checks on `main`
+
+### Fixed
+- **66+ code scanning alerts resolved** — unused variables, permissions, hardcoded credentials, scorecard findings
+- **StepSecurity remediation** — merged PR #25 with fixes for GHA best practices
+
+### Changed
+- **Dependabot PRs #26–#32 merged** — codeql-action v4.32.4, setup-dotnet v5.1.0, upload-artifact v6.0.0, download-artifact v7.0.0, scorecard-action v2.4.3, attest-build-provenance v3.2.0, sonarqube-scan-action v7.0.0
+- **Rust workspace Cargo.toml** — added for Dependabot Cargo ecosystem support
+
+### Added
+- **`docs/CODING_STANDARDS.md`** — comprehensive coding standards for OpenSSF CII badge
+- **`CONTRIBUTING.md` requirements section** — explicit contribution requirements with links
+- **Full AGPL-3.0 LICENSE text** — replaced summary with standard text for GitHub license detection
+
+---
+
 ## [3.11.0] - 2026-02-23
 
 ### Performance — Effective-Affine & RISC-V Optimization
