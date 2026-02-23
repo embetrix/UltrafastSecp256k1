@@ -40,7 +40,7 @@ jobs:
       - name: Install SonarCloud build-wrapper
         uses: SonarSource/sonarqube-scan-action/install-build-wrapper@a31c9398be7ace6bbfaf30c0bd5d415f843d45e9 # v7.0.0
 
-      - name: Build with build-wrapper
+      - name: Build with build-wrapper (coverage-instrumented)
         run: |
           export CC=clang-17 CXX=clang++-17
           cmake -S . -B build/sonar -G Ninja \
@@ -49,9 +49,30 @@ jobs:
             -DSECP256K1_BUILD_TESTS=ON \
             -DSECP256K1_BUILD_BENCH=OFF \
             -DSECP256K1_BUILD_EXAMPLES=OFF \
-            -DSECP256K1_USE_ASM=OFF
+            -DSECP256K1_USE_ASM=OFF \
+            -DCMAKE_C_FLAGS="-fprofile-instr-generate -fcoverage-mapping" \
+            -DCMAKE_CXX_FLAGS="-fprofile-instr-generate -fcoverage-mapping"
           build-wrapper-linux-x86-64 --out-dir ${{ env.BUILD_WRAPPER_OUT_DIR }} \
             cmake --build build/sonar -j$(nproc)
+
+      - name: Run tests (generate coverage data)
+        run: |
+          ctest --test-dir build/sonar --output-on-failure -j$(nproc) -E ct_sidechannel
+        env:
+          LLVM_PROFILE_FILE: "build/sonar/%p.profraw"
+
+      - name: Collect coverage (llvm-cov)
+        run: |
+          llvm-profdata-17 merge -sparse build/sonar/*.profraw -o build/sonar/merged.profdata
+          # Find all test executables for coverage binary list
+          BINS=$(find build/sonar -type f -executable ! -name '*.o' ! -path '*/CMakeFiles/*' | head -20)
+          FIRST_BIN=$(echo "$BINS" | head -1)
+          OBJECT_ARGS=$(echo "$BINS" | tail -n +2 | sed 's/^/-object /')
+          llvm-cov-17 show \
+            "$FIRST_BIN" $OBJECT_ARGS \
+            -instr-profile=build/sonar/merged.profdata \
+            --show-line-counts-or-regions \
+            > build/sonar/llvm-cov-report.txt 2>/dev/null || true
 
       - name: Run SonarCloud scan
         uses: SonarSource/sonarqube-scan-action@a31c9398be7ace6bbfaf30c0bd5d415f843d45e9 # v7.0.0
