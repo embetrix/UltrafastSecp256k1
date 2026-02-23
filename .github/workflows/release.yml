@@ -238,7 +238,7 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Setup Android NDK
-        uses: nttld/setup-ndk@2817442ee7c3346c1eb7d2ec60263c93206ba14f # v1
+        uses: nttld/setup-ndk@ed92fe6cadad69be94a966a7ee3271275e62f779 # v1
         id: ndk
         with:
           ndk-version: r27c
@@ -1480,7 +1480,7 @@ jobs:
           cat SHA256SUMS.txt
 
       - name: Attest build provenance
-        uses: actions/attest-build-provenance@96b4a1ef7235a096b17240c259729fdd70c83d45 # v2
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
         with:
           subject-path: |
             dist/**/*.tar.gz
