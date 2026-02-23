@@ -198,11 +198,11 @@ The `ct::` namespace provides constant-time operations for secret-key material �
 
 | Operation | Fast | CT | Overhead |
 |-----------|------:|------:|--------:|
-| Field Mul | 15 ns | 33 ns | 2.20× |
-| Field Inverse | 3.0 μs | 7.7 μs | 2.57× |
-| Complete Addition | — | 290 ns | — |
-| Scalar Mul (k×P) | 5.6 μs | 20.2 μs | 3.61× |
-| Generator Mul (k×G) | 5.5 μs | 9.8 μs | 1.78× |
+| Field Mul | 17 ns | 23 ns | 1.08× |
+| Field Inverse | 0.8 μs | 1.7 μs | 2.05× |
+| Complete Addition | — | 276 ns | — |
+| Scalar Mul (k×P) | 23.6 μs | 26.6 μs | 1.13× |
+| Generator Mul (k×G) | 5.3 μs | 9.9 μs | 1.86× |
 
 **CT layer provides:** `ct::field_mul`, `ct::field_inv`, `ct::scalar_mul`, `ct::point_add_complete`, `ct::point_dbl`
 
@@ -219,13 +219,13 @@ See [THREAT_MODEL.md](THREAT_MODEL.md) for a full layer-by-layer risk assessment
 
 | Operation | x86-64 (Clang 21, AVX2) | ARM64 (Cortex-A76) | RISC-V (Milk-V Mars) |
 |-----------|-------------------------:|--------------------:|---------------------:|
-| Field Mul | 17 ns | 85 ns | 173 ns |
-| Field Square | 13 ns | 66 ns | 160 ns |
-| Field Add | 1 ns | 18 ns | 38 ns |
-| Field Inverse | 1 μs | 2.6 μs | 17 μs |
-| Point Add | 172 ns | 9,329 ns | 3 μs |
-| Generator Mul (k×G) | 7 μs | 7.6 μs | 37 μs |
-| Scalar Mul (k×P) | 24 μs | 77.6 μs | 621 μs |
+| Field Mul | 17 ns | 74 ns | 95 ns |
+| Field Square | 14 ns | 50 ns | 70 ns |
+| Field Add | 1 ns | 8 ns | 11 ns |
+| Field Inverse | 1 μs | 2 μs | 4 μs |
+| Point Add | 159 ns | 992 ns | 1 μs |
+| Generator Mul (k×G) | 5 μs | 14 μs | 33 μs |
+| Scalar Mul (k×P) | 25 μs | 131 μs | 154 μs |
 
 ### GPU: CUDA vs OpenCL vs Metal
 
@@ -248,16 +248,6 @@ See [THREAT_MODEL.md](THREAT_MODEL.md) for a full layer-by-layer risk assessment
 | **CT** Scalar × G | 15,527 μs | — | — |
 | **CT** Generator × k | 4,951 μs | — | — |
 
-### ESP32-S3: UltrafastSecp256k1 vs libsecp256k1 (bitcoin-core v0.7.2)
-
-| Operation | UltrafastSecp256k1 | libsecp256k1 | Speedup |
-|-----------|-------------------:|-------------:|--------:|
-| Generator × k (CT) | **4,951 μs** | 8,209 μs | **1.66×** |
-| ECDSA Sign | — | 10,414 μs | — |
-| ECDSA Verify | — | 26,055 μs | — |
-
-*libsecp256k1 compiled with COMB 11×6 tables (22KB) optimized for ESP32 memory constraints.*
-
 ### Field Representation: 5×52 vs 4×64
 
 | Operation | 4×64 | 5×52 | Speedup |
@@ -277,10 +267,10 @@ For full benchmark results, see [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
 
 UltrafastSecp256k1 runs on resource-constrained microcontrollers with **portable C++ (no `__int128`, no assembly required)**:
 
-- **ESP32-S3** (Xtensa LX7 @ 240 MHz): Fast scalar × G in 5.2 ms, **CT generator × k in 4.9 ms** — 1.66× faster than libsecp256k1
+- **ESP32-S3** (Xtensa LX7 @ 240 MHz): Fast scalar × G in 5.2 ms, **CT generator × k in 4.9 ms**
 - **ESP32-PICO-D4** (Xtensa LX6 @ 240 MHz): Scalar × G in 6.2 ms, CT layer available (44.8 ms CT)
 - **STM32F103** (ARM Cortex-M3 @ 72 MHz): Scalar × G in 38 ms with ARM inline assembly (UMULL/ADDS/ADCS)
-- **Android ARM64** (Cortex-A55/A76 @ 2.4 GHz): Scalar × G in 7.6 μs with MUL/UMULH assembly
+- **Android ARM64** (RK3588, Cortex-A76 @ 2.256 GHz): Scalar × G in 14 μs, Scalar × P in 131 μs, ECDSA Sign 30 μs
 
 All 37 library tests pass on every embedded target. See [examples/esp32_test/](examples/esp32_test/) and [examples/stm32_test/](examples/stm32_test/).
 
@@ -788,7 +778,13 @@ Extra gratitude to [@0xbitcoiner](https://stacker.news/0xbitcoiner) for the init
 
 ---
 
-## Support the Project
+## ⚡ Support the Project
+
+If you find **UltrafastSecp256k1** useful, consider supporting its development!
+
+[![Donate with Bitcoin Lightning](https://img.shields.io/badge/Donate%20with-Lightning-yellow?style=for-the-badge&logo=bitcoin)](lightning:shrec@stacker.news)
+
+**Lightning Address:** `shrec@stacker.news`
 
 [![Sponsor](https://img.shields.io/badge/Sponsor-GitHub%20Sponsors-ea4aaa.svg?logo=github)](https://github.com/sponsors/shrec)
 [![PayPal](https://img.shields.io/badge/PayPal-Donate-blue.svg?logo=paypal)](https://paypal.me/IChkheidze)

@@ -9,9 +9,9 @@ Benchmark results for UltrafastSecp256k1 across all supported platforms.
 | Platform | Field Mul | Generator Mul | Scalar Mul |
 |----------|-----------|---------------|------------|
 | x86-64 (i5, AVX2) | 33 ns | 5 μs | 110 μs |
-| x86-64 (Clang 21, Win) | 44 ns (4×64) / 23 ns (5×52) | 8 μs | 42 μs |
-| RISC-V 64 (RVV) | 173 ns | 37 μs | 621 μs |
-| ARM64 (RK3588) | 85 ns | 7.6 μs | 77.6 μs |
+| x86-64 (Clang 21, Win) | 17 ns (5×52) | 5 μs | 25 μs |
+| RISC-V 64 (SiFive U74, LTO) | 95 ns | 33 μs | 154 μs |
+| ARM64 (RK3588, A76) | 74 ns | 14 μs | 131 μs |
 | ESP32-S3 (LX7, 240 MHz) | 7,458 ns | 2,483 μs | — |
 | ESP32 (LX6, 240 MHz) | 6,993 ns | 6,203 μs | — |
 | STM32F103 (CM3, 72 MHz) | 15,331 ns | 37,982 μs | — |
@@ -55,52 +55,58 @@ Benchmark results for UltrafastSecp256k1 across all supported platforms.
 
 | Operation | Time | Notes |
 |-----------|------|-------|
-| Field Mul (4×64) | 44 ns | Portable representation |
-| Field Mul (5×52) | 23 ns | `__int128` lazy reduction |
-| Field Square (4×64) | 33 ns | |
+| Field Mul (5×52) | 17 ns | `__int128` lazy reduction |
 | Field Square (5×52) | 14 ns | |
-| Field Add | 9 ns | |
-| Field Sub | 10 ns | |
-| Field Inverse | 5 μs | Fermat's little theorem |
-| Point Add | 821 ns | Jacobian coordinates |
-| Point Double | 380 ns | |
-| Point Scalar Mul (k×P) | 42 μs | GLV + 5×52 + Shamir |
-| Generator Mul (k×G) | 8 μs | Precomputed tables |
-| Batch Inverse (n=100) | 166 ns/elem | Montgomery's trick |
-| Batch Inverse (n=1000) | 120 ns/elem | |
+| Field Add | 1 ns | |
+| Field Negate | 1 ns | |
+| Field Inverse | 1 μs | Fermat's little theorem |
+| Point Add | 159 ns | Jacobian coordinates |
+| Point Double | 98 ns | |
+| Point Scalar Mul (k×P) | 25 μs | GLV + 5×52 + Shamir |
+| Generator Mul (k×G) | 5 μs | Precomputed tables |
+| ECDSA Sign | 8 μs | RFC 6979 |
+| ECDSA Verify | 31 μs | Shamir + GLV |
+| Schnorr Sign (BIP-340) | 14 μs | |
+| Schnorr Verify (BIP-340) | 33 μs | |
+| Batch Inverse (n=100) | 84 ns/elem | Montgomery's trick |
+| Batch Inverse (n=1000) | 88 ns/elem | |
 
 ---
 
 ## RISC-V 64 Benchmarks
 
-**Hardware:** RISC-V 64-bit (RV64GC + V extension)  
+**Hardware:** Milk-V Mars (SiFive U74, RV64GC + Zba + Zbb)  
 **OS:** Linux  
-**Compiler:** Clang 21.1.8  
+**Compiler:** Clang 21.1.8, `-mcpu=sifive-u74 -march=rv64gc_zba_zbb`  
 **Assembly:** RISC-V native assembly  
-**SIMD:** RVV 1.0
+**LTO:** ThinLTO enabled (auto-detected)
 
 | Operation | Time | Notes |
 |-----------|------|-------|
-| Field Mul | 198 ns | Optimized carry chain |
-| Field Square | 177 ns | Dedicated squaring |
-| Field Add | 34 ns | Branchless |
-| Field Sub | 31 ns | Branchless |
-| Field Inverse | 18 μs | |
-| Point Add | 3 μs | |
-| Point Double | 1 μs | |
-| Point Scalar Mul | 672 μs | GLV + wNAF |
-| Generator Mul | 40 μs | Precomputed tables |
-| Batch Inverse (n=100) | 765 ns/elem | |
-| Batch Inverse (n=1000) | 615 ns/elem | |
+| Field Mul | 95 ns | Optimized carry chain |
+| Field Square | 70 ns | Dedicated squaring |
+| Field Add | 11 ns | Branchless |
+| Field Sub | 11 ns | Branchless |
+| Field Negate | 8 ns | Branchless |
+| Field Inverse | 4 μs | Fermat's little theorem |
+| Point Add | 1 μs | Jacobian coordinates |
+| Point Double | 595 ns | |
+| Point Scalar Mul (k×P) | 154 μs | GLV + wNAF |
+| Generator Mul (k×G) | 33 μs | Precomputed tables |
+| ECDSA Sign | 67 μs | RFC 6979 |
+| ECDSA Verify | 186 μs | Shamir + GLV |
+| Schnorr Sign (BIP-340) | 86 μs | |
+| Schnorr Verify (BIP-340) | 216 μs | |
 
-### RISC-V Optimization Gains
+### RISC-V Optimization Gains (vs generic RV64GC build)
 
 | Optimization | Speedup | Applied To |
 |--------------|---------|------------|
+| `-mcpu=sifive-u74` targeting | 1.3× | All operations |
+| ThinLTO (cross-TU inlining) | 1.1× | Point/scalar ops |
 | Native assembly | 2-3× | Field mul/square |
 | Branchless algorithms | 1.2× | Field add/sub |
 | Fast modular reduction | 1.5× | All field ops |
-| RVV vectorization | 1.1× | Batch operations |
 | Carry chain optimization | 1.3× | Multiplication |
 
 ---
@@ -243,27 +249,31 @@ Benchmark results for UltrafastSecp256k1 across all supported platforms.
 
 ## Android ARM64 Benchmarks
 
-**Hardware:** RK3588 (Cortex-A55/A76 @ 2.4 GHz)  
+**Hardware:** RK3588 (Cortex-A76 @ 2.256 GHz, pinned to big cores)  
 **OS:** Android  
-**Compiler:** NDK r27, Clang 18  
-**Assembly:** ARM64 inline (MUL/UMULH)
+**Compiler:** NDK r26, Clang 17.0.2  
+**Assembly:** ARM64 inline (MUL/UMULH)  
+**Field:** 10×26 (optimal for ARM64)
 
 | Operation | Time | Notes |
 |-----------|------|-------|
-| Field Mul | 85 ns | ARM64 MUL/UMULH |
-| Field Square | 66 ns | |
-| Field Add | 18 ns | |
-| Field Sub | 16 ns | |
-| Field Inverse | 2,621 ns | Fermat's theorem |
-| Scalar Mul | 105 ns | |
-| Point Add | 9,329 ns | |
-| Point Double | 8,711 ns | |
-| Fast Scalar × G | 7.6 μs | Precomputed tables |
-| Fast Scalar × P | 77.6 μs | Non-generator |
-| CT Scalar × G | 545 μs | Constant-time |
-| CT ECDH | 545 μs | Full CT |
+| Field Mul | 74 ns | ARM64 MUL/UMULH, 10×26 |
+| Field Square | 50 ns | |
+| Field Add | 8 ns | |
+| Field Negate | 18 ns | |
+| Field Inverse | 2 μs | Fermat's theorem |
+| Point Add | 992 ns | Jacobian coordinates |
+| Point Double | 548 ns | |
+| Generator Mul (k×G) | 14 μs | Precomputed tables |
+| Scalar Mul (k×P) | 131 μs | GLV + wNAF |
+| ECDSA Sign | 30 μs | RFC 6979 |
+| ECDSA Verify | 153 μs | Shamir + GLV |
+| Schnorr Sign (BIP-340) | 38 μs | |
+| Schnorr Verify (BIP-340) | 173 μs | |
+| Batch Inverse (n=100) | 265 ns/elem | Montgomery's trick |
+| Batch Inverse (n=1000) | 240 ns/elem | |
 
-ARM64 inline assembly provides **~5× speedup** over portable C++.
+ARM64 10×26 representation with MUL/UMULH assembly provides optimal field arithmetic performance.
 
 ---
 
