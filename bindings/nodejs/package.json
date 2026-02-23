@@ -16,8 +16,8 @@
     "test": "node test/test.js"
   },
   "dependencies": {
-    "node-addon-api": "^7.0.0",
-    "node-gyp": "^10.0.0"
+    "node-addon-api": "^8.5.0",
+    "node-gyp": "^12.2.0"
   },
   "devDependencies": {},
   "keywords": [

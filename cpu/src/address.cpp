@@ -301,7 +301,7 @@ static bool convert_bits(std::vector<std::uint8_t>& out,
     int maxv = (1 << tobits) - 1;
     for (std::size_t i = 0; i < len; ++i) {
         int value = data[i];
-        if (value < 0 || value >> frombits) return false;
+        if (value >> frombits) return false;
         acc = (acc << frombits) | value;
         bits += frombits;
         while (bits >= tobits) {
@@ -492,7 +492,7 @@ WIFDecodeResult wif_decode(const std::string& wif) {
 // ===============================================================================
 
 // Helper: lift_x with even y (try-and-increment)
-static Point lift_x_even(const FieldElement& x_in) {
+[[maybe_unused]] static Point lift_x_even(const FieldElement& x_in) {
     FieldElement x = x_in;
     for (int attempt = 0; attempt < 256; ++attempt) {
         FieldElement x2 = x * x;

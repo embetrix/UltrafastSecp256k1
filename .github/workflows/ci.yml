@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [main, dev]
 
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -21,7 +24,7 @@ jobs:
         build_type: [Release, Debug]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Install compiler
         run: |
@@ -57,7 +60,7 @@ jobs:
     runs-on: ubuntu-24.04
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Install cross toolchain
         run: |
@@ -101,7 +104,7 @@ jobs:
 
     name: "Sanitizers (${{ matrix.label }})"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Install Clang 17
         run: |
@@ -132,7 +135,7 @@ jobs:
         build_type: [Release]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Configure (MSVC)
         run: |
@@ -157,7 +160,7 @@ jobs:
         build_type: [Release]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Configure
         run: |
@@ -194,7 +197,7 @@ jobs:
         platform: [OS, SIMULATOR]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Configure (iOS ${{ matrix.platform }})
         run: |
@@ -220,7 +223,7 @@ jobs:
     needs: [ios]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Build XCFramework
         run: |
@@ -228,7 +231,7 @@ jobs:
           ./scripts/build_xcframework.sh
 
       - name: Upload XCFramework
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: UltrafastSecp256k1.xcframework
           path: build-xcframework/output/UltrafastSecp256k1.xcframework
@@ -244,7 +247,7 @@ jobs:
       image: rocm/dev-ubuntu-24.04:6.3-complete
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Install build tools
         run: |
@@ -271,10 +274,10 @@ jobs:
     runs-on: ubuntu-24.04
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Setup Emscripten
-        uses: mymindstorm/setup-emsdk@v14
+        uses: mymindstorm/setup-emsdk@6ab9eb1bda2574c4ddb79809fc9247783eaf9021 # v14
         with:
           version: 3.1.51
 
@@ -291,7 +294,7 @@ jobs:
           echo "WASM size: $(du -h build-wasm/dist/secp256k1_wasm.wasm | cut -f1)"
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6
         with:
           node-version: 20
 
@@ -301,7 +304,7 @@ jobs:
           node ../../wasm/bench_wasm.mjs
 
       - name: Upload WASM artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: secp256k1-wasm
           path: |
@@ -322,10 +325,10 @@ jobs:
 
     name: "android (${{ matrix.abi }})"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Setup Android NDK
-        uses: nttld/setup-ndk@v1
+        uses: nttld/setup-ndk@2817442ee7c3346c1eb7d2ec60263c93206ba14f # v1
         id: ndk
         with:
           ndk-version: r27c
@@ -355,7 +358,7 @@ jobs:
     if: github.event_name == 'push'
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Install tools
         run: |
@@ -392,7 +395,7 @@ jobs:
           lcov --list coverage.info 2>/dev/null || echo "Coverage data collected"
 
       - name: Upload to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de # v5
         with:
           files: coverage.info
           flags: cpu

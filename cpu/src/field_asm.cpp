@@ -59,7 +59,7 @@
 namespace secp256k1::fast {
 
 // Helper to parse boolean-like environment variables
-static inline bool env_truthy(const char* v) {
+[[maybe_unused]] static inline bool env_truthy(const char* v) {
     if (!v) return false;
     char c = v[0];
     return (c == '1' || c == 'T' || c == 't' || c == 'Y' || c == 'y');

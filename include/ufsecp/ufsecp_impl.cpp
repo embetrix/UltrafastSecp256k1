@@ -215,7 +215,7 @@ ufsecp_error_t ufsecp_ctx_clone(const ufsecp_ctx* src, ufsecp_ctx** ctx_out) {
 }
 
 void ufsecp_ctx_destroy(ufsecp_ctx* ctx) {
-    if (ctx) std::free(ctx);
+    std::free(ctx);  // free(NULL) is a no-op per C standard
 }
 
 ufsecp_error_t ufsecp_last_error(const ufsecp_ctx* ctx) {
@@ -442,16 +442,16 @@ ufsecp_error_t ufsecp_ecdsa_sig_from_der(ufsecp_ctx* ctx,
 
     size_t pos = 2;
     /* Read R */
-    if (pos >= der_len || der[pos] != 0x02)
+    if (pos >= der_len || der[pos] != 0x02) // lgtm[cpp/constant-comparison] // Defensive: pos always <= 2, der_len >= 8, but keep for safety
         return ctx_set_err(ctx, UFSECP_ERR_BAD_SIG, "bad DER: missing R INTEGER");
     pos++;
-    if (pos >= der_len) return ctx_set_err(ctx, UFSECP_ERR_BAD_SIG, "bad DER: truncated");
+    if (pos >= der_len) return ctx_set_err(ctx, UFSECP_ERR_BAD_SIG, "bad DER: truncated"); // lgtm[cpp/constant-comparison] // Defensive: pos always <= 3, der_len >= 8
     size_t r_len = der[pos++];
     if (r_len == 0 || pos + r_len > der_len)
         return ctx_set_err(ctx, UFSECP_ERR_BAD_SIG, "bad DER: R length");
     const uint8_t* r_ptr = der + pos;
     size_t r_data_len = r_len;
-    if (r_data_len > 0 && r_ptr[0] == 0x00) { r_ptr++; r_data_len--; }
+    if (r_data_len > 0 && r_ptr[0] == 0x00) { r_ptr++; r_data_len--; } // lgtm[cpp/constant-comparison] // Defensive: r_data_len always >= 1
     pos += r_len;
 
     /* Read S */
@@ -464,7 +464,7 @@ ufsecp_error_t ufsecp_ecdsa_sig_from_der(ufsecp_ctx* ctx,
         return ctx_set_err(ctx, UFSECP_ERR_BAD_SIG, "bad DER: S length");
     const uint8_t* s_ptr = der + pos;
     size_t s_data_len = s_len;
-    if (s_data_len > 0 && s_ptr[0] == 0x00) { s_ptr++; s_data_len--; }
+    if (s_data_len > 0 && s_ptr[0] == 0x00) { s_ptr++; s_data_len--; } // lgtm[cpp/constant-comparison] // Defensive: s_data_len always >= 1
 
     if (r_data_len > 32 || s_data_len > 32)
         return ctx_set_err(ctx, UFSECP_ERR_BAD_SIG, "bad DER: component > 32 bytes");

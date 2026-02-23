@@ -27,7 +27,7 @@ static void check(bool cond, const char* name) {
     }
 }
 
-static void print_hex(const std::uint8_t* data, std::size_t len) {
+[[maybe_unused]] static void print_hex(const std::uint8_t* data, std::size_t len) {
     for (std::size_t i = 0; i < len; ++i)
         std::printf("%02x", data[i]);
 }

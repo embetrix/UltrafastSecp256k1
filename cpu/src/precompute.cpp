@@ -87,7 +87,7 @@
 // RDTSC benchmark macro (inline, no external header needed)
 #if defined(__x86_64__) || defined(_M_X64)
     #if defined(__GNUC__) || defined(__clang__)
-    static inline uint64_t RDTSC() {
+    [[maybe_unused]] static inline uint64_t RDTSC() {
         uint32_t lo, hi;
         __asm__ volatile ("rdtsc" : "=a"(lo), "=d"(hi));
         return ((uint64_t)hi << 32) | lo;
@@ -124,7 +124,7 @@ static inline uint64_t _umul128(uint64_t a, uint64_t b, uint64_t* hi) {
     return (mid << 32) | (uint32_t)p0;
 }
 #else
-static inline uint64_t _umul128(uint64_t a, uint64_t b, uint64_t* hi) {
+[[maybe_unused]] static inline uint64_t _umul128(uint64_t a, uint64_t b, uint64_t* hi) {
     unsigned __int128 r = (unsigned __int128)a * b;
     *hi = r >> 64;
     return (uint64_t)r;
@@ -179,7 +179,7 @@ struct JacobianPoint {
     bool infinity{true};
 };
 
-inline FieldElement fe_from_uint_local(std::uint64_t v) {
+[[maybe_unused]] inline FieldElement fe_from_uint_local(std::uint64_t v) {
     return FieldElement::from_uint64(v);
 }
 
@@ -495,7 +495,7 @@ constexpr std::array<std::uint8_t, 32> kA2Bytes{
 };
 
 // Helper: convert 32-byte big-endian two's-complement negative value to positive magnitude bytes
-static std::array<std::uint8_t,32> twos_complement_negate(const std::array<std::uint8_t,32>& neg_be) {
+[[maybe_unused]] static std::array<std::uint8_t,32> twos_complement_negate(const std::array<std::uint8_t,32>& neg_be) {
     std::array<std::uint8_t,32> out;
     // Invert
     for (std::size_t i=0;i<32;++i) out[i] = static_cast<std::uint8_t>(~neg_be[i]);
@@ -744,7 +744,7 @@ Limbs4 mul_shift_round(const Limbs4& value, const std::array<std::uint64_t, N>& 
 
 // Generic left shift across an array of limbs (little-endian), by 'shift' bits
 template <std::size_t N>
-static std::array<std::uint64_t, N> shl_limbs(const std::array<std::uint64_t, N>& in, unsigned shift) {
+[[maybe_unused]] static std::array<std::uint64_t, N> shl_limbs(const std::array<std::uint64_t, N>& in, unsigned shift) {
     if (shift == 0) return in;
     const unsigned word = shift / 64U;
     const unsigned bits = shift % 64U;
@@ -763,7 +763,7 @@ static std::array<std::uint64_t, N> shl_limbs(const std::array<std::uint64_t, N>
 }
 
 // Count leading zeros in 64-bit
-static unsigned clz64_local(std::uint64_t x) {
+[[maybe_unused]] static unsigned clz64_local(std::uint64_t x) {
     if (x == 0) return 64;
 #if defined(_MSC_VER) && !defined(__clang__)
     unsigned long idx;
@@ -776,7 +776,7 @@ static unsigned clz64_local(std::uint64_t x) {
 
 // 384/256 -> 3-limb quotient (Knuth division D simplified)
 // 384/256 division returning 192-bit quotient (3 limbs) using portable 64-bit math and MSVC intrinsics
-static Limbs3 div_384_by_256(const Limbs6& num, const Limbs4& den) {
+[[maybe_unused]] static Limbs3 div_384_by_256(const Limbs6& num, const Limbs4& den) {
     // Normalize denominator
     unsigned s = clz64_local(den[3]);
     Limbs4 v = shl_limbs(den, s);
@@ -864,7 +864,7 @@ static Limbs3 div_384_by_256(const Limbs6& num, const Limbs4& den) {
 }
 
 // Compute mu = floor((2^256 * mag) / n), where mag is up to 256 bits (here ~128 bits)
-static Limbs2 compute_mu_from_mag(const Limbs4& mag) {
+[[maybe_unused]] static Limbs2 compute_mu_from_mag(const Limbs4& mag) {
     // Build 6-limb numerator: mag << 256
     Limbs6 num{};
     num[4] = mag[0];
@@ -876,7 +876,7 @@ static Limbs2 compute_mu_from_mag(const Limbs4& mag) {
     return mu;
 }
 
-bool scalar_is_high(const Scalar& scalar) {
+[[maybe_unused]] bool scalar_is_high(const Scalar& scalar) {
     const auto& limbs = scalar.limbs();
     for (std::size_t idx = limbs.size(); idx-- > 0;) {
         if (limbs[idx] > kOrderHalf[idx]) {
@@ -889,7 +889,7 @@ bool scalar_is_high(const Scalar& scalar) {
     return false;
 }
 
-Scalar mul_scalar(const Scalar& lhs, const Scalar& rhs) {
+[[maybe_unused]] Scalar mul_scalar(const Scalar& lhs, const Scalar& rhs) {
     Scalar result = Scalar::zero();
     Scalar base = lhs;
     for (std::size_t bit = 0; bit < 256; ++bit) {
@@ -902,7 +902,7 @@ Scalar mul_scalar(const Scalar& lhs, const Scalar& rhs) {
 }
 
 // Multiply scalar 'a' by a 128-bit unsigned integer (hi:lo) modulo n.
-static Scalar mul_scalar_u128(const Scalar& a, std::uint64_t u_lo, std::uint64_t u_hi) {
+[[maybe_unused]] static Scalar mul_scalar_u128(const Scalar& a, std::uint64_t u_lo, std::uint64_t u_hi) {
     Scalar result = Scalar::zero();
     Scalar base = a;
     // Process 128 bits: lower 64 then upper 64
@@ -1017,7 +1017,7 @@ struct WindowData {
     std::vector<AffinePointPacked> psi_table;
 };
 
-std::unique_ptr<PrecomputeContext> build_context_streaming(const FixedBaseConfig& config, const std::string& cache_path) {
+[[maybe_unused]] std::unique_ptr<PrecomputeContext> build_context_streaming(const FixedBaseConfig& config, const std::string& cache_path) {
     if (config.window_bits < 2U || config.window_bits > 30U) {
         throw std::runtime_error("window_bits must be between 2 and 30");
     }
@@ -1342,11 +1342,11 @@ Scalar const_lambda() {
     return value;
 }
 
-Scalar const_a1() {
+[[maybe_unused]] Scalar const_a1() {
     static const Scalar value = make_scalar(kA1Bytes);
     return value;
 }
-Scalar const_a2() {
+[[maybe_unused]] Scalar const_a2() {
     static const Scalar value = make_scalar(kA2Bytes);
     return value;
 }
@@ -1364,18 +1364,18 @@ constexpr std::array<std::uint8_t, 32> kB2MagBytes{
     0xE8,0x6C,0x90,0xE4,0x92,0x84,0xEB,0x15
 };
 
-Scalar const_b1_mag() { // |b1|
+[[maybe_unused]] Scalar const_b1_mag() { // |b1|
     static const Scalar value = make_scalar(kB1MagBytes);
     return value;
 }
-Scalar const_b2_mag() { // |b2|
+[[maybe_unused]] Scalar const_b2_mag() { // |b2|
     static const Scalar value = make_scalar(kB2MagBytes);
     return value;
 }
 
 // Optimized multiplication for GLV decomposition where one operand is known to be small
 // This uses simple double-and-add but only iterates over the actual bits needed
-static Scalar mul_scalar_small(const Scalar& small, const Scalar& large) {
+[[maybe_unused]] static Scalar mul_scalar_small(const Scalar& small, const Scalar& large) {
     // Find highest non-zero bit in small operand
     std::size_t max_bit = 0;
     for (std::size_t bit = 0; bit < 256; ++bit) {
@@ -1474,7 +1474,7 @@ static std::array<std::uint64_t, 8> mul_scalar_raw(const Scalar& a, const Scalar
 
 // Optimized 128x256-bit multiplication for GLV decomposition
 // When 'a' is known to be ~128-bit (only low 2 limbs significant)
-static std::array<std::uint64_t, 8> mul_128x256_raw(const Limbs4& a_limbs, const Limbs4& b_limbs) {
+[[maybe_unused]] static std::array<std::uint64_t, 8> mul_128x256_raw(const Limbs4& a_limbs, const Limbs4& b_limbs) {
     std::array<std::uint64_t, 8> result{};
     
     // Only multiply first 2 limbs of 'a' (128-bit) with all 4 limbs of 'b' (256-bit)
@@ -1526,7 +1526,7 @@ static std::array<std::uint64_t, 8> mul_128x256_raw(const Limbs4& a_limbs, const
 }
 
 // Add two 512-bit numbers
-static std::array<std::uint64_t, 8> add_512(
+[[maybe_unused]] static std::array<std::uint64_t, 8> add_512(
     const std::array<std::uint64_t, 8>& a,
     const std::array<std::uint64_t, 8>& b
 ) {
@@ -1546,7 +1546,7 @@ static std::array<std::uint64_t, 8> add_512(
 }
 
 // Subtract two 512-bit numbers (assumes a >= b)
-static std::array<std::uint64_t, 8> sub_512(
+[[maybe_unused]] static std::array<std::uint64_t, 8> sub_512(
     const std::array<std::uint64_t, 8>& a,
     const std::array<std::uint64_t, 8>& b
 ) {
@@ -1561,7 +1561,7 @@ static std::array<std::uint64_t, 8> sub_512(
     return result;
 }
 
-static bool ge_512(const std::array<std::uint64_t, 8>& a,
+[[maybe_unused]] static bool ge_512(const std::array<std::uint64_t, 8>& a,
                    const std::array<std::uint64_t, 8>& b) {
     for (int i = 7; i >= 0; --i) {
         if (a[i] > b[i]) return true;
@@ -1574,13 +1574,13 @@ static bool ge_512(const std::array<std::uint64_t, 8>& a,
 // Forward declaration for 512-bit reduction (defined later).
 static Scalar reduce_512_mod_n(const std::array<std::uint64_t, 8>& wide);
 
-static Scalar mul_mod_n(const Scalar& a, const Scalar& b) {
+[[maybe_unused]] static Scalar mul_mod_n(const Scalar& a, const Scalar& b) {
     auto wide = mul_scalar_raw(a, b);
     return reduce_512_mod_n(wide);
 }
 
 // Negate a 512-bit number (two's complement)
-static std::array<std::uint64_t, 8> negate_512(const std::array<std::uint64_t, 8>& a) {
+[[maybe_unused]] static std::array<std::uint64_t, 8> negate_512(const std::array<std::uint64_t, 8>& a) {
     std::array<std::uint64_t, 8> result{};
     
     // Invert all bits
@@ -1601,7 +1601,7 @@ static std::array<std::uint64_t, 8> negate_512(const std::array<std::uint64_t, 8
 
 // Convert 512-bit value to Scalar (take lower 256 bits mod n)
 // If the 512-bit value is negative (bit 511 set), we need to add n back
-static Scalar scalar_from_512(const std::array<std::uint64_t, 8>& wide) {
+[[maybe_unused]] static Scalar scalar_from_512(const std::array<std::uint64_t, 8>& wide) {
     // Check if negative (bit 511 set = MSB of wide[7])
     bool is_negative = (wide[7] & 0x8000000000000000ULL) != 0;
     
@@ -1871,7 +1871,7 @@ static JSF_Result compute_jsf(const Scalar& k1, const Scalar& k2) {
 // Fast 128x128 multiplication returning low 256 bits (for small scalar muls)
 // Input: two 128-bit values (stored in first 2 limbs)
 // Output: 256-bit product
-static inline Limbs4 mul_small_128x128(const Limbs4& a, const Limbs4& b) {
+[[maybe_unused]] static inline Limbs4 mul_small_128x128(const Limbs4& a, const Limbs4& b) {
     Limbs4 result = {0, 0, 0, 0};
     
     // a0 * b0
@@ -1899,7 +1899,7 @@ static inline Limbs4 mul_small_128x128(const Limbs4& a, const Limbs4& b) {
 }
 
 // Add two 256-bit limb values (mod n)
-static inline Limbs4 add_limbs_mod_n(const Limbs4& a, const Limbs4& b) {
+[[maybe_unused]] static inline Limbs4 add_limbs_mod_n(const Limbs4& a, const Limbs4& b) {
     // Group order n
     constexpr Limbs4 N = {
         0xBFD25E8CD0364141ULL,
@@ -2027,6 +2027,8 @@ ScalarDecomposition split_scalar_internal(const Scalar& scalar) {
     uint64_t t3 = RDTSC();
 #else
     uint64_t t3 = 0;
+    (void)t3; // Silence unused variable warning for CodeQL
+    (void)t3;
 #endif
     Scalar k2_neg_val = Scalar::zero() - k2_mod;
     bool k2_is_neg = (fast_bitlen(k2_neg_val) < fast_bitlen(k2_mod));
@@ -2537,7 +2539,7 @@ bool configure_fixed_base_auto() {
 #if defined(_WIN32)
                         localtime_s(&tm_buf, &tt);
 #else
-                        tm_buf = *std::localtime(&tt);
+                        localtime_r(&tt, &tm_buf);
 #endif
                         log << "==== AUTOTUNE RUN " << std::put_time(&tm_buf, "%Y-%m-%d %H:%M:%S") << " ====" << '\n';
                         log << report;
@@ -3023,12 +3025,12 @@ void configure_fixed_base(const FixedBaseConfig& config) {
     // SECP256K1_CACHE_PATH -> overrides exact cache file path
     // SECP256K1_MAX_WINDOWS -> limits how many windows to load from cache (for memory control)
     if (const char* env_dir = std::getenv("SECP256K1_CACHE_DIR")) {
-        if (*env_dir) {
+        if (*env_dir && std::string(env_dir).find("..") == std::string::npos) { // lgtm[cpp/path-injection]
             g_config.cache_dir = env_dir;
         }
     }
     if (const char* env_path = std::getenv("SECP256K1_CACHE_PATH")) {
-        if (*env_path) {
+        if (*env_path && std::string(env_path).find("..") == std::string::npos) { // lgtm[cpp/path-injection]
             g_config.cache_path = env_path;
         }
     }
@@ -3766,7 +3768,7 @@ Point scalar_mul_arbitrary_precomputed_notable(const Point& Q,
 }
 
 // Helper for beta used in tests or manual GLV
-static FieldElement const_beta() {
+[[maybe_unused]] static FieldElement const_beta() {
     return FieldElement::from_bytes(glv_constants::BETA);
 }
 

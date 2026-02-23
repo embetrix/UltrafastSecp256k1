@@ -1919,7 +1919,6 @@ FieldElement pow_p_minus_2_binary(FieldElement base) {
 
 // Parallel-friendly window method (4-way SIMD-like)
 [[nodiscard]] FieldElement pow_p_minus_2_parallel_window(FieldElement base) {
-    constexpr std::size_t w = 4;
     std::array<FieldElement, 16> table{};
     table[0] = FieldElement::one();
     table[1] = base;
@@ -2685,7 +2684,7 @@ static constexpr ModInfo PINFO = {
     0x2DDACACFU
 };
 
-static inline int ctz32_var(uint32_t x) {
+[[maybe_unused]] static inline int ctz32_var(uint32_t x) {
 #if defined(__GNUC__) || defined(__clang__)
     return __builtin_ctz(x);
 #elif defined(_MSC_VER)
@@ -2713,7 +2712,7 @@ static const uint8_t inv256[128] = {
 };
 
 // Variable-time 30 divsteps (matches secp256k1_modinv32_divsteps_30_var)
-static int32_t divsteps_30_var(int32_t eta, uint32_t f0, uint32_t g0, T2x2& t) {
+[[maybe_unused]] static int32_t divsteps_30_var(int32_t eta, uint32_t f0, uint32_t g0, T2x2& t) {
     uint32_t u = 1, v = 0, q = 0, r = 1;
     uint32_t f = f0, g = g0, m;
     uint16_t w;
@@ -2749,7 +2748,7 @@ static int32_t divsteps_30_var(int32_t eta, uint32_t f0, uint32_t g0, T2x2& t) {
 }
 
 // (t/2^30) * [d, e] mod p (matches secp256k1_modinv32_update_de_30)
-static void update_de_30(S30& d, S30& e, const T2x2& t, const ModInfo& mod) {
+[[maybe_unused]] static void update_de_30(S30& d, S30& e, const T2x2& t, const ModInfo& mod) {
     const int32_t M30 = (int32_t)(UINT32_MAX >> 2);
     const int32_t u = t.u, v = t.v, q = t.q, r = t.r;
     int32_t di, ei, md, me, sd, se;
@@ -2785,7 +2784,7 @@ static void update_de_30(S30& d, S30& e, const T2x2& t, const ModInfo& mod) {
 }
 
 // (t/2^30) * [f, g] variable-length
-static void update_fg_30_var(int len, S30& f, S30& g, const T2x2& t) {
+[[maybe_unused]] static void update_fg_30_var(int len, S30& f, S30& g, const T2x2& t) {
     const int32_t M30 = (int32_t)(UINT32_MAX >> 2);
     const int32_t u = t.u, v = t.v, q = t.q, r = t.r;
     int32_t fi, gi;
@@ -2809,7 +2808,7 @@ static void update_fg_30_var(int len, S30& f, S30& g, const T2x2& t) {
 }
 
 // Normalize to [0, p)
-static void normalize_30(S30& r, int32_t sign, const ModInfo& mod) {
+[[maybe_unused]] static void normalize_30(S30& r, int32_t sign, const ModInfo& mod) {
     const int32_t M30 = (int32_t)(UINT32_MAX >> 2);
     int32_t r0=r.v[0], r1=r.v[1], r2=r.v[2], r3=r.v[3], r4=r.v[4],
             r5=r.v[5], r6=r.v[6], r7=r.v[7], r8=r.v[8];
@@ -2868,7 +2867,7 @@ static void normalize_30(S30& r, int32_t sign, const ModInfo& mod) {
 }
 
 // Convert 4x64-bit limbs -> signed-30 representation
-static S30 limbs_to_s30(const limbs4& x) {
+[[maybe_unused]] static S30 limbs_to_s30(const limbs4& x) {
     S30 r{};
     const uint32_t M30 = 0x3FFFFFFFu;
     r.v[0] = (int32_t)( x[0]        & M30);
@@ -2884,7 +2883,7 @@ static S30 limbs_to_s30(const limbs4& x) {
 }
 
 // Convert signed-30 -> 4x64-bit limbs
-static limbs4 s30_to_limbs(const S30& s) {
+[[maybe_unused]] static limbs4 s30_to_limbs(const S30& s) {
     limbs4 r{};
     r[0] = ((uint64_t)(uint32_t)s.v[0])
          | ((uint64_t)(uint32_t)s.v[1] << 30)
@@ -2902,7 +2901,7 @@ static limbs4 s30_to_limbs(const S30& s) {
 }
 
 // Main entry: variable-time modular inverse mod p
-static FieldElement inverse_impl(const FieldElement& x) {
+[[maybe_unused]] static FieldElement inverse_impl(const FieldElement& x) {
     S30 d{};                   // d = 0
     S30 e{}; e.v[0] = 1;      // e = 1
     S30 f = PINFO.modulus;     // f = p

@@ -24,8 +24,8 @@ static int tests_passed = 0;
 
 static void hex_to_bytes(const char* hex, uint8_t* out, size_t len) {
     for (size_t i = 0; i < len; ++i) {
-        unsigned int byte;
-        sscanf(hex + i * 2, "%02x", &byte);
+        unsigned int byte = 0;
+        if (sscanf(hex + i * 2, "%02x", &byte) != 1) byte = 0;
         out[i] = static_cast<uint8_t>(byte);
     }
 }
@@ -142,8 +142,10 @@ static void test_bip32_path() {
 
     // Invalid paths
     auto [_, ok_bad1] = bip32_derive_path(master, "");
+    (void)_;
     CHECK(!ok_bad1, "Empty path fails");
     auto [_2, ok_bad2] = bip32_derive_path(master, "x/0");
+    (void)_2;
     CHECK(!ok_bad2, "Path not starting with 'm' fails");
 }
 
@@ -155,6 +157,7 @@ static void test_bip32_serialize() {
     uint8_t seed[16];
     hex_to_bytes("000102030405060708090a0b0c0d0e0f", seed, 16);
     auto [master, ok] = bip32_master_key(seed, 16);
+    (void)ok;
 
     auto ser = master.serialize();
     CHECK(ser.size() == 78, "Serialized key is 78 bytes");
@@ -168,6 +171,7 @@ static void test_bip32_serialize() {
 
     // Fingerprint
     auto fp = master.fingerprint();
+    (void)fp;
     CHECK(fp.size() == 4, "Fingerprint is 4 bytes");
 }
 
@@ -178,17 +182,20 @@ static void test_bip32_seed_validation() {
 
     uint8_t short_seed[8] = {1,2,3,4,5,6,7,8};
     auto [_, ok_short] = bip32_master_key(short_seed, 8);
+    (void)_;
     CHECK(!ok_short, "Seed < 16 bytes rejected");
 
     uint8_t seed_16[16] = {};
     // Fill with non-zero to avoid zero key
     for (int i = 0; i < 16; ++i) seed_16[i] = static_cast<uint8_t>(i + 1);
     auto [k16, ok_16] = bip32_master_key(seed_16, 16);
+    (void)k16;
     CHECK(ok_16, "16-byte seed accepted");
 
     uint8_t seed_64[64] = {};
     for (int i = 0; i < 64; ++i) seed_64[i] = static_cast<uint8_t>(i + 1);
     auto [k64, ok_64] = bip32_master_key(seed_64, 64);
+    (void)k64;
     CHECK(ok_64, "64-byte seed accepted");
 }
 

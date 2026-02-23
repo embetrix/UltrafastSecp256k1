@@ -26,8 +26,8 @@ static int tests_passed = 0;
 
 static void hex_to_bytes(const char* hex, uint8_t* out, size_t len) {
     for (size_t i = 0; i < len; ++i) {
-        unsigned int byte;
-        sscanf(hex + i * 2, "%02x", &byte);
+        unsigned int byte = 0;
+        if (sscanf(hex + i * 2, "%02x", &byte) != 1) byte = 0;
         out[i] = static_cast<uint8_t>(byte);
     }
 }
@@ -115,6 +115,7 @@ static void test_nonce_gen() {
     std::array<uint8_t, 32> extra2{};
     extra2[0] = 0x43;
     auto [sec2, pub2] = musig2_nonce_gen(sk, pk, pk, msg, extra2.data());
+    (void)sec2;
     CHECK(pub_nonce.R1 != pub2.R1, "Different extra -> different nonce");
 }
 

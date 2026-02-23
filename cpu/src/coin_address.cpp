@@ -13,7 +13,7 @@ namespace secp256k1::coins {
 
 // -- Helpers ------------------------------------------------------------------
 
-static Network to_network(bool testnet) {
+[[maybe_unused]] static Network to_network(bool testnet) {
     return testnet ? Network::Testnet : Network::Mainnet;
 }
 

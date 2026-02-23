@@ -1006,7 +1006,7 @@ static Point scalar_mul_glv52(const Point& base, const Scalar& scalar) {
 // Batch inversion: Convert multiple Jacobian points to Affine using Montgomery's trick
 // Cost: 1 inversion + (3*n - 1) multiplications for n points
 // vs n inversions for individual conversion
-std::vector<AffinePoint> batch_to_affine(const std::vector<JacobianPoint>& jacobian_points) {
+[[maybe_unused]] std::vector<AffinePoint> batch_to_affine(const std::vector<JacobianPoint>& jacobian_points) {
     size_t n = jacobian_points.size();
     if (n == 0) return {};
     

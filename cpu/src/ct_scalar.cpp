@@ -51,7 +51,7 @@ static inline std::uint64_t sub256_scalar(std::uint64_t r[4],
     return borrow;
 }
 
-static inline void ct_reduce_once_n(std::uint64_t r[4]) noexcept {
+[[maybe_unused]] static inline void ct_reduce_once_n(std::uint64_t r[4]) noexcept {
     std::uint64_t tmp[4];
     std::uint64_t borrow = sub256_scalar(tmp, r, N);
     std::uint64_t mask = is_zero_mask(borrow);  // no borrow = r >= n

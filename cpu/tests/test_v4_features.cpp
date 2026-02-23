@@ -550,6 +550,7 @@ static void test_silent_payment_multiple_outputs() {
     std::vector<std::array<std::uint8_t, 32>> outputs;
     for (std::uint32_t k = 0; k < 3; ++k) {
         auto [pk, tw] = silent_payment_create_output(input_keys, sp_addr, k);
+        (void)tw;
         outputs.push_back(pk.x().to_bytes());
     }
 

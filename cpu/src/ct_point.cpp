@@ -427,12 +427,12 @@ void table_lookup_core(CTAffinePoint* out,
 
     // Load first entry (80 bytes = x.n[5] + y.n[5]) into 3 ymm registers
     // Layout: [x.n[0..3]] [x.n[4], y.n[0..2]] [y.n[3..4], padding]
-    const auto* src0 = reinterpret_cast<const __m256i*>(&table[0].x.n[0]);
-    __m256i r0 = _mm256_loadu_si256(src0);         // x.n[0..3] (32 bytes)
-    __m256i r1 = _mm256_loadu_si256(src0 + 1);     // x.n[4], y.n[0..2]
+    const auto* base0 = reinterpret_cast<const char*>(&table[0].x.n[0]);
+    __m256i r0 = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(base0));           // x.n[0..3] (32 bytes)
+    __m256i r1 = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(base0 + 32));      // x.n[4], y.n[0..2]
     // Last 16 bytes: y.n[3], y.n[4]
     // Use 128-bit load for the remaining 16 bytes to avoid reading past struct
-    __m128i r2lo = _mm_loadu_si128(reinterpret_cast<const __m128i*>(src0 + 2));
+    __m128i r2lo = _mm_loadu_si128(reinterpret_cast<const __m128i*>(base0 + 64));
     __m256i r2 = _mm256_castsi128_si256(r2lo);
 
     // CT linear scan: cmov each entry using vectorized AND/XOR
@@ -442,10 +442,10 @@ void table_lookup_core(CTAffinePoint* out,
         __m256i vmask = _mm256_set1_epi64x(static_cast<long long>(eq));
         __m128i vmask128 = _mm_set1_epi64x(static_cast<long long>(eq));
 
-        const auto* src = reinterpret_cast<const __m256i*>(&table[m].x.n[0]);
-        __m256i s0 = _mm256_loadu_si256(src);
-        __m256i s1 = _mm256_loadu_si256(src + 1);
-        __m128i s2lo = _mm_loadu_si128(reinterpret_cast<const __m128i*>(src + 2));
+        const auto* base_m = reinterpret_cast<const char*>(&table[m].x.n[0]);
+        __m256i s0 = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(base_m));
+        __m256i s1 = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(base_m + 32));
+        __m128i s2lo = _mm_loadu_si128(reinterpret_cast<const __m128i*>(base_m + 64));
         __m256i s2 = _mm256_castsi128_si256(s2lo);
 
         // r = (r ^ s) & mask ^ r  ==  mask ? s : r
@@ -459,10 +459,10 @@ void table_lookup_core(CTAffinePoint* out,
     }
 
     // Store back into out (80 bytes)
-    auto* dst = reinterpret_cast<__m256i*>(&out->x.n[0]);
-    _mm256_storeu_si256(dst, r0);
-    _mm256_storeu_si256(dst + 1, r1);
-    _mm_storeu_si128(reinterpret_cast<__m128i*>(dst + 2), _mm256_castsi256_si128(r2));
+    auto* dst_base = reinterpret_cast<char*>(&out->x.n[0]);
+    _mm256_storeu_si256(reinterpret_cast<__m256i*>(dst_base), r0);
+    _mm256_storeu_si256(reinterpret_cast<__m256i*>(dst_base + 32), r1);
+    _mm_storeu_si128(reinterpret_cast<__m128i*>(dst_base + 64), _mm256_castsi256_si128(r2));
 
     // Conditional Y-negate (sign handling) -- scalar, runs once
     FE52 neg_y = out->y;

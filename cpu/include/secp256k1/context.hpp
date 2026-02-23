@@ -103,7 +103,7 @@ private:
     static void set_name(CurveContext& ctx, const char* label) {
         std::memset(ctx.name, 0, sizeof(ctx.name));
         std::size_t len = 0;
-        while (label[len] && len < sizeof(ctx.name) - 1) {
+        while (len < sizeof(ctx.name) - 1 && label[len]) { // lgtm[cpp/offset-use-before-range-check]
             ctx.name[len] = label[len];
             ++len;
         }

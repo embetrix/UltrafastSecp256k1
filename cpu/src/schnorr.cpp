@@ -25,7 +25,7 @@ using FE52 = fast::FieldElement52;
 // has buf_len_==0 and state_ captures all tag-dependent work.
 // Saves 2 SHA256 block compressions per tagged_hash call.
 
-static SHA256 make_tag_midstate(const char* tag) {
+[[maybe_unused]] static SHA256 make_tag_midstate(const char* tag) {
     auto tag_hash = SHA256::hash(tag, std::strlen(tag));
     SHA256 ctx;
     ctx.update(tag_hash.data(), 32);

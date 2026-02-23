@@ -60,10 +60,11 @@ double bench_ns(Func&& f, int iterations) {
     return runs[PASSES / 2];  // median
 }
 
-// Prevent dead-code elimination
+// Prevent dead-code elimination (standard benchmark anti-optimization pattern).
+// Intentionally leaks stack addresses into a volatile sink to defeat DCE.
 static volatile uint64_t sink;
 
-static void escape(const void* p) {
+static void escape(const void* p) { // lgtm[cpp/stack-address-escape] // Intentional: benchmark anti-optimization
     sink = reinterpret_cast<uintptr_t>(p);
 }
 

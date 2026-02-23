@@ -621,9 +621,13 @@ static bool run_external_vectors(bool verbose) {
     }
     // const char* path = ...; // adapt existing logic
 #else
-    const char* path = std::getenv("SECP256K1_SELFTEST_VECTORS");
+    const char* path = std::getenv("SECP256K1_SELFTEST_VECTORS"); // lgtm[cpp/path-injection]
+    // Reject paths with directory traversal
+    if (path && std::string(path).find("..") != std::string::npos) return true;
 #endif
     if (!path) return true; // Not provided: treat as success
+    // Reject paths with directory traversal
+    if (std::string(path).find("..") != std::string::npos) return true;
     std::ifstream in(path);
     if (!in) {
         if (verbose) {

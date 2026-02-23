@@ -141,28 +141,10 @@ inline void mulx64(uint64_t a, uint64_t b, uint64_t& lo, uint64_t& hi) {
             #endif
         #endif
     #else
-        // Fallback
-        // #ifdef SECP256K1_NO_INT128
-        //     // 32-bit safe implementation
-        //     uint64_t a_lo = a & 0xFFFFFFFFULL;
-        //     uint64_t a_hi = a >> 32;
-        //     uint64_t b_lo = b & 0xFFFFFFFFULL;
-        //     uint64_t b_hi = b >> 32;
-        //
-        //     uint64_t p0 = a_lo * b_lo;
-        //     uint64_t p1 = a_lo * b_hi;
-        //     uint64_t p2 = a_hi * b_lo;
-        //     uint64_t p3 = a_hi * b_hi;
-        //
-        //     uint64_t carry = ((p0 >> 32) + (p1 & 0xFFFFFFFFULL) + (p2 & 0xFFFFFFFFULL)) >> 32;
-        //
-        //     lo = p0 + (p1 << 32) + (p2 << 32);
-        //     hi = p3 + (p1 >> 32) + (p2 >> 32) + carry;
-        // #else
-        //     __uint128_t result = static_cast<__uint128_t>(a) * b;
-        //     lo = static_cast<uint64_t>(result);
-        //     hi = static_cast<uint64_t>(result >> 64);
-        // #endif
+        // Fallback: 128-bit wide multiply (GCC/Clang, all 64-bit targets)
+        __uint128_t result = static_cast<__uint128_t>(a) * b;
+        lo = static_cast<uint64_t>(result);
+        hi = static_cast<uint64_t>(result >> 64);
     #endif
 }
 

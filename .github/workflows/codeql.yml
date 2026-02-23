@@ -23,7 +23,7 @@ jobs:
     runs-on: ubuntu-24.04
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Install compiler
         run: |
@@ -31,7 +31,7 @@ jobs:
           sudo apt-get install -y clang-17 lld-17 ninja-build
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
+        uses: github/codeql-action/init@c4a7bc332abaec03596ff2803dd7f3ca3a238975 # v3
         with:
           languages: c-cpp
           build-mode: manual
@@ -49,6 +49,6 @@ jobs:
           cmake --build build-codeql -j$(nproc)
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v3
+        uses: github/codeql-action/analyze@c4a7bc332abaec03596ff2803dd7f3ca3a238975 # v3
         with:
           category: "/language:c-cpp"

@@ -10,11 +10,7 @@ on:
         description: 'Tag to release (e.g. v3.10.0)'
         required: true
 
-permissions:
-  contents: write
-  packages: write
-  id-token: write
-  attestations: write
+permissions: read-all
 
 env:
   CMAKE_BUILD_TYPE: Release
@@ -54,7 +50,7 @@ jobs:
 
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       # -- Linux: install compiler --
       - name: Install deps (Linux)
@@ -66,7 +62,7 @@ jobs:
       # -- Windows: set up MSVC env + Ninja --
       - name: Setup MSVC (Windows)
         if: runner.os == 'Windows'
-        uses: ilammy/msvc-dev-cmd@v1
+        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1
         with:
           arch: x64
 
@@ -150,7 +146,7 @@ jobs:
 
       # -- Upload artifact --
       - name: Upload
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ${{ env.PKG_NAME }}
           path: ${{ env.PKG_NAME }}.${{ matrix.ext }}
@@ -162,7 +158,7 @@ jobs:
   build-linux-arm64:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Install cross-compiler
         run: |
@@ -216,7 +212,7 @@ jobs:
           echo "PKG_NAME=${PKG_NAME}" >> "$GITHUB_ENV"
 
       - name: Upload
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ${{ env.PKG_NAME }}
           path: ${{ env.PKG_NAME }}.tar.gz
@@ -239,10 +235,10 @@ jobs:
             name: android-x64
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Setup Android NDK
-        uses: nttld/setup-ndk@v1
+        uses: nttld/setup-ndk@2817442ee7c3346c1eb7d2ec60263c93206ba14f # v1
         id: ndk
         with:
           ndk-version: r27c
@@ -294,7 +290,7 @@ jobs:
           echo "PKG_NAME=${PKG_NAME}" >> "$GITHUB_ENV"
 
       - name: Upload
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ${{ env.PKG_NAME }}
           path: ${{ env.PKG_NAME }}.tar.gz
@@ -306,7 +302,7 @@ jobs:
   build-ios:
     runs-on: macos-14
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Set version from tag
         run: echo "${GITHUB_REF_NAME#v}" > VERSION.txt
@@ -338,7 +334,7 @@ jobs:
           echo "PKG_NAME=${PKG_NAME}" >> "$GITHUB_ENV"
 
       - name: Upload
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ${{ env.PKG_NAME }}
           path: ${{ env.PKG_NAME }}.tar.gz
@@ -350,10 +346,10 @@ jobs:
   build-wasm:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Setup Emscripten
-        uses: mymindstorm/setup-emsdk@v14
+        uses: mymindstorm/setup-emsdk@6ab9eb1bda2574c4ddb79809fc9247783eaf9021 # v14
         with:
           version: 3.1.51
 
@@ -373,7 +369,7 @@ jobs:
           echo "WASM size: $(du -h build-wasm/dist/secp256k1_wasm.wasm | cut -f1)"
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6
         with:
           node-version: 20
 
@@ -402,7 +398,7 @@ jobs:
           echo "PKG_NAME=${PKG_NAME}" >> "$GITHUB_ENV"
 
       - name: Upload
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ${{ env.PKG_NAME }}
           path: ${{ env.PKG_NAME }}.tar.gz
@@ -415,10 +411,10 @@ jobs:
     needs: [build-desktop, build-linux-arm64]
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Download desktop artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           path: native-dist
 
@@ -489,7 +485,7 @@ jobs:
           ls -la wheelhouse/
 
       - name: Upload Python wheels
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ufsecp-python-wheels
           path: bindings/python/wheelhouse/
@@ -503,14 +499,14 @@ jobs:
     if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6
         with:
           node-version: 20
 
       - name: Download desktop artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           path: native-dist
 
@@ -567,7 +563,7 @@ jobs:
           ls -la ufsecp-*.tgz
 
       - name: Upload npm tarball
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ufsecp-npm
           path: bindings/nodejs/ufsecp-*.tgz
@@ -610,16 +606,16 @@ jobs:
     if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
         with:
           dotnet-version: |
             8.0.x
             9.0.x
 
       - name: Download desktop artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           path: native-dist
 
@@ -678,7 +674,7 @@ jobs:
           ls -la nupkgs/
 
       - name: Upload NuGet
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ufsecp-nuget
           path: bindings/csharp/Ufsecp/nupkgs/*.nupkg
@@ -707,14 +703,14 @@ jobs:
     needs: [build-desktop, build-linux-arm64]
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - uses: ruby/setup-ruby@v1
+      - uses: ruby/setup-ruby@09a7688d3b55cf0e976497ff046b70949eeaccfd # v1
         with:
           ruby-version: '3.3'
 
       - name: Download desktop artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           path: native-dist
 
@@ -761,7 +757,7 @@ jobs:
           ls -la ufsecp-*.gem
 
       - name: Upload gem
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ufsecp-gem
           path: bindings/ruby/ufsecp-*.gem
@@ -787,15 +783,15 @@ jobs:
     needs: [build-desktop, build-linux-arm64, build-android]
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5
         with:
           distribution: temurin
           java-version: '17'
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           path: native-dist
 
@@ -860,7 +856,7 @@ jobs:
           jar tf "ufsecp-${VERSION}.jar" | head -30
 
       - name: Upload JAR
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ufsecp-java
           path: bindings/java/ufsecp-*.jar
@@ -928,10 +924,10 @@ jobs:
     needs: [build-desktop, build-linux-arm64]
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Download desktop artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           path: native-dist
 
@@ -982,7 +978,7 @@ jobs:
           ls -la "${PKG}.tar.gz"
 
       - name: Upload Go package
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ufsecp-go
           path: ufsecp-go-*.tar.gz
@@ -995,10 +991,10 @@ jobs:
     needs: [build-desktop, build-linux-arm64]
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Download desktop artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           path: native-dist
 
@@ -1050,7 +1046,7 @@ jobs:
           ls -la "${PKG}.tar.gz"
 
       - name: Upload Rust package
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ufsecp-rust
           path: ufsecp-rust-*.tar.gz
@@ -1063,10 +1059,10 @@ jobs:
     needs: [build-desktop, build-linux-arm64, build-android, build-ios]
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           path: native-dist
 
@@ -1122,7 +1118,7 @@ jobs:
           ls -la "${PKG}.tar.gz"
 
       - name: Upload Dart package
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ufsecp-dart
           path: ufsecp-dart-*.tar.gz
@@ -1135,10 +1131,10 @@ jobs:
     needs: [build-desktop, build-linux-arm64]
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Download desktop artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           path: native-dist
 
@@ -1187,7 +1183,7 @@ jobs:
           ls -la "${PKG}.tar.gz"
 
       - name: Upload PHP package
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ufsecp-php
           path: ufsecp-php-*.tar.gz
@@ -1200,14 +1196,14 @@ jobs:
     needs: [build-desktop, build-android, build-ios]
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6
         with:
           node-version: 20
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           path: native-dist
 
@@ -1263,7 +1259,7 @@ jobs:
           ls -la react-native-ufsecp-*.tgz
 
       - name: Upload React Native package
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ufsecp-react-native
           path: bindings/react-native/react-native-ufsecp-*.tgz
@@ -1298,10 +1294,10 @@ jobs:
     needs: [build-desktop, build-ios]
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Download artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           path: native-dist
 
@@ -1352,7 +1348,7 @@ jobs:
           ls -la "${PKG}.tar.gz"
 
       - name: Upload Swift package
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ufsecp-swift
           path: ufsecp-swift-*.tar.gz
@@ -1365,10 +1361,10 @@ jobs:
     needs: [build-desktop, build-linux-arm64]
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Download desktop artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           path: native-dist
 
@@ -1419,7 +1415,7 @@ jobs:
           ls -la "${PKG}.tar.gz"
 
       - name: Upload C SDK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ufsecp-c-headers
           path: ufsecp-c-*.tar.gz
@@ -1432,11 +1428,16 @@ jobs:
     needs: [build-desktop, build-linux-arm64, build-android, build-ios, build-wasm, pack-python, pack-npm, pack-nuget, pack-gem, pack-java, pack-go, pack-rust, pack-dart, pack-php, pack-react-native, pack-swift, pack-c-headers]
     if: ${{ always() && !cancelled() }}
     runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+      attestations: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           path: dist
 
@@ -1479,7 +1480,7 @@ jobs:
           cat SHA256SUMS.txt
 
       - name: Attest build provenance
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@96b4a1ef7235a096b17240c259729fdd70c83d45 # v2
         with:
           subject-path: |
             dist/**/*.tar.gz
@@ -1489,7 +1490,7 @@ jobs:
             dist/**/*.tgz
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2
         with:
           tag_name: ${{ github.ref_name }}
           name: "UltrafastSecp256k1 ${{ github.ref_name }}"

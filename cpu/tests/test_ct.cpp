@@ -34,7 +34,7 @@ namespace ct = secp256k1::ct;
 static int g_pass = 0;
 static int g_fail = 0;
 
-static std::string fe_hex(const FE& f) {
+[[maybe_unused]] static std::string fe_hex(const FE& f) {
     auto bytes = f.to_bytes();
     std::stringstream ss;
     ss << std::hex << std::setfill('0');
@@ -71,7 +71,7 @@ static bool pt_eq_affine(const PT& a, const PT& b) {
 
 // --- Test helpers ------------------------------------------------------------
 
-static FE make_fe(uint64_t v) { return FE::from_uint64(v); }
+[[maybe_unused]] static FE make_fe(uint64_t v) { return FE::from_uint64(v); }
 
 // --- 1. CT Field Arithmetic -------------------------------------------------
 

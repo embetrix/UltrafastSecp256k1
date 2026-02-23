@@ -231,19 +231,23 @@ static void test_recovery_invalid_sig() {
     // Zero r
     ECDSASignature zero_r{Scalar::zero(), Scalar::one()};
     auto [pk1, ok1] = ecdsa_recover(msg, zero_r, 0);
+    (void)pk1;
     check(!ok1, "Recovery: zero r fails");
 
     // Zero s
     ECDSASignature zero_s{Scalar::one(), Scalar::zero()};
     auto [pk2, ok2] = ecdsa_recover(msg, zero_s, 0);
+    (void)pk2;
     check(!ok2, "Recovery: zero s fails");
 
     // Invalid recid
     ECDSASignature valid_sig{Scalar::one(), Scalar::one()};
     auto [pk3, ok3] = ecdsa_recover(msg, valid_sig, -1);
+    (void)pk3;
     check(!ok3, "Recovery: negative recid fails");
 
     auto [pk4, ok4] = ecdsa_recover(msg, valid_sig, 4);
+    (void)pk4;
     check(!ok4, "Recovery: recid > 3 fails");
 }
 

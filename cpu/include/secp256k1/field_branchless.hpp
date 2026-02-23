@@ -118,7 +118,7 @@ inline void field_cadd(FieldElement* r, const FieldElement& a,
     field_cmov(r, &sum, &a, flag);
 }
 
-// Conditional subtraction: if (flag) *r = a - b; else *r = a;
+// Conditional subtraction: sets *r to (a - b) when flag is true, otherwise keeps a
 inline void field_csub(FieldElement* r, const FieldElement& a, 
                        const FieldElement& b, bool flag) noexcept {
     FieldElement diff = a - b;

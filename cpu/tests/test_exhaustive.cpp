@@ -43,7 +43,7 @@ using PT = secp256k1::fast::Point;
 static int g_pass = 0;
 static int g_fail = 0;
 
-static std::string fe_hex_short(const FE& f) {
+[[maybe_unused]] static std::string fe_hex_short(const FE& f) {
     auto b = f.to_bytes();
     std::stringstream ss;
     ss << std::hex << std::setfill('0');
