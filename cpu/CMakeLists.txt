@@ -341,6 +341,13 @@ if(NOT TARGET ${SECP256K1_LIB_NAME})
 )
 
 target_compile_features(${SECP256K1_LIB_NAME} PUBLIC cxx_std_20)
+
+# Set SOVERSION for shared library builds
+set_target_properties(${SECP256K1_LIB_NAME} PROPERTIES
+    VERSION   ${PROJECT_VERSION}
+    SOVERSION ${PROJECT_VERSION_MAJOR}
+)
+
 # Install target
 if(SECP256K1_INSTALL)
     include(GNUInstallDirs)

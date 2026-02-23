@@ -243,12 +243,25 @@ set(CPACK_PACKAGE_FILE_NAME
     "${CPACK_PACKAGE_NAME}-${PROJECT_VERSION}-${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}")
 set(CPACK_STRIP_FILES ON)
 
-# Generate ZIP on all platforms, plus TGZ on Unix
+# Generate ZIP on all platforms, plus TGZ + DEB + RPM on Unix
 if(WIN32)
     set(CPACK_GENERATOR "ZIP")
 else()
-    set(CPACK_GENERATOR "TGZ;ZIP")
+    set(CPACK_GENERATOR "TGZ;ZIP;DEB;RPM")
 endif()
+
+# DEB-specific
+set(CPACK_DEBIAN_PACKAGE_MAINTAINER "shrec <shrec@users.noreply.github.com>")
+set(CPACK_DEBIAN_PACKAGE_SECTION "libs")
+set(CPACK_DEBIAN_PACKAGE_DEPENDS "libc6 (>= 2.17)")
+set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
+set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
+
+# RPM-specific
+set(CPACK_RPM_PACKAGE_LICENSE "AGPL-3.0-or-later")
+set(CPACK_RPM_PACKAGE_GROUP "System Environment/Libraries")
+set(CPACK_RPM_FILE_NAME RPM-DEFAULT)
+set(CPACK_RPM_PACKAGE_REQUIRES "glibc >= 2.17")
 
 # Source package
 set(CPACK_SOURCE_GENERATOR "TGZ;ZIP")

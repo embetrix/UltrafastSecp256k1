@@ -1,0 +1,7 @@
+libsecp256k1-fast (3.12.1-1) unstable; urgency=medium
+
+  * New upstream release.
+  * Security: bump wheel 0.45.1 -> 0.46.2 (CVE-2026-24049).
+  * Security: bump setuptools 75.8.0 -> 78.1.1 (CVE-2025-47273).
+
+ -- shrec <shrec@users.noreply.github.com>  Sun, 23 Feb 2026 12:00:00 +0000
