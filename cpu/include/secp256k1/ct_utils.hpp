@@ -132,26 +132,47 @@ inline std::uint8_t ct_select_byte(std::uint8_t a, std::uint8_t b,
 }
 
 // -- Constant-Time Lexicographic Compare --------------------------------------
-// Returns: -1 if a < b, 0 if a == b, 1 if a > b. Constant-time.
+// Returns: -1 if a < b, 0 if a == b, 1 if a > b. Fully branchless.
 inline int ct_compare(const void* a, const void* b, std::size_t len) noexcept {
     const auto* pa = static_cast<const std::uint8_t*>(a);
     const auto* pb = static_cast<const std::uint8_t*>(b);
 
-    // We accumulate the result without branching
-    int result = 0;
-    int decided = 0;  // Have we found a difference?
+    // Branchless accumulation: capture the first differing byte pair.
+    // All arithmetic -- no ternaries, no short-circuit, no branches.
+    unsigned result  = 0;   // unsigned repr of (first_a - first_b)
+    unsigned decided = 0;   // 1 once a difference has been found
 
     for (std::size_t i = 0; i < len; ++i) {
-        int diff = static_cast<int>(pa[i]) - static_cast<int>(pb[i]);
-        // Only take the first non-zero diff
-        int is_diff = (diff != 0) ? 1 : 0;
-        int take = is_diff & ~decided;
-        result = (take != 0) ? diff : result;
-        decided |= is_diff;
+        unsigned ai = pa[i];
+        unsigned bi = pb[i];
+        unsigned diff = ai - bi;    // mod 2^32: 0..255 or 0xFFFFFF01..0xFFFFFFFF
+
+        // nz = 1 if diff != 0, else 0  (branchless: OR with negation, extract sign)
+        unsigned nz = ((diff | (0u - diff)) >> 31) & 1u;
+
+        // take = 1 only for the very first non-zero diff
+        unsigned take = nz & (1u - decided);
+
+        // mask = 0xFFFFFFFF when take==1, 0 when take==0
+        unsigned mask = 0u - take;
+
+        // Conditionally latch diff into result (no branch)
+        result  = (diff & mask) | (result & ~mask);
+        decided |= nz;
+
+#if defined(__GNUC__) || defined(__clang__)
+        // Value barrier: prevent the compiler from lifting branches out
+        asm volatile("" : "+r"(result), "+r"(decided));
+#endif
     }
 
-    // Normalize to -1, 0, 1
-    return (result > 0) - (result < 0);
+    // Normalise to {-1, 0, 1} without branches.
+    // sign = 1 if result represents a negative value (bit 31 set), else 0
+    unsigned sign = (result >> 31) & 1u;
+    unsigned nz_r = ((result | (0u - result)) >> 31) & 1u;
+    unsigned pos  = nz_r & (1u - sign);   // 1 if positive
+
+    return static_cast<int>(pos) - static_cast<int>(sign);
 }
 
 } // namespace secp256k1::ct
