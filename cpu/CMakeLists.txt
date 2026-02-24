@@ -638,6 +638,7 @@ if(BUILD_TESTING)
         tests/test_mul.cpp
         tests/test_arithmetic_correctness.cpp
         tests/test_ct.cpp
+        tests/test_ct_equivalence.cpp
         tests/test_ecdsa_schnorr.cpp
         tests/test_multiscalar_batch.cpp
         tests/test_bip32.cpp
@@ -786,4 +787,15 @@ if(BUILD_TESTING)
     target_link_libraries(test_differential_standalone PRIVATE ${SECP256K1_LIB_NAME})
     add_test(NAME differential COMMAND test_differential_standalone)
     set_tests_properties(differential PROPERTIES TIMEOUT 120)
+
+    # Standalone FAST≡CT equivalence test (property-based + boundary vectors)
+    add_executable(test_ct_equivalence_standalone
+        tests/test_ct_equivalence.cpp
+    )
+    target_link_libraries(test_ct_equivalence_standalone PRIVATE ${SECP256K1_LIB_NAME})
+    target_compile_definitions(test_ct_equivalence_standalone PRIVATE STANDALONE_TEST)
+    if(MSVC OR (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND WIN32))
+        target_link_options(test_ct_equivalence_standalone PRIVATE "LINKER:/STACK:8388608")
+    endif()
+    add_test(NAME ct_equivalence COMMAND test_ct_equivalence_standalone)
 endif()

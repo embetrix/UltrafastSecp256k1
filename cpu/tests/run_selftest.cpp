@@ -24,6 +24,7 @@ int test_large_scalar_multiplication_run();
 int test_mul_run();
 int test_arithmetic_correctness_run();
 int test_ct_run();
+int test_ct_equivalence_run();
 int test_ecdsa_schnorr_run();
 int test_multiscalar_batch_run();
 int test_bip32_run();
@@ -52,6 +53,7 @@ static const TestModule MODULES[] = {
     { "arithmetic correctness",           test_arithmetic_correctness_run },
     { "scalar multiplication",            test_large_scalar_multiplication_run },
     { "constant-time layer",              test_ct_run },
+    { "FAST\u2261CT equivalence",              test_ct_equivalence_run },
     { "ECDSA + Schnorr",                  test_ecdsa_schnorr_run },
     { "multi-scalar & batch verify",      test_multiscalar_batch_run },
     { "BIP-32 HD derivation",             test_bip32_run },

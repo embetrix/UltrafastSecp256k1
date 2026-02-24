@@ -1,6 +1,6 @@
 # Constant-Time Verification
 
-**UltrafastSecp256k1 v3.12.1** — CT Layer Methodology & Audit Status
+**UltrafastSecp256k1 v3.13.0** — CT Layer Methodology & Audit Status
 
 ---
 
@@ -280,4 +280,4 @@ FROST and MuSig2 have NOT been CT-audited:
 
 ---
 
-*UltrafastSecp256k1 v3.12.1 — CT Verification*
+*UltrafastSecp256k1 v3.13.0 — CT Verification*
