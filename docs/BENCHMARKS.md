@@ -481,10 +481,10 @@ All targets registered in CMake. Build with `cmake --build build -j` then run fr
 
 | Date | Field Mul | Scalar Mul | Change |
 |------|-----------|------------|--------|
-| 2026-02-08 | 307 ns | 954 μs | Initial |
-| 2026-02-09 | 205 ns | 676 μs | Carry optimization |
-| 2026-02-10 | 198 ns | 672 μs | Square optimization |
-| 2026-02-10 | 198 ns | 672 μs | **Current** |
+| 2026-02-11 | 307 ns | 954 μs | Initial |
+| 2026-02-12 | 205 ns | 676 μs | Carry optimization |
+| 2026-02-13 | 198 ns | 672 μs | Square optimization |
+| 2026-02-13 | 198 ns | 672 μs | **Current** |
 
 ### Key Optimizations Applied
 

@@ -3,7 +3,7 @@
 **UltrafastSecp256k1** — External Security Audit Engagement Scope
 
 Version: 1.0  
-Date: 2025-02-24  
+Date: 2026-02-24  
 Status: Pre-engagement  
 Contact: payysoon@gmail.com
 

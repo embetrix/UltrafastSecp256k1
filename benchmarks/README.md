@@ -117,7 +117,7 @@ gcc --version  # or clang --version
 See individual platform directories for detailed results:
 - [x86-64 Windows](cpu/x86-64/windows/)
 - [x86-64 Linux](cpu/x86-64/linux/)
-- [**RISC-V Linux (Milk-V Mars)** ✓](cpu/riscv64/linux/) - **Updated 2026-02-08**
+- [**RISC-V Linux (Milk-V Mars)** ✓](cpu/riscv64/linux/) - **Updated 2026-02-11**
 - [**ESP32-S3 Embedded** ✓](cpu/esp32/embedded/) - **Updated 2026-02-13**
 - [ARM64 Linux](cpu/arm64/linux/)
 - [CUDA RTX 4090](gpu/cuda/rtx-40xx/)
@@ -137,7 +137,7 @@ See individual platform directories for detailed results:
 
 ### RISC-V (Milk-V Mars - StarFive JH7110 @ 1.5 GHz)
 **Configuration:** Assembly + RVV + Fast Modular Reduction  
-**Date:** 2026-02-08 | **Tests:** 29/29 ✓
+**Date:** 2026-02-11 | **Tests:** 29/29 ✓
 
 | Operation | Performance |
 |-----------|-------------|

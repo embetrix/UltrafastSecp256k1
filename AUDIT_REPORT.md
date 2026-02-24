@@ -1,7 +1,7 @@
 # UltrafastSecp256k1 — Cryptographic Audit Report
 
 **Library Version:** 3.9.0  
-**Audit Date:** 2025-07-11  
+**Audit Date:** 2026-02-11  
 **Commit:** `cc20253` (dev)  
 **Platform:** Linux x86_64, clang++-19, C++20, Release (-O3)  
 **Total Audit Checks:** 641,194  

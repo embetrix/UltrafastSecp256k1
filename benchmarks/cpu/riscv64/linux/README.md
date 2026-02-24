@@ -9,7 +9,7 @@
 - **CPU:** StarFive JH7110 @ 1.5 GHz (4x U74 cores)
 - **Features:** Assembly + RVV Vector Extension + Fast Modular Reduction
 - **Compiler:** Clang 19.1.7
-- **Date:** 2026-02-08
+- **Date:** 2026-02-11
 
 #### Performance Summary
 | Operation | Time |

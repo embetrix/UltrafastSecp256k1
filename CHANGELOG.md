@@ -400,7 +400,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [3.0.0] - 2025-07-22
+## [3.0.0] - 2026-02-11
 
 ### Added — Cryptographic Primitives
 - **ECDSA (RFC 6979)** — Deterministic signing & verification (`cpu/include/ecdsa.hpp`)
@@ -437,7 +437,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [2.0.0] - 2025-07-10
+## [2.0.0] - 2026-02-11
 
 ### Added
 - **Shared POD types** (`include/secp256k1/types.hpp`): Canonical data layouts
@@ -473,7 +473,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Point Add: CUDA 1.1 ns (916 M/s), OpenCL 1.6 ns — **CUDA 1.45×**
 - Field Mul: 0.2 ns on both (4,139 M/s)
 
-## [1.0.0] - 2026-02-02
+## [1.0.0] - 2026-02-11
 
 ### Added
 - Complete secp256k1 field arithmetic

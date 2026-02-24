@@ -165,4 +165,4 @@ Platforms follow the same lifecycle as features:
 ---
 
 *Policy version: 1.0*  
-*Effective date: 2025-02-24*
+*Effective date: 2026-02-24*
