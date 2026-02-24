@@ -13,6 +13,7 @@
 
 #include <cstdio>
 #include <cstdint>
+#include <cstdlib>
 #include <cstring>
 #include <array>
 #include <random>
@@ -43,6 +44,10 @@ static int g_pass = 0, g_fail = 0;
 // Deterministic PRNG for reproducibility (seed can be changed for different runs)
 static std::mt19937_64 rng(42);
 
+// Iteration multiplier: 1 = default (CI), larger = nightly/stress.
+// Set via argv[1] or DIFFERENTIAL_MULTIPLIER env var.
+static int g_multiplier = 1;
+
 static std::array<uint8_t, 32> random_bytes() {
     std::array<uint8_t, 32> out{};
     for (int i = 0; i < 4; ++i) {
@@ -64,7 +69,8 @@ static Scalar random_scalar() {
 // -- Test: Public Key Derivation ---------------------------------------------
 
 static void test_pubkey_derivation() {
-    printf("[1] Public Key Derivation (1000 random keys)\n");
+    const int N = 1000 * g_multiplier;
+    printf("[1] Public Key Derivation (%d random keys)\n", N);
 
     // Known test vector: k=1 -> G
     {
@@ -76,7 +82,7 @@ static void test_pubkey_derivation() {
     }
 
     // Random keys
-    for (int i = 0; i < 1000; ++i) {
+    for (int i = 0; i < N; ++i) {
         auto sk = random_scalar();
         auto pk = Point::generator().scalar_mul(sk);
         CHECK(!pk.is_infinity(), "pubkey not infinity");
@@ -98,9 +104,10 @@ static void test_pubkey_derivation() {
 // -- Test: ECDSA Sign+Verify Cross-Check -------------------------------------
 
 static void test_ecdsa_cross() {
-    printf("[2] ECDSA Sign+Verify Internal Consistency (1000 rounds)\n");
+    const int N = 1000 * g_multiplier;
+    printf("[2] ECDSA Sign+Verify Internal Consistency (%d rounds)\n", N);
 
-    for (int i = 0; i < 1000; ++i) {
+    for (int i = 0; i < N; ++i) {
         auto sk = random_scalar();
         auto pk = Point::generator().scalar_mul(sk);
         auto msg = random_bytes();
@@ -135,9 +142,10 @@ static void test_ecdsa_cross() {
 // -- Test: Schnorr Sign+Verify Cross-Check -----------------------------------
 
 static void test_schnorr_cross() {
-    printf("[3] Schnorr (BIP-340) Sign+Verify Internal Consistency (1000 rounds)\n");
+    const int N = 1000 * g_multiplier;
+    printf("[3] Schnorr (BIP-340) Sign+Verify Internal Consistency (%d rounds)\n", N);
 
-    for (int i = 0; i < 1000; ++i) {
+    for (int i = 0; i < N; ++i) {
         auto sk = random_scalar();
         auto msg = random_bytes();
         auto aux = random_bytes();
@@ -164,6 +172,7 @@ static void test_schnorr_cross() {
 
 static void test_point_arithmetic() {
     printf("[4] Point Arithmetic Identities\n");
+    const int N = 100 * g_multiplier;
 
     auto G = Point::generator();
 
@@ -180,7 +189,7 @@ static void test_point_arithmetic() {
           "2G+G == 3*G");
 
     // k*G + (n-k)*G = infinity (where n is the curve order)
-    for (int i = 0; i < 100; ++i) {
+    for (int i = 0; i < N; ++i) {
         auto k = random_scalar();
         auto neg_k = k.negate();
         auto kG = G.scalar_mul(k);
@@ -207,7 +216,7 @@ static void test_point_arithmetic() {
     }
 
     // Scalar mul: (a*b)*G == a*(b*G)
-    for (int i = 0; i < 100; ++i) {
+    for (int i = 0; i < N; ++i) {
         auto a = random_scalar();
         auto b = random_scalar();
         auto ab = a * b;
@@ -225,9 +234,10 @@ static void test_point_arithmetic() {
 
 static void test_scalar_arithmetic() {
     printf("[5] Scalar Arithmetic\n");
+    const int N = 100 * g_multiplier;
 
     // a + b == b + a (commutativity)
-    for (int i = 0; i < 100; ++i) {
+    for (int i = 0; i < N; ++i) {
         auto a = random_scalar();
         auto b = random_scalar();
         auto ab = a + b;
@@ -236,7 +246,7 @@ static void test_scalar_arithmetic() {
     }
 
     // a * b == b * a
-    for (int i = 0; i < 100; ++i) {
+    for (int i = 0; i < N; ++i) {
         auto a = random_scalar();
         auto b = random_scalar();
         auto ab = a * b;
@@ -245,7 +255,7 @@ static void test_scalar_arithmetic() {
     }
 
     // a * a_inv == 1
-    for (int i = 0; i < 100; ++i) {
+    for (int i = 0; i < N; ++i) {
         auto a = random_scalar();
         auto inv = a.inverse();
         auto product = a * inv;
@@ -253,7 +263,7 @@ static void test_scalar_arithmetic() {
     }
 
     // a + (-a) == 0
-    for (int i = 0; i < 100; ++i) {
+    for (int i = 0; i < N; ++i) {
         auto a = random_scalar();
         auto neg = a.negate();
         auto sum = a + neg;
@@ -267,9 +277,10 @@ static void test_scalar_arithmetic() {
 
 static void test_field_arithmetic() {
     printf("[6] Field Arithmetic\n");
+    const int N = 100 * g_multiplier;
 
     // x * x_inv == 1
-    for (int i = 0; i < 100; ++i) {
+    for (int i = 0; i < N; ++i) {
         auto bytes = random_bytes();
         auto x = FieldElement::from_bytes(bytes);
         if (x == FieldElement::zero()) continue;
@@ -279,7 +290,7 @@ static void test_field_arithmetic() {
     }
 
     // sqrt(x^2) == +/-x
-    for (int i = 0; i < 100; ++i) {
+    for (int i = 0; i < N; ++i) {
         auto bytes = random_bytes();
         auto x = FieldElement::from_bytes(bytes);
         auto x2 = x * x;
@@ -295,8 +306,9 @@ static void test_field_arithmetic() {
 
 static void test_ecdsa_roundtrip() {
     printf("[7] ECDSA Signature Serialization Roundtrip\n");
+    const int N = 100 * g_multiplier;
 
-    for (int i = 0; i < 100; ++i) {
+    for (int i = 0; i < N; ++i) {
         auto sk = random_scalar();
         auto msg = random_bytes();
         auto sig = secp256k1::ecdsa_sign(msg, sk);
@@ -338,10 +350,23 @@ static void test_bip340_vectors() {
 
 // -- Main ---------------------------------------------------------------------
 
-int main() {
+int main(int argc, char* argv[]) {
+    // Optional multiplier: ./differential_test [multiplier]
+    // Or set DIFFERENTIAL_MULTIPLIER env var.
+    if (argc > 1) {
+        g_multiplier = std::atoi(argv[1]);
+        if (g_multiplier < 1) g_multiplier = 1;
+    } else {
+        const char* env = std::getenv("DIFFERENTIAL_MULTIPLIER");
+        if (env) {
+            g_multiplier = std::atoi(env);
+            if (g_multiplier < 1) g_multiplier = 1;
+        }
+    }
+
     printf("===============================================================\n");
     printf("  UltrafastSecp256k1 -- Differential Correctness Tests\n");
-    printf("  Seed: 42 (deterministic -- change seed for different coverage)\n");
+    printf("  Seed: 42 (deterministic)  Multiplier: %d\n", g_multiplier);
     printf("===============================================================\n\n");
 
     test_pubkey_derivation();

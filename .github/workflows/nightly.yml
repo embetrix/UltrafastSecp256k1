@@ -1,0 +1,102 @@
+name: Nightly Extended Tests
+
+on:
+  schedule:
+    # Daily 03:00 UTC — extended test suite
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+    inputs:
+      differential_multiplier:
+        description: 'Differential test multiplier (default: 100 ≈ 1.3M checks)'
+        required: false
+        default: '100'
+      dudect_timeout:
+        description: 'dudect timeout in seconds (default: 1800 = 30 min)'
+        required: false
+        default: '1800'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ── Differential correctness (≥1M random cases) ──────────────────────────
+  differential:
+    name: Differential Correctness (extended)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Harden the runner
+        uses: step-security/harden-runner@5ef0c079ce82195b2a36a210272d6b661572d83e # v2.14.2
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Install toolchain
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends g++-13 ninja-build
+
+      - name: Configure
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_CXX_COMPILER=g++-13 \
+            -DSECP256K1_BUILD_TESTS=ON
+
+      - name: Build differential test
+        run: cmake --build build --target test_differential_standalone -j"$(nproc)"
+
+      - name: Run extended differential test
+        env:
+          DIFFERENTIAL_MULTIPLIER: ${{ github.event.inputs.differential_multiplier || '100' }}
+        run: |
+          echo "Multiplier: ${DIFFERENTIAL_MULTIPLIER}"
+          ./build/cpu/test_differential_standalone "${DIFFERENTIAL_MULTIPLIER}"
+
+  # ── dudect full statistical run (30 min) ─────────────────────────────────
+  dudect-full:
+    name: dudect Full Statistical Analysis
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Harden the runner
+        uses: step-security/harden-runner@5ef0c079ce82195b2a36a210272d6b661572d83e # v2.14.2
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Install toolchain
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends g++-13 ninja-build
+
+      - name: Configure
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_CXX_COMPILER=g++-13 \
+            -DSECP256K1_BUILD_TESTS=ON
+
+      - name: Build dudect (full mode, no DUDECT_SMOKE)
+        run: cmake --build build --target test_ct_sidechannel_standalone -j"$(nproc)"
+
+      - name: Run dudect full statistical analysis
+        run: |
+          TIMEOUT="${{ github.event.inputs.dudect_timeout || '1800' }}"
+          echo "Running dudect for up to ${TIMEOUT}s..."
+          EXIT=0
+          timeout "${TIMEOUT}" ./build/cpu/test_ct_sidechannel_standalone || EXIT=$?
+          if [ "${EXIT}" -eq 124 ]; then
+            echo "::notice::dudect reached time limit (${TIMEOUT}s) — expected for nightly run"
+          elif [ "${EXIT}" -ne 0 ]; then
+            echo "::error::dudect detected timing leakage (t > threshold)"
+            exit 1
+          else
+            echo "::notice::dudect completed within time limit — all operations CT"
+          fi
