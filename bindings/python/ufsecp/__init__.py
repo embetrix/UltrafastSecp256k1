@@ -77,6 +77,20 @@ class UfsecpError(Exception):
         super().__init__(f"ufsecp {operation} failed: {msg}")
 
 
+class _BytesPtr:
+    """ctypes-compatible argtype that accepts bytes, bytearray, and ctypes arrays
+    as POINTER(c_uint8).  Used in argtypes so raw ``bytes`` can be passed to
+    C functions that expect ``const uint8_t*``."""
+
+    @classmethod
+    def from_param(cls, obj):
+        if isinstance(obj, (bytes, bytearray)):
+            return (c_uint8 * len(obj)).from_buffer_copy(obj)
+        if obj is None:
+            return None
+        return obj  # ctypes arrays / pointers pass through
+
+
 # -- Result types ---------------------------------------------------------
 
 class RecoverableSignature(NamedTuple):
@@ -172,9 +186,11 @@ class Ufsecp:
 
     # -- Version ----------------------------------------------------------
 
+    @property
     def version(self) -> int:
         return self._lib.ufsecp_version()
 
+    @property
     def abi_version(self) -> int:
         return self._lib.ufsecp_abi_version()
 
@@ -448,7 +464,7 @@ class Ufsecp:
         """Set up argtypes / restypes for type safety."""
         L = self._lib
         vp = c_void_p
-        p8 = POINTER(c_uint8)
+        p8 = _BytesPtr
         pvp = POINTER(c_void_p)
 
         L.ufsecp_ctx_create.argtypes = [pvp]

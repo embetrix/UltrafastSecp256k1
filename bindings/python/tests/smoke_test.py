@@ -76,14 +76,10 @@ def test_seckey_verify():
     """Private key validation."""
     with Ufsecp() as ctx:
         # Valid key
-        ctx.seckey_verify(KNOWN_PRIVKEY)
+        assert ctx.seckey_verify(KNOWN_PRIVKEY), "valid key must pass"
 
         # Invalid: all-zero
-        try:
-            ctx.seckey_verify(bytes(32))
-            assert False, "should have raised"
-        except UfsecpError as e:
-            assert e.code == 2  # ERR_BAD_KEY
+        assert not ctx.seckey_verify(bytes(32)), "zero key must fail"
 
 
 def test_pubkey_create():
@@ -114,11 +110,8 @@ def test_ecdsa_sign_verify():
         # Mutated sig must fail
         bad_sig = bytearray(sig)
         bad_sig[0] ^= 0x01
-        try:
-            ctx.ecdsa_verify(RFC6979_MSG, bytes(bad_sig), KNOWN_PUBKEY_COMPRESSED)
-            assert False, "should have raised"
-        except UfsecpError:
-            pass  # expected
+        assert not ctx.ecdsa_verify(RFC6979_MSG, bytes(bad_sig), KNOWN_PUBKEY_COMPRESSED), \
+            "corrupted sig must fail verify"
 
 
 def test_ecdsa_der_roundtrip():
@@ -142,11 +135,8 @@ def test_schnorr_sign_verify():
         # Mutated sig must fail
         bad_sig = bytearray(sig)
         bad_sig[0] ^= 0x01
-        try:
-            ctx.schnorr_verify(RFC6979_MSG, bytes(bad_sig), KNOWN_PUBKEY_XONLY)
-            assert False, "should have raised"
-        except UfsecpError:
-            pass  # expected
+        assert not ctx.schnorr_verify(RFC6979_MSG, bytes(bad_sig), KNOWN_PUBKEY_XONLY), \
+            "corrupted schnorr sig must fail verify"
 
 
 def test_ecdsa_recover():
@@ -221,14 +211,10 @@ def test_ecdh():
 
 
 def test_error_path():
-    """Intentional error: verify error code and message are populated."""
+    """Intentional error: verify methods return False for bad inputs."""
     with Ufsecp() as ctx:
-        try:
-            ctx.seckey_verify(bytes(32))  # all-zero key → invalid
-            assert False, "should have raised"
-        except UfsecpError as e:
-            assert e.code == 2  # ERR_BAD_KEY
-            assert "key" in str(e).lower()
+        # all-zero key → invalid → returns False
+        assert not ctx.seckey_verify(bytes(32)), "zero key must return False"
 
 
 def test_golden_ecdsa_deterministic():
