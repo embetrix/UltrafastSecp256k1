@@ -151,7 +151,18 @@ static FieldElement random_fe() {
 
 // -- Framework ----------------------------------------------------------------
 static int g_pass = 0, g_fail = 0;
+
+// Smoke mode: short run for CI (compile with -DDUDECT_SMOKE).
+// Full mode: longer statistical run for local/nightly testing.
+#ifdef DUDECT_SMOKE
+static constexpr double T_THRESHOLD = 25.0;  // Very relaxed: only catch gross leaks
+static constexpr int    SMOKE_N_PRIM  = 5000; // Primitive ops (masks, cmov, etc.)
+static constexpr int    SMOKE_N_FIELD = 3000; // Field/scalar ops
+static constexpr int    SMOKE_N_POINT = 500;  // Point ops (expensive)
+static constexpr int    SMOKE_N_SIGN  = 100;  // ECDSA/Schnorr sign (very expensive)
+#else
 static constexpr double T_THRESHOLD = 4.5;
+#endif
 
 static void check(bool cond, const char* msg) {
     if (cond) { ++g_pass; }
@@ -165,7 +176,11 @@ static void check(bool cond, const char* msg) {
 static void test_ct_primitives() {
     printf("\n[1] CT  -- timing \n");
 
+#ifdef DUDECT_SMOKE
+    constexpr int N = SMOKE_N_PRIM;
+#else
     constexpr int N = 100000;
+#endif
 
     // -- 1a: is_zero_mask -------------------------------------------------
     {
@@ -386,7 +401,11 @@ static void test_ct_primitives() {
 static void test_ct_field() {
     printf("\n[2] CT Field  -- timing \n");
 
+#ifdef DUDECT_SMOKE
+    constexpr int N = SMOKE_N_FIELD;
+#else
     constexpr int N = 50000;
+#endif
 
     // Pre-generate ALL field elements
     auto* fe_cls0 = new FieldElement[N]; // class 0: fixed (zero)
@@ -579,7 +598,11 @@ static void test_ct_field() {
 static void test_ct_scalar() {
     printf("\n[3] CT Scalar  -- timing \n");
 
+#ifdef DUDECT_SMOKE
+    constexpr int N = SMOKE_N_FIELD;
+#else
     constexpr int N = 50000;
+#endif
 
     auto sc_one = Scalar::from_hex(
         "0000000000000000000000000000000000000000000000000000000000000001");
@@ -787,7 +810,11 @@ static void test_ct_point() {
 
     // -- 4a: complete addition (P+O vs P+Q) ------------------------------
     {
+#ifdef DUDECT_SMOKE
+        constexpr int N = SMOKE_N_POINT;
+#else
         constexpr int N = 10000;
+#endif
         auto ct_G = secp256k1::ct::CTJacobianPoint::from_point(G);
         auto ct_O = secp256k1::ct::CTJacobianPoint::make_infinity();
         auto ct_Q = secp256k1::ct::CTJacobianPoint::from_point(
@@ -824,7 +851,11 @@ static void test_ct_point() {
 
     // -- 4b: complete addition (P+P vs P+Q) -- doubling case -------------
     {
+#ifdef DUDECT_SMOKE
+        constexpr int N = SMOKE_N_POINT;
+#else
         constexpr int N = 10000;
+#endif
         auto ct_G = secp256k1::ct::CTJacobianPoint::from_point(G);
         auto ct_Q = secp256k1::ct::CTJacobianPoint::from_point(
             G.scalar_mul(random_scalar()));
@@ -860,7 +891,11 @@ static void test_ct_point() {
     // -- 4c: CT scalar_mul (k=1 vs k=random) ----------------------------
     //      . secret key timing leak.
     {
+#ifdef DUDECT_SMOKE
+        constexpr int N = SMOKE_N_SIGN;
+#else
         constexpr int N = 2000;
+#endif
         auto sc_one = Scalar::from_hex(
             "0000000000000000000000000000000000000000000000000000000000000001");
 
@@ -897,7 +932,11 @@ static void test_ct_point() {
 
     // -- 4d: CT scalar_mul (k=n-1 vs k=random) --------------------------
     {
+#ifdef DUDECT_SMOKE
+        constexpr int N = SMOKE_N_SIGN;
+#else
         constexpr int N = 2000;
+#endif
         auto sc_nm1 = Scalar::from_hex(
             "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364140");
 
@@ -934,7 +973,11 @@ static void test_ct_point() {
 
     // -- 4e: CT generator_mul (low HW vs high HW scalar) ----------------
     {
+#ifdef DUDECT_SMOKE
+        constexpr int N = SMOKE_N_SIGN;
+#else
         constexpr int N = 2000;
+#endif
         auto sc_low = Scalar::from_hex(
             "0000000000000000000000000000000100000000000000000000000000000000");
         auto sc_high = Scalar::from_hex(
@@ -973,7 +1016,11 @@ static void test_ct_point() {
 
     // -- 4f: point_table_lookup (index 0 vs 15) -------------------------
     {
+#ifdef DUDECT_SMOKE
+        constexpr int N = SMOKE_N_PRIM;
+#else
         constexpr int N = 50000;
+#endif
         secp256k1::ct::CTJacobianPoint table[16];
         auto pt = secp256k1::ct::CTJacobianPoint::from_point(G);
         for (int i = 0; i < 16; ++i) {
@@ -1020,7 +1067,11 @@ static void test_ct_point() {
 static void test_ct_utils() {
     printf("\n[5] CT Byte Utilities -- timing \n");
 
+#ifdef DUDECT_SMOKE
+    constexpr int N = SMOKE_N_PRIM;
+#else
     constexpr int N = 100000;
+#endif
 
     // -- 5a: ct_memcpy_if ------------------------------------------------
     {
@@ -1169,7 +1220,11 @@ static void test_fast_not_ct() {
     printf("    (  fast::  ct::  )\n");
 
     auto G = Point::generator();
+#ifdef DUDECT_SMOKE
+    constexpr int N = SMOKE_N_POINT;
+#else
     constexpr int N = 5000;
+#endif
 
     auto sc_one = Scalar::from_hex(
         "0000000000000000000000000000000000000000000000000000000000000001");
