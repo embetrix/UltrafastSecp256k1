@@ -1596,6 +1596,41 @@ jobs:
             done
           cd ..
 
+      # -- Verification Artifacts --
+      - name: Generate verification artifacts
+        run: |
+          # Selftest report JSON (build a minimal test binary that dumps JSON)
+          echo '#include "secp256k1/selftest.hpp"
+          #include <cstdio>
+          int main() {
+            auto r = secp256k1::fast::selftest_report(secp256k1::fast::SelftestMode::ci, 0);
+            printf("%s\n", r.to_json().c_str());
+            return r.all_passed ? 0 : 1;
+          }' > /tmp/selftest_json_gen.cpp
+
+          # Build against the library we already built
+          if [ -f build/lib/libfastsecp256k1.a ] || [ -f build/libfastsecp256k1.a ]; then
+            LIB=$(find build -name 'libfastsecp256k1.a' -print -quit 2>/dev/null || true)
+            if [ -n "$LIB" ]; then
+              ${CXX:-g++} -std=c++20 -O2 \
+                -I cpu/include -I staging/include \
+                /tmp/selftest_json_gen.cpp "$LIB" \
+                -o /tmp/selftest_json_gen 2>/dev/null && \
+              /tmp/selftest_json_gen > selftest_report.json 2>/dev/null || \
+              echo '{"error":"selftest binary build failed","all_passed":null}' > selftest_report.json
+            else
+              echo '{"error":"library not found","all_passed":null}' > selftest_report.json
+            fi
+          else
+            echo '{"error":"library not found","all_passed":null}' > selftest_report.json
+          fi
+
+          # Copy verification transparency report
+          cp docs/AUDIT_READINESS_REPORT_v1.md verification_report.md 2>/dev/null || true
+
+          echo "=== Verification artifacts ==="
+          ls -la selftest_report.json verification_report.md 2>/dev/null || true
+
       # -- SBOM generation (CycloneDX) --
       - name: Generate SBOM
         run: |
@@ -1637,6 +1672,8 @@ jobs:
             dist/**/*
             SHA256SUMS.txt
             sbom.cdx.json
+            selftest_report.json
+            verification_report.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
