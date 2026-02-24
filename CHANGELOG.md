@@ -5,6 +5,31 @@ All notable changes to UltrafastSecp256k1 are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.13.0] - 2026-02-24
+
+### Added
+- **BIP-32 official test vectors TV1–TV5** — 90 comprehensive checks covering master key derivation, hardened/normal child paths, and public-only derivation chains (`test_bip32_vectors.cpp`)
+- **Nightly CI workflow** — daily extended verification: differential correctness with 100× multiplier (~1.3M checks) and dudect full-mode statistical analysis (30 min, t=4.5 threshold)
+- **Differential test CLI/env multiplier** — `differential_test` accepts `--multiplier=N` or `UFSECP_DIFF_MULTIPLIER` env variable; default 1 preserves existing CI behavior
+
+### Fixed
+- **BIP-32 public key decompression** — `public_key()` now correctly decompresses from compressed prefix + x-coordinate via y²=x³+7 square root with parity check; previously treated x-coordinate as scalar, producing wrong public keys for public-only derivation
+- **`pub_prefix` field** in `ExtendedKey` — stores y-parity byte (0x02/0x03) across `to_public()`, `derive_child()`, and `serialize()` for correct compressed public key round-trip
+- **SonarCloud `ct_sidechannel` exclusion** — changed `-E ct_sidechannel` to exact-match `-E "^ct_sidechannel$"` to prevent accidental exclusion of other tests
+
+---
+
+## [3.12.3] - 2026-02-24
+
+### Fixed
+- **Valgrind "still reachable" false positives** — added `valgrind.supp` suppression file for precomputed wNAF/comb table allocations that are intentionally kept for program lifetime
+- **CTest memcheck integration** — switched from `enable_testing()` to `include(CTest)` for proper Valgrind memcheck support
+- **Security audit CI** — added `--suppressions` flag and exact-match `ct_sidechannel` exclusion in Valgrind step
+- **ASan heap-buffer-overflow** in dudect smoke mode — fixed buffer overread in timing analysis
+- **aarch64 cross-compilation** — added missing toolchain file for ARM64 CI builds
+
+---
+
 ## [3.12.2] - 2026-02-24
 
 ### Security
