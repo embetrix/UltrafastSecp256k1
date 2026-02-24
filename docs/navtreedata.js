@@ -56,7 +56,7 @@ var NAVTREE =
       [ "Class Members", "functions.html", [
         [ "All", "functions.html", "functions_dup" ],
         [ "Functions", "functions_func.html", "functions_func" ],
-        [ "Variables", "functions_vars.html", null ],
+        [ "Variables", "functions_vars.html", "functions_vars" ],
         [ "Typedefs", "functions_type.html", null ]
       ] ]
     ] ],
@@ -75,15 +75,16 @@ var NAVTREE =
 var NAVTREEINDEX =
 [
 "UltrafastSecp256k1_8hpp.html",
-"classsecp256k1_1_1fast_1_1Point.html#abff5c00ffb3074c4cd1b502e447b33c7",
-"field_8hpp.html#a2a0daebfdeafbf5c13da255f371d6673",
-"hash__accel_8hpp.html#aa9baa48a38bbe07a5b3a664e5767bc92",
-"namespacesecp256k1.html#ae508026a4b6a2d3be70fbe3f4e96d4c6",
-"namespacesecp256k1_1_1fast.html#ac604f7acb9e495a0ed210c2efd7a9b53",
-"secp256k1__wasm_8h.html#acf24fdbfbd82e46515fd7ab7e565e750",
-"structsecp256k1_1_1SchnorrBatchEntry.html",
-"structsecp256k1_1_1fast_1_1FixedBaseConfig.html#ad128b6e5247dee768f63059adb8cfc63",
-"ufsecp__error_8h.html#aba178017981654417291869b891fe7d4"
+"classsecp256k1_1_1fast_1_1Point.html#a799ad7adc180235caaf11e47c98e2086",
+"ct__utils_8hpp_source.html",
+"functions_q.html",
+"namespacesecp256k1.html#a0508ad0ead12c8b68e3e5ceb647e65eb",
+"namespacesecp256k1_1_1fast.html#a1af2b5f26a2f1eafd5c29948db4ae158",
+"namespacesecp256k1_1_1test.html#a67d5ad2842e24c72d6e79f845fb96335ab1870fa8801941a8b0faddfd614d3493",
+"structsecp256k1_1_1ExtendedKey.html#aff761f7bc981243505d1a340480d6af6",
+"structsecp256k1_1_1coins_1_1Keccak256State.html#a95fb0fbe8cbb37c76896fd1a4fc7a96c",
+"structsecp256k1_1_1fast_1_1PrecomputedScalar.html#ad58b708c971b3f63b8590fa7b10a94bb",
+"ufsecp__impl_8cpp_source.html"
 ];
 
 var SYNCONMSG = 'click to disable panel synchronisation';
