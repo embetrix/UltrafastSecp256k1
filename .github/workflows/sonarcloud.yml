@@ -69,16 +69,38 @@ jobs:
             echo "::warning::No profraw files found, skipping coverage collection"
             exit 0
           fi
+          echo "Found profraw files:"
+          echo "$PROFRAW"
           llvm-profdata-17 merge -sparse $PROFRAW -o build/sonar/merged.profdata
-          # Find all test executables for coverage binary list
-          BINS=$(find build/sonar -type f -executable ! -name '*.o' ! -path '*/CMakeFiles/*' | head -20)
-          FIRST_BIN=$(echo "$BINS" | head -1)
-          OBJECT_ARGS=$(echo "$BINS" | tail -n +2 | sed 's/^/-object /')
+
+          # Use run_selftest as primary binary (links the full library)
+          MAIN_BIN=$(find build/sonar -name 'run_selftest' -type f -executable | head -1)
+          if [ -z "$MAIN_BIN" ]; then
+            echo "::error::run_selftest binary not found"
+            exit 1
+          fi
+          echo "Primary binary: $MAIN_BIN"
+
+          # Add standalone test binaries as additional objects
+          STANDALONE=$(find build/sonar -name 'test_*_standalone' -type f -executable 2>/dev/null)
+          OBJECT_ARGS=""
+          for bin in $STANDALONE; do
+            OBJECT_ARGS="$OBJECT_ARGS -object $bin"
+            echo "  +object: $bin"
+          done
+
           llvm-cov-17 show \
-            "$FIRST_BIN" $OBJECT_ARGS \
+            "$MAIN_BIN" $OBJECT_ARGS \
             -instr-profile=build/sonar/merged.profdata \
             --show-line-counts-or-regions \
-            > build/sonar/llvm-cov-report.txt 2>/dev/null || true
+            > build/sonar/llvm-cov-report.txt
+
+          # Verify report has content
+          LINES=$(wc -l < build/sonar/llvm-cov-report.txt)
+          echo "Coverage report: $LINES lines"
+          if [ "$LINES" -lt 10 ]; then
+            echo "::warning::Coverage report is suspiciously small ($LINES lines)"
+          fi
 
       - name: Run SonarCloud scan
         uses: SonarSource/sonarqube-scan-action@a31c9398be7ace6bbfaf30c0bd5d415f843d45e9 # v7.0.0
