@@ -757,6 +757,18 @@ if(BUILD_TESTING)
     add_test(NAME ct_sidechannel COMMAND test_ct_sidechannel_standalone)
     set_tests_properties(ct_sidechannel PROPERTIES TIMEOUT 300)
 
+    # Smoke version of dudect (short run, relaxed threshold — safe for CI)
+    add_executable(test_ct_sidechannel_smoke
+        ${CMAKE_CURRENT_SOURCE_DIR}/../tests/test_ct_sidechannel.cpp
+    )
+    target_link_libraries(test_ct_sidechannel_smoke PRIVATE ${SECP256K1_LIB_NAME})
+    target_compile_definitions(test_ct_sidechannel_smoke PRIVATE STANDALONE_TEST DUDECT_SMOKE)
+    if(MSVC OR (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND WIN32))
+        target_link_options(test_ct_sidechannel_smoke PRIVATE "LINKER:/STACK:8388608")
+    endif()
+    add_test(NAME ct_sidechannel_smoke COMMAND test_ct_sidechannel_smoke)
+    set_tests_properties(ct_sidechannel_smoke PROPERTIES TIMEOUT 120)
+
     # Standalone differential/self-consistency test (from top-level tests/)
     add_executable(test_differential_standalone
         ${CMAKE_CURRENT_SOURCE_DIR}/../tests/differential_test.cpp
