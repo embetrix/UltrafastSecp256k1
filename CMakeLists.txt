@@ -300,6 +300,19 @@ if(SECP256K1_BUILD_PROTOCOL_TESTS AND SECP256K1_BUILD_CPU AND BUILD_TESTING)
     add_test(NAME musig2_frost_advanced COMMAND test_musig2_frost_advanced)
     set_tests_properties(musig2_frost_advanced PROPERTIES TIMEOUT 600)
     message(STATUS "  MuSig2 + FROST advanced tests: ON")
+
+    # FROST reference KAT vectors (Phase II 2.2.5)
+    add_executable(test_frost_kat tests/test_frost_kat.cpp)
+    target_link_libraries(test_frost_kat PRIVATE fastsecp256k1)
+    target_include_directories(test_frost_kat PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/cpu/include
+    )
+    if(MSVC OR (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND WIN32))
+        target_link_options(test_frost_kat PRIVATE "LINKER:/STACK:8388608")
+    endif()
+    add_test(NAME frost_kat COMMAND test_frost_kat)
+    set_tests_properties(frost_kat PROPERTIES TIMEOUT 600)
+    message(STATUS "  FROST reference KAT vectors: ON")
 endif()
 
 # Export targets
