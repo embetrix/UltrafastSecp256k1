@@ -66,8 +66,8 @@ jobs:
 
       - name: Convert to SARIF
         run: |
-          # Use cppcheck built-in SARIF output (cppcheck >= 2.13)
-          cppcheck \
+          # Try cppcheck built-in SARIF output (>= 2.13)
+          if ! cppcheck \
             --project=build/compile_commands.json \
             --enable=warning,performance,portability \
             --suppress=missingIncludeSystem \
@@ -77,42 +77,10 @@ jobs:
             --error-exitcode=0 \
             --std=c++20 \
             --output-file=cppcheck-results.sarif \
-            --output-format=sarif 2>/dev/null || {
-            # Fallback: convert XML -> SARIF with Python
-            python3 -c "
-import xml.etree.ElementTree as ET
-import json, sys
-
-tree = ET.parse('cppcheck-results.xml')
-root = tree.getroot()
-results = []
-for error in root.iter('error'):
-    for loc in error.findall('location'):
-        results.append({
-            'ruleId': error.get('id', 'unknown'),
-            'level': 'warning' if error.get('severity') != 'error' else 'error',
-            'message': {'text': error.get('msg', '')},
-            'locations': [{
-                'physicalLocation': {
-                    'artifactLocation': {'uri': loc.get('file', '')},
-                    'region': {'startLine': int(loc.get('line', 1))}
-                }
-            }]
-        })
-
-sarif = {
-    '\$schema': 'https://raw.githubusercontent.com/oasis-tcs/sarif-spec/main/sarif-2.1/schema/sarif-schema-2.1.0.json',
-    'version': '2.1.0',
-    'runs': [{
-        'tool': {'driver': {'name': 'Cppcheck', 'version': '2.x'}},
-        'results': results
-    }]
-}
-with open('cppcheck-results.sarif', 'w') as f:
-    json.dump(sarif, f, indent=2)
-print(f'Converted {len(results)} findings to SARIF')
-"
-          }
+            --output-format=sarif 2>/dev/null; then
+            # Fallback: convert XML -> SARIF with external script
+            python3 .github/scripts/xml2sarif.py cppcheck-results.xml cppcheck-results.sarif
+          fi
 
       - name: Upload SARIF to GitHub Security
         if: always()
