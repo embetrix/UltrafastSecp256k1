@@ -310,11 +310,25 @@ endif()
 target_link_libraries(unified_audit_runner PRIVATE fastsecp256k1)
 target_include_directories(unified_audit_runner PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../include
+    ${CMAKE_CURRENT_BINARY_DIR}/../include   # for generated version.hpp
+    ${CMAKE_BINARY_DIR}/include              # fallback for version.hpp
 )
+# Inject git hash at compile time (short hash, 8 chars)
+execute_process(
+    COMMAND git -C "${CMAKE_CURRENT_SOURCE_DIR}" rev-parse --short=8 HEAD
+    OUTPUT_VARIABLE _git_hash
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET
+    RESULT_VARIABLE _git_rc
+)
+if(_git_rc)
+    set(_git_hash "unknown")
+endif()
 target_compile_definitions(unified_audit_runner PRIVATE
     UNIFIED_AUDIT_RUNNER
     DUDECT_SMOKE
     UFSECP_BUILDING
+    GIT_HASH="${_git_hash}"
 )
 if(MSVC OR (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND WIN32))
     target_link_options(unified_audit_runner PRIVATE "LINKER:/STACK:8388608")

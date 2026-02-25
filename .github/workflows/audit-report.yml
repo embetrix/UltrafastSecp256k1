@@ -1,0 +1,237 @@
+# ===========================================================================
+# Unified Audit Report -- CI Workflow
+# ===========================================================================
+#
+# Builds and runs the unified_audit_runner on Linux + Windows.
+# Generates audit_report.json + audit_report.txt as downloadable artifacts.
+#
+# Triggers:
+#   - Weekly schedule (Monday 06:00 UTC)
+#   - Manual dispatch (workflow_dispatch)
+#   - On release tags
+# ===========================================================================
+name: Audit Report
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'   # Weekly: Monday 06:00 UTC
+  workflow_dispatch:
+    inputs:
+      section:
+        description: 'Run only this section (empty = all)'
+        required: false
+        default: ''
+        type: string
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  # =========================================================================
+  # Linux (GCC-13, Release)
+  # =========================================================================
+  linux-gcc:
+    name: Audit (Linux GCC-13)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ninja-build g++-13
+
+      - name: Configure
+        run: |
+          cmake -S . -B build-audit -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_CXX_COMPILER=g++-13 \
+            -DBUILD_TESTING=ON \
+            -DSECP256K1_BUILD_PROTOCOL_TESTS=ON \
+            -DSECP256K1_BUILD_FUZZ_TESTS=ON
+
+      - name: Build
+        run: cmake --build build-audit -j $(nproc)
+
+      - name: Create output directory
+        run: mkdir -p audit-output
+
+      - name: Run unified audit runner
+        run: |
+          SECTION_ARG=""
+          if [ -n "${{ github.event.inputs.section }}" ]; then
+            SECTION_ARG="--section ${{ github.event.inputs.section }}"
+          fi
+          ./build-audit/audit/unified_audit_runner \
+            --report-dir ./audit-output \
+            $SECTION_ARG || true
+
+      - name: Upload audit reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: audit-report-linux-gcc13
+          path: |
+            audit-output/audit_report.json
+            audit-output/audit_report.txt
+          retention-days: 90
+
+      - name: Print summary
+        if: always()
+        run: |
+          echo "## Audit Report (Linux GCC-13)" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          cat audit-output/audit_report.txt 2>/dev/null || echo "Report not generated"
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+  # =========================================================================
+  # Linux (Clang-17, Release)
+  # =========================================================================
+  linux-clang:
+    name: Audit (Linux Clang-17)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ninja-build clang-17
+
+      - name: Configure
+        run: |
+          cmake -S . -B build-audit -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_CXX_COMPILER=clang++-17 \
+            -DBUILD_TESTING=ON \
+            -DSECP256K1_BUILD_PROTOCOL_TESTS=ON \
+            -DSECP256K1_BUILD_FUZZ_TESTS=ON
+
+      - name: Build
+        run: cmake --build build-audit -j $(nproc)
+
+      - name: Create output directory
+        run: mkdir -p audit-output
+
+      - name: Run unified audit runner
+        run: |
+          SECTION_ARG=""
+          if [ -n "${{ github.event.inputs.section }}" ]; then
+            SECTION_ARG="--section ${{ github.event.inputs.section }}"
+          fi
+          ./build-audit/audit/unified_audit_runner \
+            --report-dir ./audit-output \
+            $SECTION_ARG || true
+
+      - name: Upload audit reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: audit-report-linux-clang17
+          path: |
+            audit-output/audit_report.json
+            audit-output/audit_report.txt
+          retention-days: 90
+
+      - name: Print summary
+        if: always()
+        run: |
+          echo "## Audit Report (Linux Clang-17)" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          cat audit-output/audit_report.txt 2>/dev/null || echo "Report not generated"
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+  # =========================================================================
+  # Windows (MSVC, Release)
+  # =========================================================================
+  windows-msvc:
+    name: Audit (Windows MSVC)
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: |
+          cmake -S . -B build-audit -G "Visual Studio 17 2022" -A x64 `
+            -DBUILD_TESTING=ON `
+            -DSECP256K1_BUILD_PROTOCOL_TESTS=ON `
+            -DSECP256K1_BUILD_FUZZ_TESTS=ON
+
+      - name: Build
+        run: cmake --build build-audit --config Release -j
+
+      - name: Create output directory
+        run: New-Item -ItemType Directory -Force -Path audit-output | Out-Null
+
+      - name: Run unified audit runner
+        shell: pwsh
+        run: |
+          $section = "${{ github.event.inputs.section }}"
+          $args = @("--report-dir", ".\audit-output")
+          if ($section) { $args += @("--section", $section) }
+          & .\build-audit\audit\Release\unified_audit_runner.exe @args
+          if ($LASTEXITCODE -ne 0) {
+            Write-Warning "Audit runner exited with code $LASTEXITCODE"
+          }
+
+      - name: Upload audit reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: audit-report-windows-msvc
+          path: |
+            audit-output/audit_report.json
+            audit-output/audit_report.txt
+          retention-days: 90
+
+      - name: Print summary
+        if: always()
+        shell: pwsh
+        run: |
+          "## Audit Report (Windows MSVC)" | Out-File -Append $env:GITHUB_STEP_SUMMARY
+          '```' | Out-File -Append $env:GITHUB_STEP_SUMMARY
+          if (Test-Path audit-output/audit_report.txt) {
+            Get-Content audit-output/audit_report.txt | Out-File -Append $env:GITHUB_STEP_SUMMARY
+          } else {
+            "Report not generated" | Out-File -Append $env:GITHUB_STEP_SUMMARY
+          }
+          '```' | Out-File -Append $env:GITHUB_STEP_SUMMARY
+
+  # =========================================================================
+  # Aggregate verdict
+  # =========================================================================
+  verdict:
+    name: Audit Verdict
+    needs: [linux-gcc, linux-clang, windows-msvc]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Download all reports
+        uses: actions/download-artifact@v4
+        with:
+          pattern: audit-report-*
+          merge-multiple: false
+
+      - name: Aggregate verdict
+        run: |
+          echo "## Cross-Platform Audit Verdict" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Platform | Verdict |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|---------|" >> $GITHUB_STEP_SUMMARY
+
+          for dir in audit-report-*/; do
+            platform=$(basename "$dir" | sed 's/audit-report-//')
+            json="$dir/audit_report.json"
+            if [ -f "$json" ]; then
+              verdict=$(grep -o '"audit_verdict": *"[^"]*"' "$json" | head -1 | cut -d'"' -f4)
+              echo "| $platform | $verdict |" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "| $platform | NO REPORT |" >> $GITHUB_STEP_SUMMARY
+            fi
+          done

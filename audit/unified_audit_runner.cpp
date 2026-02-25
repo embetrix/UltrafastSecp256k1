@@ -36,6 +36,22 @@
 #include <sys/utsname.h>
 #endif
 
+// Library version (injected by CMake from VERSION.txt)
+#if __has_include("secp256k1/version.hpp")
+#include "secp256k1/version.hpp"
+#endif
+#ifndef SECP256K1_VERSION_STRING
+#define SECP256K1_VERSION_STRING "unknown"
+#endif
+
+// Git hash (injected at compile time via -DGIT_HASH=...)
+#ifndef GIT_HASH
+#define GIT_HASH "unknown"
+#endif
+
+// Audit framework version (bump when report schema changes)
+static constexpr const char* AUDIT_FRAMEWORK_VERSION = "2.0.0";
+
 using namespace secp256k1::fast;
 
 // ============================================================================
@@ -252,6 +268,9 @@ struct PlatformInfo {
     std::string compiler;
     std::string build_type;
     std::string timestamp;
+    std::string library_version;
+    std::string git_hash;
+    std::string framework_version;
 };
 
 static PlatformInfo detect_platform() {
@@ -317,6 +336,11 @@ static PlatformInfo detect_platform() {
     char timebuf[64];
     std::strftime(timebuf, sizeof(timebuf), "%Y-%m-%dT%H:%M:%S", std::localtime(&t));
     info.timestamp = timebuf;
+
+    // -- Version / git / framework --
+    info.library_version  = SECP256K1_VERSION_STRING;
+    info.git_hash         = GIT_HASH;
+    info.framework_version = AUDIT_FRAMEWORK_VERSION;
 
     return info;
 }
@@ -411,7 +435,9 @@ static void write_json_report(const char* path,
     std::fprintf(f, "{\n");
     std::fprintf(f, "  \"report_type\": \"industrial_self_audit\",\n");
     std::fprintf(f, "  \"library\": \"UltrafastSecp256k1\",\n");
-    std::fprintf(f, "  \"version\": \"4.0\",\n");
+    std::fprintf(f, "  \"library_version\": \"%s\",\n", json_escape(plat.library_version).c_str());
+    std::fprintf(f, "  \"git_hash\": \"%s\",\n", json_escape(plat.git_hash).c_str());
+    std::fprintf(f, "  \"audit_framework_version\": \"%s\",\n", json_escape(plat.framework_version).c_str());
     std::fprintf(f, "  \"timestamp\": \"%s\",\n", json_escape(plat.timestamp).c_str());
     std::fprintf(f, "  \"platform\": {\n");
     std::fprintf(f, "    \"os\": \"%s\",\n", json_escape(plat.os).c_str());
@@ -494,6 +520,9 @@ static void write_text_report(const char* path,
     std::fprintf(f, "================================================================\n");
     std::fprintf(f, "  UltrafastSecp256k1 -- Industrial Self-Audit Report\n");
     std::fprintf(f, "================================================================\n\n");
+    std::fprintf(f, "Library:    UltrafastSecp256k1 v%s\n", plat.library_version.c_str());
+    std::fprintf(f, "Git Hash:   %s\n", plat.git_hash.c_str());
+    std::fprintf(f, "Framework:  Audit Framework v%s\n", plat.framework_version.c_str());
     std::fprintf(f, "Timestamp:  %s\n", plat.timestamp.c_str());
     std::fprintf(f, "OS:         %s\n", plat.os.c_str());
     std::fprintf(f, "Arch:       %s\n", plat.arch.c_str());
@@ -565,49 +594,105 @@ static std::string get_exe_dir() {
 // ============================================================================
 // Main
 // ============================================================================
+static void print_usage() {
+    std::printf("Usage: unified_audit_runner [OPTIONS]\n\n");
+    std::printf("Options:\n");
+    std::printf("  --json-only            Suppress console output; write JSON only\n");
+    std::printf("  --report-dir <dir>     Write reports to <dir> (default: exe dir)\n");
+    std::printf("  --section <id>         Run only modules in section <id>\n");
+    std::printf("  --list-sections        Print available sections and exit\n");
+    std::printf("  --help                 Show this message\n\n");
+    std::printf("Sections:\n");
+    for (int s = 0; s < NUM_SECTIONS; ++s) {
+        std::printf("  %-20s %s\n", SECTIONS[s].id, SECTIONS[s].title_en);
+    }
+}
+
 int main(int argc, char* argv[]) {
     // Parse args
     bool json_only = false;
     std::string report_dir = "";
+    std::string section_filter = "";  // empty = run all
     for (int i = 1; i < argc; ++i) {
         if (std::strcmp(argv[i], "--json-only") == 0) {
             json_only = true;
         } else if (std::strcmp(argv[i], "--report-dir") == 0 && i + 1 < argc) {
             report_dir = argv[++i];
+        } else if (std::strcmp(argv[i], "--section") == 0 && i + 1 < argc) {
+            section_filter = argv[++i];
+        } else if (std::strcmp(argv[i], "--list-sections") == 0) {
+            for (int s = 0; s < NUM_SECTIONS; ++s) {
+                std::printf("%s\n", SECTIONS[s].id);
+            }
+            return 0;
+        } else if (std::strcmp(argv[i], "--help") == 0 || std::strcmp(argv[i], "-h") == 0) {
+            print_usage();
+            return 0;
         }
     }
     if (report_dir.empty()) {
         report_dir = get_exe_dir();
     }
 
+    // Validate section filter
+    if (!section_filter.empty()) {
+        bool found = false;
+        for (int s = 0; s < NUM_SECTIONS; ++s) {
+            if (section_filter == SECTIONS[s].id) { found = true; break; }
+        }
+        if (!found) {
+            std::fprintf(stderr, "ERROR: unknown section '%s'\n", section_filter.c_str());
+            print_usage();
+            return 1;
+        }
+    }
+
     auto plat = detect_platform();
 
     auto total_start = std::chrono::steady_clock::now();
 
-    std::printf("================================================================\n");
-    std::printf("  UltrafastSecp256k1 -- Unified Audit Runner\n");
-    std::printf("  %s | %s | %s | %s\n",
-                plat.os.c_str(), plat.arch.c_str(),
-                plat.compiler.c_str(), plat.build_type.c_str());
-    std::printf("  %s\n", plat.timestamp.c_str());
-    std::printf("================================================================\n\n");
+    if (!json_only) {
+        std::printf("================================================================\n");
+        std::printf("  UltrafastSecp256k1 -- Unified Audit Runner\n");
+        std::printf("  Library v%s  |  Git: %.8s  |  Framework v%s\n",
+                    plat.library_version.c_str(), plat.git_hash.c_str(),
+                    plat.framework_version.c_str());
+        std::printf("  %s | %s | %s | %s\n",
+                    plat.os.c_str(), plat.arch.c_str(),
+                    plat.compiler.c_str(), plat.build_type.c_str());
+        std::printf("  %s\n", plat.timestamp.c_str());
+        if (!section_filter.empty())
+            std::printf("  Filter: section=%s\n", section_filter.c_str());
+        std::printf("================================================================\n\n");
+    }
 
     // -- Phase 1: Library selftest ----------------------------------------
-    std::printf("[Phase 1/3] Library selftest (ci mode)...\n");
+    if (!json_only) std::printf("[Phase 1/3] Library selftest (ci mode)...\n");
     auto st_start = std::chrono::steady_clock::now();
     bool selftest_passed = Selftest(false, SelftestMode::ci, 0);
     auto st_end = std::chrono::steady_clock::now();
     double selftest_ms = std::chrono::duration<double, std::milli>(st_end - st_start).count();
 
-    if (selftest_passed) {
-        std::printf("[Phase 1/3] Selftest PASSED (%.0f ms)\n\n", selftest_ms);
-    } else {
-        std::printf("[Phase 1/3] *** Selftest FAILED *** (%.0f ms)\n\n", selftest_ms);
+    if (!json_only) {
+        if (selftest_passed) {
+            std::printf("[Phase 1/3] Selftest PASSED (%.0f ms)\n\n", selftest_ms);
+        } else {
+            std::printf("[Phase 1/3] *** Selftest FAILED *** (%.0f ms)\n\n", selftest_ms);
+        }
     }
 
-    // -- Phase 2: All test modules (grouped by 8 sections) ------------
-    std::printf("[Phase 2/3] Running %d test modules across %d audit sections...\n\n",
-                NUM_MODULES, NUM_SECTIONS);
+    // -- Phase 2: All test modules (grouped by 8 sections) ----------------
+    // Count modules to run (with filter)
+    int modules_to_run = 0;
+    for (int i = 0; i < NUM_MODULES; ++i) {
+        if (section_filter.empty() || section_filter == ALL_MODULES[i].section)
+            ++modules_to_run;
+    }
+
+    if (!json_only) {
+        std::printf("[Phase 2/3] Running %d test modules across %d audit sections...\n\n",
+                    modules_to_run, NUM_SECTIONS);
+    }
 
     std::vector<ModuleResult> results;
     results.reserve(NUM_MODULES);
@@ -618,12 +703,17 @@ int main(int argc, char* argv[]) {
     // Track which section we're in for console grouping
     const char* current_section = "";
     int section_num = 0;
+    int run_idx = 0;
 
     for (int i = 0; i < NUM_MODULES; ++i) {
         auto& m = ALL_MODULES[i];
 
+        // Apply section filter
+        if (!section_filter.empty() && section_filter != m.section)
+            continue;
+
         // Print section header on transition
-        if (std::strcmp(m.section, current_section) != 0) {
+        if (!json_only && std::strcmp(m.section, current_section) != 0) {
             current_section = m.section;
             ++section_num;
             // Find the section title
@@ -637,8 +727,11 @@ int main(int argc, char* argv[]) {
             }
         }
 
-        std::printf("  [%2d/%d] %-45s ", i + 1, NUM_MODULES, m.name);
-        std::fflush(stdout);
+        ++run_idx;
+        if (!json_only) {
+            std::printf("  [%2d/%d] %-45s ", run_idx, modules_to_run, m.name);
+            std::fflush(stdout);
+        }
 
         auto t0 = std::chrono::steady_clock::now();
         int rc = m.run();
@@ -648,10 +741,10 @@ int main(int argc, char* argv[]) {
         bool ok = (rc == 0);
         if (ok) {
             ++modules_passed;
-            std::printf("PASS  (%.0f ms)\n", ms);
+            if (!json_only) std::printf("PASS  (%.0f ms)\n", ms);
         } else {
             ++modules_failed;
-            std::printf("FAIL  (%.0f ms)\n", ms);
+            if (!json_only) std::printf("FAIL  (%.0f ms)\n", ms);
         }
 
         results.push_back({ m.id, m.name, m.section, ok, ms });
@@ -661,28 +754,35 @@ int main(int argc, char* argv[]) {
     double total_ms = std::chrono::duration<double, std::milli>(total_end - total_start).count();
 
     // -- Phase 3: Generate reports ---------------------------------------
-    std::printf("\n[Phase 3/3] Generating audit reports...\n");
+    if (!json_only) std::printf("\n[Phase 3/3] Generating audit reports...\n");
 
     std::string json_path = report_dir + "/audit_report.json";
     std::string text_path = report_dir + "/audit_report.txt";
 
     write_json_report(json_path.c_str(), plat, results, selftest_passed, selftest_ms, total_ms);
-    write_text_report(text_path.c_str(), plat, results, selftest_passed, selftest_ms, total_ms);
+    if (!json_only) {
+        write_text_report(text_path.c_str(), plat, results, selftest_passed, selftest_ms, total_ms);
+    }
 
-    std::printf("  JSON: %s\n", json_path.c_str());
-    std::printf("  Text: %s\n", text_path.c_str());
+    if (!json_only) {
+        std::printf("  JSON: %s\n", json_path.c_str());
+        std::printf("  Text: %s\n", text_path.c_str());
+    }
 
     // -- Section Summary Table -------------------------------------------
     auto sections = compute_section_summaries(results);
 
-    std::printf("\n================================================================\n");
-    std::printf("  %-4s %-50s %s\n", "#", "Audit Section", "Result");
-    std::printf("  ---- -------------------------------------------------- ------\n");
-    for (int s = 0; s < (int)sections.size(); ++s) {
-        auto& sec = sections[s];
-        std::printf("  %-4d %-50s %d/%d %s\n",
-                    s + 1, sec.title_en, sec.passed, sec.total,
-                    sec.failed == 0 ? "PASS" : "FAIL");
+    if (!json_only) {
+        std::printf("\n================================================================\n");
+        std::printf("  %-4s %-50s %s\n", "#", "Audit Section", "Result");
+        std::printf("  ---- -------------------------------------------------- ------\n");
+        for (int s = 0; s < (int)sections.size(); ++s) {
+            auto& sec = sections[s];
+            if (sec.total == 0) continue;  // skip empty sections (filtered)
+            std::printf("  %-4d %-50s %d/%d %s\n",
+                        s + 1, sec.title_en, sec.passed, sec.total,
+                        sec.failed == 0 ? "PASS" : "FAIL");
+        }
     }
 
     // -- Final Summary ---------------------------------------------------
@@ -690,20 +790,22 @@ int main(int argc, char* argv[]) {
     int total_fail = modules_failed + (selftest_passed ? 0 : 1);
     int total_count = total_pass + total_fail;
 
-    std::printf("\n================================================================\n");
-    std::printf("  AUDIT VERDICT: %s\n",
-                (total_fail == 0) ? "AUDIT-READY" : "AUDIT-BLOCKED");
-    std::printf("  TOTAL: %d/%d modules passed", total_pass, total_count);
-    if (total_fail == 0) {
-        std::printf("  --  ALL PASSED");
-    } else {
-        std::printf("  --  %d FAILED", total_fail);
+    if (!json_only) {
+        std::printf("\n================================================================\n");
+        std::printf("  AUDIT VERDICT: %s\n",
+                    (total_fail == 0) ? "AUDIT-READY" : "AUDIT-BLOCKED");
+        std::printf("  TOTAL: %d/%d modules passed", total_pass, total_count);
+        if (total_fail == 0) {
+            std::printf("  --  ALL PASSED");
+        } else {
+            std::printf("  --  %d FAILED", total_fail);
+        }
+        std::printf("  (%.1f s)\n", total_ms / 1000.0);
+        std::printf("  Platform: %s %s | %s | %s\n",
+                    plat.os.c_str(), plat.arch.c_str(),
+                    plat.compiler.c_str(), plat.build_type.c_str());
+        std::printf("================================================================\n");
     }
-    std::printf("  (%.1f s)\n", total_ms / 1000.0);
-    std::printf("  Platform: %s %s | %s | %s\n",
-                plat.os.c_str(), plat.arch.c_str(),
-                plat.compiler.c_str(), plat.build_type.c_str());
-    std::printf("================================================================\n");
 
     return total_fail > 0 ? 1 : 0;
 }
