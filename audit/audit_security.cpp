@@ -431,6 +431,28 @@ static void test_high_s_rejection() {
 }
 
 // ============================================================================
+// _run() entry point for unified audit runner
+// ============================================================================
+
+int audit_security_run() {
+    g_pass = 0; g_fail = 0;
+
+    test_zero_key_handling();
+    test_zeroization();
+    test_bitflip_resilience();
+    test_message_bitflip();
+    test_nonce_determinism();
+    test_serialization_integrity();
+    test_compact_recovery_serial();
+    test_double_ops();
+    test_cross_algorithm();
+    test_high_s_rejection();
+
+    return g_fail > 0 ? 1 : 0;
+}
+
+// ============================================================================
+#ifndef UNIFIED_AUDIT_RUNNER
 int main() {
     printf("===============================================================\n");
     printf("  AUDIT V -- Security Hardening\n");
@@ -453,3 +475,4 @@ int main() {
 
     return g_fail > 0 ? 1 : 0;
 }
+#endif // UNIFIED_AUDIT_RUNNER

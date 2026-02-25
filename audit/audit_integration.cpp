@@ -487,6 +487,28 @@ static void test_stress_mixed() {
 }
 
 // ============================================================================
+// _run() entry point for unified audit runner
+// ============================================================================
+
+int audit_integration_run() {
+    g_pass = 0; g_fail = 0;
+
+    test_ecdh();
+    test_schnorr_batch_verify();
+    test_ecdsa_batch_verify();
+    test_ecdsa_full_roundtrip();
+    test_schnorr_cross_path();
+    test_fast_vs_ct_integration();
+    test_combined_protocol();
+    test_multikey_consistency();
+    test_schnorr_ecdsa_key_consistency();
+    test_stress_mixed();
+
+    return g_fail > 0 ? 1 : 0;
+}
+
+// ============================================================================
+#ifndef UNIFIED_AUDIT_RUNNER
 int main() {
     printf("===============================================================\n");
     printf("  AUDIT VI -- Integration Testing\n");
@@ -509,3 +531,4 @@ int main() {
 
     return g_fail > 0 ? 1 : 0;
 }
+#endif // UNIFIED_AUDIT_RUNNER

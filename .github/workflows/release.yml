@@ -1628,8 +1628,15 @@ jobs:
           # Copy verification transparency report
           cp docs/AUDIT_READINESS_REPORT_v1.md verification_report.md 2>/dev/null || true
 
+          # Generate traceability matrix (Phase IV, Task 4.1.4)
+          if [ -x scripts/generate_traceability.sh ]; then
+            echo "Generating traceability report..."
+            bash scripts/generate_traceability.sh 2>/dev/null || \
+              echo '{"error":"traceability generation failed"}' > traceability_report.json
+          fi
+
           echo "=== Verification artifacts ==="
-          ls -la selftest_report.json verification_report.md 2>/dev/null || true
+          ls -la selftest_report.json verification_report.md traceability_report.json 2>/dev/null || true
 
       # -- SBOM generation (CycloneDX) --
       - name: Generate SBOM
@@ -1673,6 +1680,7 @@ jobs:
             SHA256SUMS.txt
             sbom.cdx.json
             selftest_report.json
+            traceability_report.json
             verification_report.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

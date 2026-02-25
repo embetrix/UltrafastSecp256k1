@@ -756,52 +756,9 @@ if(BUILD_TESTING)
     endif()
     add_test(NAME ecc_properties COMMAND test_ecc_properties_standalone)
 
-    # Standalone dudect side-channel timing test (from top-level tests/)
-    add_executable(test_ct_sidechannel_standalone
-        ${CMAKE_CURRENT_SOURCE_DIR}/../tests/test_ct_sidechannel.cpp
-    )
-    target_link_libraries(test_ct_sidechannel_standalone PRIVATE ${SECP256K1_LIB_NAME})
-    target_compile_definitions(test_ct_sidechannel_standalone PRIVATE STANDALONE_TEST)
-    if(MSVC OR (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND WIN32))
-        target_link_options(test_ct_sidechannel_standalone PRIVATE "LINKER:/STACK:8388608")
-    endif()
-    add_test(NAME ct_sidechannel COMMAND test_ct_sidechannel_standalone)
-    set_tests_properties(ct_sidechannel PROPERTIES TIMEOUT 300)
+    # ── Audit infrastructure lives in audit/ ──────────────────────────────
+    # All audit-specific targets (unified_audit_runner, standalone CT/fuzz/
+    # differential/protocol tests) are defined in ../audit/CMakeLists.txt
+    # to keep the library source tree clean.
 
-    # Smoke version of dudect (short run, relaxed threshold — safe for CI)
-    add_executable(test_ct_sidechannel_smoke
-        ${CMAKE_CURRENT_SOURCE_DIR}/../tests/test_ct_sidechannel.cpp
-    )
-    target_link_libraries(test_ct_sidechannel_smoke PRIVATE ${SECP256K1_LIB_NAME})
-    target_compile_definitions(test_ct_sidechannel_smoke PRIVATE STANDALONE_TEST DUDECT_SMOKE)
-    if(MSVC OR (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND WIN32))
-        target_link_options(test_ct_sidechannel_smoke PRIVATE "LINKER:/STACK:8388608")
-    endif()
-    add_test(NAME ct_sidechannel_smoke COMMAND test_ct_sidechannel_smoke)
-    set_tests_properties(ct_sidechannel_smoke PROPERTIES TIMEOUT 120)
-
-    # Standalone differential/self-consistency test (from top-level tests/)
-    add_executable(test_differential_standalone
-        ${CMAKE_CURRENT_SOURCE_DIR}/../tests/differential_test.cpp
-    )
-    target_link_libraries(test_differential_standalone PRIVATE ${SECP256K1_LIB_NAME})
-    add_test(NAME differential COMMAND test_differential_standalone)
-    set_tests_properties(differential PROPERTIES TIMEOUT 120)
-
-    # Standalone FAST≡CT equivalence test (property-based + boundary vectors)
-    add_executable(test_ct_equivalence_standalone
-        tests/test_ct_equivalence.cpp
-    )
-    target_link_libraries(test_ct_equivalence_standalone PRIVATE ${SECP256K1_LIB_NAME})
-    target_compile_definitions(test_ct_equivalence_standalone PRIVATE STANDALONE_TEST)
-    if(MSVC OR (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND WIN32))
-        target_link_options(test_ct_equivalence_standalone PRIVATE "LINKER:/STACK:8388608")
-    endif()
-    add_test(NAME ct_equivalence COMMAND test_ct_equivalence_standalone)
-
-    # Diagnostic: ct::scalar_mul step-by-step comparison
-    add_executable(diag_scalar_mul tests/diag_scalar_mul.cpp)
-    target_link_libraries(diag_scalar_mul PRIVATE ${SECP256K1_LIB_NAME})
-    target_compile_definitions(diag_scalar_mul PRIVATE STANDALONE_TEST)
-    add_test(NAME diag_scalar_mul COMMAND diag_scalar_mul)
 endif()

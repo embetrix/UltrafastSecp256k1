@@ -350,6 +350,23 @@ static void test_bip340_vectors() {
 
 // -- Main ---------------------------------------------------------------------
 
+// Exportable run function (for unified audit runner)
+int test_differential_run() {
+    g_pass = g_fail = 0;
+    g_multiplier = 1;
+    test_pubkey_derivation();
+    test_ecdsa_cross();
+    test_schnorr_cross();
+    test_point_arithmetic();
+    test_scalar_arithmetic();
+    test_field_arithmetic();
+    test_ecdsa_roundtrip();
+    test_bip340_vectors();
+    printf("  [differential] %d passed, %d failed\n", g_pass, g_fail);
+    return g_fail > 0 ? 1 : 0;
+}
+
+#ifndef UNIFIED_AUDIT_RUNNER
 int main(int argc, char* argv[]) {
     // Optional multiplier: ./differential_test [multiplier]
     // Or set DIFFERENTIAL_MULTIPLIER env var.
@@ -384,3 +401,4 @@ int main(int argc, char* argv[]) {
 
     return g_fail > 0 ? 1 : 0;
 }
+#endif // UNIFIED_AUDIT_RUNNER

@@ -439,6 +439,29 @@ static void test_random_cross_check() {
 }
 
 // ============================================================================
+// _run() entry point for unified audit runner
+// ============================================================================
+
+int audit_field_run() {
+    g_pass = 0; g_fail = 0;
+
+    test_addition_overflow();
+    test_subtraction_borrow();
+    test_mul_carry();
+    test_square_vs_mul();
+    test_reduction();
+    test_canonical();
+    test_limb_boundary();
+    test_inverse();
+    test_sqrt();
+    test_batch_inverse();
+    test_random_cross_check();
+
+    return g_fail > 0 ? 1 : 0;
+}
+
+// ============================================================================
+#ifndef UNIFIED_AUDIT_RUNNER
 int main() {
     printf("===============================================================\n");
     printf("  AUDIT I.1 -- Field Arithmetic Correctness\n");
@@ -462,3 +485,4 @@ int main() {
 
     return g_fail > 0 ? 1 : 0;
 }
+#endif // UNIFIED_AUDIT_RUNNER

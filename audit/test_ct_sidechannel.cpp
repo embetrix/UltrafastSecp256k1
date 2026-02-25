@@ -1378,7 +1378,23 @@ static void test_assembly_info() {
     printf("      awk '/ct.*:$/,/^$/' | grep -cE 'j[a-z]{1,3}\\s'\n");
 }
 
+// Exportable run function (for unified audit runner — smoke mode)
+int test_ct_sidechannel_smoke_run() {
+    g_pass = g_fail = 0;
+    test_ct_primitives();
+    test_ct_field();
+    test_ct_scalar();
+    test_ct_point();
+    test_ct_utils();
+    test_fast_not_ct();
+    test_valgrind_markers();
+    test_assembly_info();
+    printf("  [ct_sidechannel_smoke] %d passed, %d failed\n", g_pass, g_fail);
+    return g_fail > 0 ? 1 : 0;
+}
+
 // ===========================================================================
+#ifndef UNIFIED_AUDIT_RUNNER
 int main() {
     printf("===============================================================\n");
     printf("  Side-Channel Attack Test Suite (dudect methodology)\n");
@@ -1411,3 +1427,4 @@ int main() {
 
     return g_fail > 0 ? 1 : 0;
 }
+#endif // UNIFIED_AUDIT_RUNNER

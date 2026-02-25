@@ -611,9 +611,30 @@ static void test_frost_signer_set_binding() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Main
+// _run() entry point for unified audit runner
 // ═══════════════════════════════════════════════════════════════════════════════
 
+int test_musig2_frost_advanced_run() {
+    g_pass = 0; g_fail = 0;
+
+    test_musig2_rogue_key_resistance();
+    test_musig2_key_coefficient_binding();
+    test_musig2_message_binding();
+    test_musig2_nonce_binding();
+    test_musig2_fault_injection();
+    test_frost_bad_share_dkg();
+    test_frost_bad_partial_sig();
+    test_frost_message_binding();
+    test_frost_signer_set_binding();
+
+    return g_fail > 0 ? 1 : 0;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Main (standalone only)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+#ifndef UNIFIED_AUDIT_RUNNER
 int main() {
     std::printf("═══════════════════════════════════════════════════\n");
     std::printf("  MuSig2 + FROST Advanced Protocol Tests\n");
@@ -645,3 +666,4 @@ int main() {
 
     return g_fail > 0 ? 1 : 0;
 }
+#endif // UNIFIED_AUDIT_RUNNER

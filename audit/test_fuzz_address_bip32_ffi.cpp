@@ -905,9 +905,42 @@ static void suite_13_ffi_error_inspection(ufsecp_ctx* ctx) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Main
+// _run() entry point for unified audit runner
 // ═══════════════════════════════════════════════════════════════════════════
 
+int test_fuzz_address_bip32_ffi_run() {
+    g_pass = 0; g_fail = 0; g_crash = 0;
+
+    ufsecp_ctx* ctx = nullptr;
+    ufsecp_error_t err = ufsecp_ctx_create(&ctx);
+    if (err != UFSECP_OK || !ctx) {
+        std::printf("  FATAL: ufsecp_ctx_create failed\n");
+        return 1;
+    }
+
+    suite_1_p2pkh_fuzz(ctx);
+    suite_2_p2wpkh_fuzz(ctx);
+    suite_3_p2tr_fuzz(ctx);
+    suite_4_wif_fuzz(ctx);
+    suite_5_bip32_master_fuzz(ctx);
+    suite_6_bip32_path_fuzz(ctx);
+    suite_7_bip32_derive_fuzz(ctx);
+    suite_8_ffi_context_stress();
+    suite_9_ffi_ecdsa_boundary(ctx);
+    suite_10_ffi_schnorr_boundary(ctx);
+    suite_11_ffi_ecdh_tweak(ctx);
+    suite_12_ffi_taproot_boundary(ctx);
+    suite_13_ffi_error_inspection(ctx);
+
+    ufsecp_ctx_destroy(ctx);
+    return (g_fail > 0 || g_crash > 0) ? 1 : 0;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Main (standalone only)
+// ═══════════════════════════════════════════════════════════════════════════
+
+#ifndef UNIFIED_AUDIT_RUNNER
 int main() {
     std::printf("=== Fuzz: Address Encoders + BIP32 + FFI Boundary ===\n");
     std::printf("    Tasks: 2.3.4 (address), 2.3.5 (BIP32), 2.3.6 (FFI)\n\n");
@@ -940,3 +973,4 @@ int main() {
     std::printf("════════════════════════════════════════════════════\n");
     return g_fail > 0 ? 1 : 0;
 }
+#endif // UNIFIED_AUDIT_RUNNER

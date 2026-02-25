@@ -173,6 +173,12 @@ if(SECP256K1_BUILD_EXAMPLES)
     add_subdirectory(examples)
 endif()
 
+# ── Audit infrastructure (standalone CTest targets + unified runner) ───────
+# All audit-specific targets live in audit/ to keep the library source clean.
+if(SECP256K1_BUILD_CPU AND BUILD_TESTING)
+    add_subdirectory(audit)
+endif()
+
 # ── Stable C ABI layer (ufsecp_*) ─────────────────────────────────────────
 option(SECP256K1_BUILD_CABI "Build the stable ufsecp_* C ABI library" ON)
 if(SECP256K1_BUILD_CABI AND SECP256K1_BUILD_CPU)
@@ -180,140 +186,14 @@ if(SECP256K1_BUILD_CABI AND SECP256K1_BUILD_CPU)
     message(STATUS "  C ABI (ufsecp):   ON")
 endif()
 
-# ── Cross-library differential test (Phase I, Task 1.1.4) ─────────────────
-# Links both UltrafastSecp256k1 AND bitcoin-core/libsecp256k1 in one process
-# and compares outputs (pubkey derivation, ECDSA, Schnorr, point arithmetic).
-# OFF by default — requires internet for FetchContent download.
-option(SECP256K1_BUILD_CROSS_TESTS
-       "Build in-process differential tests against bitcoin-core/libsecp256k1" OFF)
+# ── Cross-library differential test ─────────────────────────────────────────
+# Moved to audit/CMakeLists.txt — enable with -DSECP256K1_BUILD_CROSS_TESTS=ON
 
-if(SECP256K1_BUILD_CROSS_TESTS AND SECP256K1_BUILD_CPU AND BUILD_TESTING)
-    include(FetchContent)
-    FetchContent_Declare(
-        libsecp256k1_ref
-        GIT_REPOSITORY https://github.com/bitcoin-core/secp256k1.git
-        GIT_TAG        v0.6.0
-        GIT_SHALLOW    TRUE
-    )
-    FetchContent_GetProperties(libsecp256k1_ref)
-    if(NOT libsecp256k1_ref_POPULATED)
-        FetchContent_Populate(libsecp256k1_ref)
-        # Configure reference lib: static only, disable its tests/bench, enable modules we test
-        set(BUILD_SHARED_LIBS                  OFF CACHE BOOL "" FORCE)
-        set(SECP256K1_BUILD_SHARED             OFF CACHE BOOL "" FORCE)
-        set(SECP256K1_ENABLE_MODULE_SCHNORRSIG ON  CACHE BOOL "" FORCE)
-        set(SECP256K1_ENABLE_MODULE_EXTRAKEYS  ON  CACHE BOOL "" FORCE)
-        set(SECP256K1_ENABLE_MODULE_RECOVERY   ON  CACHE BOOL "" FORCE)
-        set(SECP256K1_ENABLE_MODULE_ECDH       ON  CACHE BOOL "" FORCE)
-        set(SECP256K1_BUILD_BENCHMARK          OFF CACHE BOOL "" FORCE)
-        set(SECP256K1_BUILD_TESTS              OFF CACHE BOOL "" FORCE)
-        set(SECP256K1_BUILD_EXHAUSTIVE_TESTS   OFF CACHE BOOL "" FORCE)
-        add_subdirectory(
-            ${libsecp256k1_ref_SOURCE_DIR}
-            ${libsecp256k1_ref_BINARY_DIR}
-            EXCLUDE_FROM_ALL
-        )
-    endif()
+# ── Parser fuzz tests ──────────────────────────────────────────────────────
+# Moved to audit/CMakeLists.txt — enable with -DSECP256K1_BUILD_FUZZ_TESTS=ON
 
-    add_executable(test_cross_libsecp256k1
-        tests/test_cross_libsecp256k1.cpp
-    )
-    target_link_libraries(test_cross_libsecp256k1
-        PRIVATE fastsecp256k1 secp256k1
-    )
-    target_include_directories(test_cross_libsecp256k1
-        PRIVATE ${libsecp256k1_ref_SOURCE_DIR}/include
-    )
-    if(MSVC OR (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND WIN32))
-        target_link_options(test_cross_libsecp256k1 PRIVATE "LINKER:/STACK:8388608")
-    endif()
-    add_test(NAME cross_libsecp256k1 COMMAND test_cross_libsecp256k1)
-    set_tests_properties(cross_libsecp256k1 PROPERTIES TIMEOUT 300)
-    message(STATUS "  Cross-test vs libsecp256k1: ON (ref: v0.6.0)")
-endif()
-
-# ── Parser fuzz tests (Phase II, Tasks 2.3.1–2.3.3) ──────────────────────
-# Deterministic pseudo-fuzz: random + adversarial inputs to DER, Schnorr, Pubkey parsers.
-option(SECP256K1_BUILD_FUZZ_TESTS
-       "Build deterministic fuzz tests for parsers (DER, Schnorr, Pubkey)" OFF)
-
-if(SECP256K1_BUILD_FUZZ_TESTS AND SECP256K1_BUILD_CPU AND SECP256K1_BUILD_CABI AND BUILD_TESTING)
-    add_executable(test_fuzz_parsers tests/test_fuzz_parsers.cpp)
-    target_link_libraries(test_fuzz_parsers PRIVATE ufsecp_static fastsecp256k1)
-    target_include_directories(test_fuzz_parsers PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/include
-        ${CMAKE_CURRENT_BINARY_DIR}/include/ufsecp   # generated ufsecp_version.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/cpu/include
-    )
-    # Static linking: suppress __declspec(dllimport) on ufsecp symbols
-    target_compile_definitions(test_fuzz_parsers PRIVATE "UFSECP_API=")
-    if(MSVC OR (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND WIN32))
-        target_link_options(test_fuzz_parsers PRIVATE "LINKER:/STACK:8388608")
-    endif()
-    add_test(NAME fuzz_parsers COMMAND test_fuzz_parsers)
-    set_tests_properties(fuzz_parsers PROPERTIES TIMEOUT 300)
-    message(STATUS "  Parser fuzz tests: ON")
-
-    # Address + BIP32 + FFI boundary fuzz (Tasks 2.3.4, 2.3.5, 2.3.6)
-    add_executable(test_fuzz_address_bip32_ffi tests/test_fuzz_address_bip32_ffi.cpp)
-    target_link_libraries(test_fuzz_address_bip32_ffi PRIVATE ufsecp_static fastsecp256k1)
-    target_include_directories(test_fuzz_address_bip32_ffi PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/include
-        ${CMAKE_CURRENT_BINARY_DIR}/include/ufsecp
-        ${CMAKE_CURRENT_SOURCE_DIR}/cpu/include
-    )
-    target_compile_definitions(test_fuzz_address_bip32_ffi PRIVATE "UFSECP_API=")
-    if(MSVC OR (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND WIN32))
-        target_link_options(test_fuzz_address_bip32_ffi PRIVATE "LINKER:/STACK:8388608")
-    endif()
-    add_test(NAME fuzz_address_bip32_ffi COMMAND test_fuzz_address_bip32_ffi)
-    set_tests_properties(fuzz_address_bip32_ffi PROPERTIES TIMEOUT 300)
-    message(STATUS "  Address + BIP32 + FFI fuzz tests: ON")
-endif()
-
-# ── MuSig2 + FROST protocol tests (Phase II, Tasks 2.1.1–2.2.2) ──────────
-option(SECP256K1_BUILD_PROTOCOL_TESTS
-       "Build MuSig2 + FROST protocol tests" OFF)
-
-if(SECP256K1_BUILD_PROTOCOL_TESTS AND SECP256K1_BUILD_CPU AND BUILD_TESTING)
-    add_executable(test_musig2_frost tests/test_musig2_frost.cpp)
-    target_link_libraries(test_musig2_frost PRIVATE fastsecp256k1)
-    target_include_directories(test_musig2_frost PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/cpu/include
-    )
-    if(MSVC OR (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND WIN32))
-        target_link_options(test_musig2_frost PRIVATE "LINKER:/STACK:8388608")
-    endif()
-    add_test(NAME musig2_frost COMMAND test_musig2_frost)
-    set_tests_properties(musig2_frost PROPERTIES TIMEOUT 600)
-    message(STATUS "  MuSig2 + FROST protocol tests: ON")
-
-    # Advanced protocol tests: rogue-key, transcript binding, malicious participant
-    add_executable(test_musig2_frost_advanced tests/test_musig2_frost_advanced.cpp)
-    target_link_libraries(test_musig2_frost_advanced PRIVATE fastsecp256k1)
-    target_include_directories(test_musig2_frost_advanced PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/cpu/include
-    )
-    if(MSVC OR (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND WIN32))
-        target_link_options(test_musig2_frost_advanced PRIVATE "LINKER:/STACK:8388608")
-    endif()
-    add_test(NAME musig2_frost_advanced COMMAND test_musig2_frost_advanced)
-    set_tests_properties(musig2_frost_advanced PROPERTIES TIMEOUT 600)
-    message(STATUS "  MuSig2 + FROST advanced tests: ON")
-
-    # FROST reference KAT vectors (Phase II 2.2.5)
-    add_executable(test_frost_kat tests/test_frost_kat.cpp)
-    target_link_libraries(test_frost_kat PRIVATE fastsecp256k1)
-    target_include_directories(test_frost_kat PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/cpu/include
-    )
-    if(MSVC OR (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND WIN32))
-        target_link_options(test_frost_kat PRIVATE "LINKER:/STACK:8388608")
-    endif()
-    add_test(NAME frost_kat COMMAND test_frost_kat)
-    set_tests_properties(frost_kat PROPERTIES TIMEOUT 600)
-    message(STATUS "  FROST reference KAT vectors: ON")
-endif()
+# ── MuSig2 + FROST protocol tests ─────────────────────────────────────────
+# Moved to audit/CMakeLists.txt — enable with -DSECP256K1_BUILD_PROTOCOL_TESTS=ON
 
 # Export targets
 if(SECP256K1_INSTALL)

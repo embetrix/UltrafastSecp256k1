@@ -71,6 +71,7 @@ static void print_result(const BenchResult& r) {
 }
 
 // ============================================================================
+#ifndef UNIFIED_AUDIT_RUNNER
 int main() {
     printf("===============================================================\n");
     printf("  AUDIT IV -- Performance Validation\n");
@@ -205,6 +206,49 @@ int main() {
     printf("  NOTE: This is a profiling benchmark, not a pass/fail test.\n");
     printf("  Compare results against known baselines for regression.\n");
     printf("===============================================================\n");
+
+    return 0;
+}
+#endif // UNIFIED_AUDIT_RUNNER
+
+// ============================================================================
+// _run() entry point for unified audit runner
+// Performance benchmarks always PASS (informational only)
+// ============================================================================
+
+int audit_perf_run() {
+    // In unified mode, run a quick sanity check (reduced iterations)
+    auto G = Point::generator();
+    auto k = random_scalar();
+    auto P = G.scalar_mul(k);
+    auto fe_a = random_fe(), fe_b = random_fe();
+
+    // Quick smoke: each op produces non-trivial result
+    auto fe_c = fe_a * fe_b;
+    auto fe_d = fe_c.square();
+    auto fe_e = fe_d.inverse();
+    auto sc_a = random_scalar(), sc_b = random_scalar();
+    auto sc_c = sc_a * sc_b;
+    auto sc_d = sc_c.inverse();
+    auto Q = P.add(G.scalar_mul(sc_a));
+    auto R = Q.dbl();
+    (void)fe_e; (void)sc_d; (void)R;
+
+    // Verify ECDSA round-trip
+    auto ecdsa_sk = random_scalar();
+    auto ecdsa_pk = G.scalar_mul(ecdsa_sk);
+    std::array<uint8_t, 32> msg{};
+    msg[0] = 0x42;
+    auto sig = secp256k1::ecdsa_sign(msg, ecdsa_sk);
+    if (!secp256k1::ecdsa_verify(msg, ecdsa_pk, sig)) return 1;
+
+    // Verify Schnorr round-trip
+    auto schnorr_sk = random_scalar();
+    auto schnorr_pkx = secp256k1::schnorr_pubkey(schnorr_sk);
+    std::array<uint8_t, 32> schnorr_msg{}, aux{};
+    schnorr_msg[0] = 0x99;
+    auto schnorr_sig = secp256k1::schnorr_sign(schnorr_sk, schnorr_msg, aux);
+    if (!secp256k1::schnorr_verify(schnorr_pkx, schnorr_msg, schnorr_sig)) return 1;
 
     return 0;
 }

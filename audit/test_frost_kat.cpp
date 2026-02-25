@@ -635,9 +635,30 @@ static void test_secret_reconstruction() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// main
+// _run() entry point for unified audit runner
 // ═══════════════════════════════════════════════════════════════════════════════
 
+int test_frost_kat_run() {
+    g_pass = 0; g_fail = 0;
+
+    test_lagrange_properties();
+    test_dkg_determinism();
+    test_dkg_feldman_vss();
+    test_2of3_full_signing();
+    test_3of5_full_signing();
+    test_lagrange_consistency();
+    test_pinned_dkg_group_key();
+    test_pinned_signing_roundtrip();
+    test_secret_reconstruction();
+
+    return g_fail > 0 ? 1 : 0;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Main (standalone only)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+#ifndef UNIFIED_AUDIT_RUNNER
 int main() {
     std::printf("=== FROST Reference KAT Tests (Phase II 2.2.5) ===\n\n");
 
@@ -660,3 +681,4 @@ int main() {
     std::printf("All reference KAT checks passed.\n");
     return 0;
 }
+#endif // UNIFIED_AUDIT_RUNNER

@@ -67,7 +67,7 @@ static void test_malformed_pubkeys() {
     // Valid sig with valid key should pass
     CHECK(secp256k1::ecdsa_verify(msg, pk, sig), "valid sig+pk");
 
-    // Verify with infinity should fail
+    // Verify with infinity should fail (not crash)
     CHECK(!secp256k1::ecdsa_verify(msg, Point::infinity(), sig),
           "verify with infinity fails");
 
@@ -446,6 +446,28 @@ static void test_sig_normalization() {
 }
 
 // ============================================================================
+// _run() entry point for unified audit runner
+// ============================================================================
+
+int test_audit_fuzz_run() {
+    g_pass = 0; g_fail = 0;
+
+    test_malformed_pubkeys();
+    test_invalid_ecdsa_sigs();
+    test_invalid_schnorr_sigs();
+    test_oversized_scalars();
+    test_boundary_field_elements();
+    test_recovery_edges();
+    test_random_op_sequence();
+    test_der_roundtrip();
+    test_schnorr_bytes_roundtrip();
+    test_sig_normalization();
+
+    return g_fail > 0 ? 1 : 0;
+}
+
+// ============================================================================
+#ifndef UNIFIED_AUDIT_RUNNER
 int main() {
     printf("===============================================================\n");
     printf("  AUDIT III -- Fuzzing & Adversarial Testing\n");
@@ -468,3 +490,4 @@ int main() {
 
     return g_fail > 0 ? 1 : 0;
 }
+#endif // UNIFIED_AUDIT_RUNNER

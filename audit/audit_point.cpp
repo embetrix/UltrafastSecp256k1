@@ -405,6 +405,29 @@ static void test_stress_random() {
 }
 
 // ============================================================================
+// _run() entry point for unified audit runner
+// ============================================================================
+
+int audit_point_run() {
+    g_pass = 0; g_fail = 0;
+
+    test_infinity();
+    test_jacobian_add();
+    test_jacobian_dbl();
+    test_mixed_add_same_point();
+    test_point_negation();
+    test_affine_conversion();
+    test_scalar_mul_identities();
+    test_known_vectors();
+    test_ecdsa_roundtrip();
+    test_schnorr_roundtrip();
+    test_stress_random();
+
+    return g_fail > 0 ? 1 : 0;
+}
+
+// ============================================================================
+#ifndef UNIFIED_AUDIT_RUNNER
 int main() {
     printf("===============================================================\n");
     printf("  AUDIT I.3 -- Point Operations & Signature Correctness\n");
@@ -428,3 +451,4 @@ int main() {
 
     return g_fail > 0 ? 1 : 0;
 }
+#endif // UNIFIED_AUDIT_RUNNER

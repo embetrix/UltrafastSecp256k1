@@ -431,8 +431,35 @@ static void test_ecdsa_verify_random(ufsecp_ctx* ctx) {
                 N, accepted);
 }
 
-// ── Main ────────────────────────────────────────────────────────────────────
+// ── _run() entry point for unified audit runner ─────────────────────────────
 
+int test_fuzz_parsers_run() {
+    g_pass = 0; g_fail = 0;
+
+    ufsecp_ctx* ctx = nullptr;
+    ufsecp_error_t err = ufsecp_ctx_create(&ctx);
+    if (err != UFSECP_OK || !ctx) {
+        std::printf("  FATAL: ufsecp_ctx_create failed\n");
+        return 1;
+    }
+
+    test_der_random(ctx);
+    test_der_adversarial(ctx);
+    test_der_roundtrip(ctx);
+    test_schnorr_random(ctx);
+    test_schnorr_roundtrip(ctx);
+    test_pubkey_parse_random(ctx);
+    test_pubkey_roundtrip(ctx);
+    test_pubkey_adversarial(ctx);
+    test_ecdsa_verify_random(ctx);
+
+    ufsecp_ctx_destroy(ctx);
+    return g_fail > 0 ? 1 : 0;
+}
+
+// ── Main (standalone) ───────────────────────────────────────────────────────
+
+#ifndef UNIFIED_AUDIT_RUNNER
 int main(int argc, char* argv[]) {
     std::printf(
         "════════════════════════════════════════════════════════════\n"
@@ -468,3 +495,4 @@ int main(int argc, char* argv[]) {
 
     return g_fail > 0 ? 1 : 0;
 }
+#endif // UNIFIED_AUDIT_RUNNER

@@ -660,9 +660,37 @@ static void test_frost_wrong_partial() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Main
+// _run() entry point for unified audit runner
 // ═══════════════════════════════════════════════════════════════════════════════
 
+int test_musig2_frost_protocol_run() {
+    g_pass = 0; g_fail = 0;
+
+    test_musig2_key_agg_determinism();
+    test_musig2_key_agg_ordering();
+    test_musig2_key_agg_duplicates();
+    test_musig2_round_trip(2, "2");
+    test_musig2_round_trip(3, "3");
+    test_musig2_round_trip(5, "5");
+    test_musig2_wrong_signer();
+    test_musig2_bitflip();
+
+    test_frost_dkg(2, 3, "2of3");
+    test_frost_dkg(3, 5, "3of5");
+    test_frost_signing(2, 3, "2of3");
+    test_frost_signing(3, 5, "3of5");
+    test_frost_different_subsets();
+    test_frost_bitflip();
+    test_frost_wrong_partial();
+
+    return g_fail > 0 ? 1 : 0;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Main (standalone only)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+#ifndef UNIFIED_AUDIT_RUNNER
 int main() {
     std::printf("═══════════════════════════════════════════════════\n");
     std::printf("  MuSig2 + FROST Protocol Tests\n");
@@ -694,3 +722,4 @@ int main() {
 
     return g_fail > 0 ? 1 : 0;
 }
+#endif // UNIFIED_AUDIT_RUNNER

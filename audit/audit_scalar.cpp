@@ -304,6 +304,26 @@ static void test_negate() {
 }
 
 // ============================================================================
+// _run() entry point for unified audit runner
+// ============================================================================
+
+int audit_scalar_run() {
+    g_pass = 0; g_fail = 0;
+
+    test_mod_n_reduction();
+    test_overflow_normalization();
+    test_edge_scalars();
+    test_scalar_laws();
+    test_scalar_inverse();
+    test_glv_split();
+    test_high_bits();
+    test_negate();
+
+    return g_fail > 0 ? 1 : 0;
+}
+
+// ============================================================================
+#ifndef UNIFIED_AUDIT_RUNNER
 int main() {
     printf("===============================================================\n");
     printf("  AUDIT I.2 -- Scalar Arithmetic Correctness\n");
@@ -324,3 +344,4 @@ int main() {
 
     return g_fail > 0 ? 1 : 0;
 }
+#endif // UNIFIED_AUDIT_RUNNER
