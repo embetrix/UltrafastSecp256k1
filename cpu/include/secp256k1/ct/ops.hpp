@@ -84,10 +84,13 @@ namespace secp256k1::ct {
 // Returns 0xFFFFFFFFFFFFFFFF if v == 0, else 0x0000000000000000
 inline std::uint64_t is_zero_mask(std::uint64_t v) noexcept {
     // ~(v | -v) has MSB set iff v == 0
+    value_barrier(v);   // prevent compiler from recognising v's value range
     std::uint64_t nv = -v;
-    value_barrier(nv);
-    return static_cast<std::uint64_t>(
+    value_barrier(nv);  // prevent compiler from knowing nv == -v
+    std::uint64_t mask = static_cast<std::uint64_t>(
         -static_cast<std::int64_t>((~(v | nv)) >> 63));
+    value_barrier(mask); // prevent compiler from converting result into branch
+    return mask;
 }
 
 // Returns 0xFFFFFFFFFFFFFFFF if v != 0, else 0x0000000000000000
@@ -104,7 +107,9 @@ inline std::uint64_t eq_mask(std::uint64_t a, std::uint64_t b) noexcept {
 inline std::uint64_t bool_to_mask(bool flag) noexcept {
     std::uint64_t v = static_cast<std::uint64_t>(flag);
     value_barrier(v);
-    return -v;
+    std::uint64_t mask = -v;
+    value_barrier(mask); // prevent converting to branch
+    return mask;
 }
 
 // Returns 0xFFFFFFFFFFFFFFFF if a < b (unsigned), else 0

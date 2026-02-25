@@ -87,6 +87,14 @@ static inline uint64_t rdtsc() {
     asm volatile("mrs %0, cntvct_el0" : "=r"(val));
     return val;
 }
+#elif defined(__riscv) && __riscv_xlen == 64
+static inline uint64_t rdtsc() {
+    uint64_t val;
+    // fence serialises all prior loads/stores so rdcycle doesn't capture
+    // tail-end memory latency from the test-harness operand selection.
+    asm volatile("fence\nrdcycle %0" : "=r"(val) :: "memory");
+    return val;
+}
 #else
 static inline uint64_t rdtsc() {
     return std::chrono::high_resolution_clock::now().time_since_epoch().count();
@@ -407,20 +415,22 @@ static void test_ct_field() {
     constexpr int N = 50000;
 #endif
 
-    // Pre-generate ALL field elements
-    auto* fe_cls0 = new FieldElement[N]; // class 0: fixed (zero)
-    auto* fe_cls1 = new FieldElement[N]; // class 1: random
-    auto* fe_base = new FieldElement[N]; // second operand (always random)
-    int* classes  = new int[N];
+    // Pre-generate ALL field elements -- INTERLEAVED for cache symmetry.
+    // fe_input[i][0] = class 0 value, fe_input[i][1] = class 1 value.
+    // Both classes share the same cache line, eliminating load-latency bias.
+    struct FEPair { FieldElement v[2]; };
+    auto* fe_input = new FEPair[N];
+    auto* fe_base  = new FieldElement[N]; // second operand (always random)
+    int* classes   = new int[N];
 
     auto fe_zero = FieldElement::zero();
     auto fe_one  = FieldElement::one();
 
     for (int i = 0; i < N; ++i) {
-        classes[i]  = rng() & 1;
-        fe_cls0[i]  = fe_zero;     // fixed
-        fe_cls1[i]  = random_fe(); // random
-        fe_base[i]  = random_fe(); // second operand
+        classes[i]       = rng() & 1;
+        fe_input[i].v[0] = fe_zero;     // fixed
+        fe_input[i].v[1] = random_fe(); // random
+        fe_base[i]       = random_fe(); // second operand
     }
 
     // -- 2a: field_add ---------------------------------------------------
@@ -428,7 +438,7 @@ static void test_ct_field() {
         WelchState ws;
         for (int i = 0; i < N; ++i) {
             int cls = classes[i];
-            auto& op = (cls == 0) ? fe_cls0[i] : fe_cls1[i];
+            auto& op = fe_input[i].v[cls];
 
             BARRIER_FENCE();
             uint64_t t0 = rdtsc();
@@ -452,7 +462,7 @@ static void test_ct_field() {
         WelchState ws;
         for (int i = 0; i < N; ++i) {
             int cls = classes[i];
-            auto& op = (cls == 0) ? fe_cls0[i] : fe_cls1[i];
+            auto& op = fe_input[i].v[cls];
 
             BARRIER_FENCE();
             uint64_t t0 = rdtsc();
@@ -474,12 +484,12 @@ static void test_ct_field() {
     // -- 2c: field_sqr ---------------------------------------------------
     {
         // Swap cls0 to fe_one for sqr
-        for (int i = 0; i < N; ++i) fe_cls0[i] = fe_one;
+        for (int i = 0; i < N; ++i) fe_input[i].v[0] = fe_one;
 
         WelchState ws;
         for (int i = 0; i < N; ++i) {
             int cls = classes[i];
-            auto& op = (cls == 0) ? fe_cls0[i] : fe_cls1[i];
+            auto& op = fe_input[i].v[cls];
 
             BARRIER_FENCE();
             uint64_t t0 = rdtsc();
@@ -503,15 +513,15 @@ static void test_ct_field() {
         constexpr int NSLOW = (N < 5000) ? N : 5000;
         // Re-generate for fewer samples
         for (int i = 0; i < NSLOW; ++i) {
-            fe_cls0[i] = fe_one;
-            fe_cls1[i] = random_fe();
-            classes[i]  = rng() & 1;
+            fe_input[i].v[0] = fe_one;
+            fe_input[i].v[1] = random_fe();
+            classes[i]       = rng() & 1;
         }
 
         WelchState ws;
         for (int i = 0; i < NSLOW; ++i) {
             int cls = classes[i];
-            auto& op = (cls == 0) ? fe_cls0[i] : fe_cls1[i];
+            auto& op = fe_input[i].v[cls];
 
             BARRIER_FENCE();
             uint64_t t0 = rdtsc();
@@ -541,7 +551,7 @@ static void test_ct_field() {
             int cls = classes[i];
             uint64_t mask = masks[cls];
             auto dst = fe_base[i];
-            auto src = fe_cls1[i];
+            auto src = fe_input[i].v[1];
 
             BARRIER_OPAQUE(mask);
             uint64_t t0 = rdtsc();
@@ -561,12 +571,12 @@ static void test_ct_field() {
 
     // -- 2f: field_is_zero -----------------------------------------------
     {
-        for (int i = 0; i < N; ++i) fe_cls0[i] = fe_zero;
+        for (int i = 0; i < N; ++i) fe_input[i].v[0] = fe_zero;
 
         WelchState ws;
         for (int i = 0; i < N; ++i) {
             int cls = classes[i];
-            auto& op = (cls == 0) ? fe_cls0[i] : fe_cls1[i];
+            auto& op = fe_input[i].v[cls];
 
             BARRIER_FENCE();
             uint64_t t0 = rdtsc();
@@ -585,8 +595,7 @@ static void test_ct_field() {
         check(t < T_THRESHOLD, "ct::field_is_zero timing leak");
     }
 
-    delete[] fe_cls0;
-    delete[] fe_cls1;
+    delete[] fe_input;
     delete[] fe_base;
     delete[] classes;
 }
@@ -609,16 +618,17 @@ static void test_ct_scalar() {
     auto sc_zero = Scalar::from_hex(
         "0000000000000000000000000000000000000000000000000000000000000000");
 
-    auto* sc_cls0 = new Scalar[N];
-    auto* sc_cls1 = new Scalar[N];
-    auto* sc_base = new Scalar[N];
-    int* classes  = new int[N];
+    // Interleaved storage for cache symmetry
+    struct ScPair { Scalar v[2]; };
+    auto* sc_input = new ScPair[N];
+    auto* sc_base  = new Scalar[N];
+    int* classes   = new int[N];
 
     for (int i = 0; i < N; ++i) {
-        classes[i] = rng() & 1;
-        sc_cls0[i] = sc_one;
-        sc_cls1[i] = random_scalar();
-        sc_base[i] = random_scalar();
+        classes[i]       = rng() & 1;
+        sc_input[i].v[0] = sc_one;          // fixed
+        sc_input[i].v[1] = random_scalar(); // random
+        sc_base[i]       = random_scalar();
     }
 
     // -- 3a: scalar_add --------------------------------------------------
@@ -626,7 +636,7 @@ static void test_ct_scalar() {
         WelchState ws;
         for (int i = 0; i < N; ++i) {
             int cls = classes[i];
-            auto& op = (cls == 0) ? sc_cls0[i] : sc_cls1[i];
+            auto& op = sc_input[i].v[cls];
 
             BARRIER_FENCE();
             uint64_t t0 = rdtsc();
@@ -650,7 +660,7 @@ static void test_ct_scalar() {
         WelchState ws;
         for (int i = 0; i < N; ++i) {
             int cls = classes[i];
-            auto& op = (cls == 0) ? sc_cls0[i] : sc_cls1[i];
+            auto& op = sc_input[i].v[cls];
 
             BARRIER_FENCE();
             uint64_t t0 = rdtsc();
@@ -677,7 +687,7 @@ static void test_ct_scalar() {
             int cls = classes[i];
             uint64_t mask = masks[cls];
             auto dst = sc_base[i];
-            auto src = sc_cls1[i];
+            auto src = sc_input[i].v[1];
 
             BARRIER_OPAQUE(mask);
             uint64_t t0 = rdtsc();
@@ -697,12 +707,12 @@ static void test_ct_scalar() {
 
     // -- 3d: scalar_is_zero ----------------------------------------------
     {
-        for (int i = 0; i < N; ++i) sc_cls0[i] = sc_zero;
+        for (int i = 0; i < N; ++i) sc_input[i].v[0] = sc_zero;
 
         WelchState ws;
         for (int i = 0; i < N; ++i) {
             int cls = classes[i];
-            auto& op = (cls == 0) ? sc_cls0[i] : sc_cls1[i];
+            auto& op = sc_input[i].v[cls];
 
             BARRIER_FENCE();
             uint64_t t0 = rdtsc();
@@ -793,8 +803,7 @@ static void test_ct_scalar() {
         check(t < T_THRESHOLD, "ct::scalar_window timing leak");
     }
 
-    delete[] sc_cls0;
-    delete[] sc_cls1;
+    delete[] sc_input;
     delete[] sc_base;
     delete[] classes;
 }
@@ -1177,23 +1186,28 @@ static void test_ct_utils() {
 
     // -- 5d: ct_compare --------------------------------------------------
     {
-        struct Pair { uint8_t a[32]; uint8_t b[32]; };
-        auto* pairs0 = new Pair[N];
-        auto* pairs1 = new Pair[N];
+        // Interleaved: both classes in same cache line
+        struct CmpPair {
+            uint8_t a[2][32]; // a[0]=cls0.a, a[1]=cls1.a
+            uint8_t b[2][32]; // b[0]=cls0.b, b[1]=cls1.b
+        };
+        auto* cmp_data = new CmpPair[N];
         int classes[N];
         for (int i = 0; i < N; ++i) {
             classes[i] = rng() & 1;
-            random_bytes(pairs0[i].a, 32);
-            std::memcpy(pairs0[i].b, pairs0[i].a, 32); // equal
-            random_bytes(pairs1[i].a, 32);
-            random_bytes(pairs1[i].b, 32); // different
+            // Class 0: equal pair
+            random_bytes(cmp_data[i].a[0], 32);
+            std::memcpy(cmp_data[i].b[0], cmp_data[i].a[0], 32);
+            // Class 1: different pair
+            random_bytes(cmp_data[i].a[1], 32);
+            random_bytes(cmp_data[i].b[1], 32);
         }
 
         WelchState ws;
         for (int i = 0; i < N; ++i) {
             int cls = classes[i];
-            const uint8_t* a = (cls == 0) ? pairs0[i].a : pairs1[i].a;
-            const uint8_t* b = (cls == 0) ? pairs0[i].b : pairs1[i].b;
+            const uint8_t* a = cmp_data[i].a[cls];
+            const uint8_t* b = cmp_data[i].b[cls];
 
             BARRIER_FENCE();
             uint64_t t0 = rdtsc();
@@ -1206,8 +1220,7 @@ static void test_ct_utils() {
 
             ws.push(cls, static_cast<double>(t1 - t0));
         }
-        delete[] pairs0;
-        delete[] pairs1;
+        delete[] cmp_data;
         double t = std::abs(ws.t_value());
         printf("    ct_compare:      |t| = %6.2f  %s\n",
                t, t < T_THRESHOLD ? "[OK] CT" : "[!]  LEAK");
