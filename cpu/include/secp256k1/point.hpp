@@ -9,7 +9,11 @@
 // On 5x52-capable platforms, Point stores FieldElement52 internally
 // for zero-conversion-overhead point arithmetic.
 // FE52 native storage: only on 64-bit platforms with __int128
-#if defined(__SIZEOF_INT128__) && !defined(SECP256K1_PLATFORM_ESP32) && !defined(SECP256K1_PLATFORM_STM32)
+// Excluded on Emscripten/WASM: wasm32 emulates __int128 via compiler intrinsics,
+// which is correct but gives no speed benefit over 4x64 FieldElement.
+// The 52-bit dual_scalar_mul_gen_point also builds huge static tables (8192 entries)
+// that are unnecessary for WASM targets.
+#if defined(__SIZEOF_INT128__) && !defined(SECP256K1_PLATFORM_ESP32) && !defined(SECP256K1_PLATFORM_STM32) && !defined(__EMSCRIPTEN__)
   #ifndef SECP256K1_FAST_52BIT
     #define SECP256K1_FAST_52BIT 1
   #endif
