@@ -243,6 +243,48 @@ static void test_point_kat() {
     auto neg_Ps2 = Ps2.negate();
     auto should_be_inf = Ps2.add(neg_Ps2);
     CHECK(should_be_inf.is_infinity(), "P + (-P) == O");
+
+    // ---- Non-generator scalar_mul (exercises wNAF/GLV fallback path) ----
+    // This is THE critical test for WASM verify correctness.
+    // Verify uses P.scalar_mul(u2) where P is NOT the generator.
+    // This path was previously dead code on desktop (FE52+GLV) and untested.
+    {
+        // Q = s2*G (non-generator point, has is_generator_=false)
+        // Compute Q.scalar_mul(one_s) -- should equal Q (since one_s == 1)
+        auto Q_times_1 = Ps2.scalar_mul(one_s);
+        auto q1_comp = Q_times_1.to_compressed();
+        CHECK(q1_comp == ps2_comp, "Q.scalar_mul(1) == Q (non-generator path)");
+
+        // Compute Q.scalar_mul(s2) -- verify result is on curve
+        auto Q_times_s2 = Ps2.scalar_mul(s2);
+        auto qx = Q_times_s2.x();
+        auto qy = Q_times_s2.y();
+        auto qlhs = qy.square();
+        auto qrhs = qx * qx * qx + FieldElement::from_uint64(7);
+        CHECK(qlhs.to_bytes() == qrhs.to_bytes(), "Q.scalar_mul(s2) on curve");
+
+        // Cross-check: Q.scalar_mul(s2) == G.scalar_mul(s2*s2 mod n)
+        // Since Q = s2*G, then Q*s2 = s2*s2*G
+        auto s2_squared = s2 * s2;
+        auto expected = G.scalar_mul(s2_squared);
+        auto exp_comp = expected.to_compressed();
+        auto qs2_comp = Q_times_s2.to_compressed();
+        CHECK(qs2_comp == exp_comp, "Q*s2 == G*(s2^2) cross-check");
+    }
+
+    // ---- dual_scalar_mul_gen_point self-consistency ----
+    // This is the exact operation verify uses: a*G + b*P
+    {
+        auto a = Scalar::from_bytes(MSG_HASH);
+        auto b = one_s;
+        // dual_scalar_mul_gen_point(a, 1, Ps2) should == a*G + Ps2
+        auto R = Point::dual_scalar_mul_gen_point(a, b, Ps2);
+        auto aG = G.scalar_mul(a);
+        auto expected_R = aG.add(Ps2);
+        auto r_comp = R.to_compressed();
+        auto exp_comp = expected_R.to_compressed();
+        CHECK(r_comp == exp_comp, "dual_scalar_mul_gen_point consistency");
+    }
 }
 
 // ============================================================================
