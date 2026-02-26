@@ -173,17 +173,18 @@ if(SECP256K1_BUILD_EXAMPLES)
     add_subdirectory(examples)
 endif()
 
-# -- Audit infrastructure (standalone CTest targets + unified runner) -------
-# All audit-specific targets live in audit/ to keep the library source clean.
-if(SECP256K1_BUILD_CPU AND BUILD_TESTING)
-    add_subdirectory(audit)
-endif()
-
 # -- Stable C ABI layer (ufsecp_*) -----------------------------------------
+# Built before audit/ so that ufsecp_static is available for fuzz tests.
 option(SECP256K1_BUILD_CABI "Build the stable ufsecp_* C ABI library" ON)
 if(SECP256K1_BUILD_CABI AND SECP256K1_BUILD_CPU)
     add_subdirectory(include/ufsecp)
     message(STATUS "  C ABI (ufsecp):   ON")
+endif()
+
+# -- Audit infrastructure (standalone CTest targets + unified runner) -------
+# All audit-specific targets live in audit/ to keep the library source clean.
+if(SECP256K1_BUILD_CPU AND BUILD_TESTING)
+    add_subdirectory(audit)
 endif()
 
 # -- Cross-library differential test -----------------------------------------
