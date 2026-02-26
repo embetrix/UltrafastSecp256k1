@@ -204,6 +204,7 @@ inline int ct_compare(const void* a, const void* b, std::size_t len) noexcept {
             std::uint64_t differs = gt | lt;  // 0 or 1
             ct::value_barrier(differs);
             std::uint64_t mask = 0ULL - differs;
+            ct::value_barrier(mask);
             result = (gt - lt) & mask;  // result was 0
         }
         ct::value_barrier(result);
@@ -215,6 +216,7 @@ inline int ct_compare(const void* a, const void* b, std::size_t len) noexcept {
             std::uint64_t differs = gt | lt;
             ct::value_barrier(differs);
             std::uint64_t mask = 0ULL - differs;
+            ct::value_barrier(mask);
             result = ((gt - lt) & mask) | (result & ~mask);
         }
         ct::value_barrier(result);
@@ -226,6 +228,7 @@ inline int ct_compare(const void* a, const void* b, std::size_t len) noexcept {
             std::uint64_t differs = gt | lt;
             ct::value_barrier(differs);
             std::uint64_t mask = 0ULL - differs;
+            ct::value_barrier(mask);
             result = ((gt - lt) & mask) | (result & ~mask);
         }
         ct::value_barrier(result);
@@ -237,6 +240,7 @@ inline int ct_compare(const void* a, const void* b, std::size_t len) noexcept {
             std::uint64_t differs = gt | lt;
             ct::value_barrier(differs);
             std::uint64_t mask = 0ULL - differs;
+            ct::value_barrier(mask);
             result = ((gt - lt) & mask) | (result & ~mask);
         }
 
@@ -285,6 +289,7 @@ inline int ct_compare(const void* a, const void* b, std::size_t len) noexcept {
 
         // mask = all-ones when take==1, zero when take==0
         std::uint64_t mask = 0ULL - take;
+        ct::value_barrier(mask);
 
         // Branchless unsigned compare: ct_cmp_pair-style barriers on inputs
         std::uint64_t gt, lt;
@@ -323,6 +328,7 @@ inline int ct_compare(const void* a, const void* b, std::size_t len) noexcept {
         ct::value_barrier(decided);
         std::uint64_t take = nz & (1ULL - decided);
         std::uint64_t mask = 0ULL - take;
+        ct::value_barrier(mask);
 
         std::uint64_t gt_b, lt_b;
         ct::value_barrier(ai);

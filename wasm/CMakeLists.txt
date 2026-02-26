@@ -135,3 +135,32 @@ message(STATUS "  secp256k1_wasm.wasm  -- WebAssembly binary")
 message(STATUS "  secp256k1.mjs        -- High-level JS wrapper")
 message(STATUS "  secp256k1.d.ts       -- TypeScript declarations")
 message(STATUS "")
+
+# -- Cross-Platform KAT Test (Node.js executable) ----------------------------
+# Compiles the golden-vector test to WASM, runnable via: node wasm_kat_test.js
+# Verifies byte-exact equivalence of field/scalar/point/ECDSA/Schnorr on WASM.
+add_executable(wasm_kat_test
+    ${CMAKE_CURRENT_SOURCE_DIR}/../audit/test_cross_platform_kat.cpp
+)
+target_link_libraries(wasm_kat_test PRIVATE fastsecp256k1)
+target_include_directories(wasm_kat_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../cpu/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../include
+)
+target_link_options(wasm_kat_test PRIVATE
+    "SHELL:-s ENVIRONMENT=node"
+    "SHELL:-s ALLOW_MEMORY_GROWTH=1"
+    "SHELL:-s INITIAL_MEMORY=4194304"
+    "SHELL:-s STACK_SIZE=524288"
+    "SHELL:-s EXIT_RUNTIME=1"
+    "SHELL:-s FILESYSTEM=0"
+)
+if(CMAKE_BUILD_TYPE STREQUAL "Release")
+    target_compile_options(wasm_kat_test PRIVATE -O3 -fno-exceptions)
+    target_link_options(wasm_kat_test PRIVATE -O3 "SHELL:-s ASSERTIONS=0")
+endif()
+set_target_properties(wasm_kat_test PROPERTIES
+    SUFFIX ".js"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/dist"
+)
+message(STATUS "  wasm_kat_test.js     -- Cross-platform KAT test (node)")
