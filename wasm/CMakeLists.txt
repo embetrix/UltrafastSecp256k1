@@ -161,6 +161,6 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release")
 endif()
 set_target_properties(wasm_kat_test PROPERTIES
     SUFFIX ".js"
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/dist"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/kat"
 )
-message(STATUS "  wasm_kat_test.js     -- Cross-platform KAT test (node)")
+message(STATUS "  wasm_kat_test.js     -- Cross-platform KAT test (node) [build/wasm/kat/]")
