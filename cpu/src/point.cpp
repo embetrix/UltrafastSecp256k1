@@ -3,7 +3,7 @@
 #include "secp256k1/precompute.hpp"
 #endif
 #include "secp256k1/glv.hpp"
-#if defined(__SIZEOF_INT128__)
+#if defined(__SIZEOF_INT128__) && !defined(__EMSCRIPTEN__)
 #include "secp256k1/field_52.hpp"
 #endif
 
@@ -400,7 +400,7 @@ static inline void jacobian_add_inplace(JacobianPoint& p, const JacobianPoint& q
 // This gives ~2.5-3x speedup to point double/add/mixed-add.
 // ===============================================================================
 
-#if defined(__SIZEOF_INT128__)
+#if defined(__SIZEOF_INT128__) && !defined(__EMSCRIPTEN__)
 #define SECP256K1_FAST_52BIT 1
 
 struct JacobianPoint52 {
