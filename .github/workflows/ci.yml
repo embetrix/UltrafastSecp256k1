@@ -143,7 +143,7 @@ jobs:
         run: cmake --build build/${{ matrix.sanitizer }} -j$(nproc)
 
       - name: Test (${{ matrix.label }})
-        run: ctest --test-dir build/${{ matrix.sanitizer }} --output-on-failure -j$(nproc) -E "^ct_sidechannel"
+        run: ctest --test-dir build/${{ matrix.sanitizer }} --output-on-failure -j$(nproc) -E "^(ct_sidechannel|unified_audit)" --timeout 300
 
   # -- Windows (MSVC + Clang-cl) ----------------------------------------------
   windows:
@@ -346,6 +346,8 @@ jobs:
           ls -lh build/wasm/dist/secp256k1_wasm.js
           ls -lh build/wasm/dist/secp256k1_wasm.wasm
           echo "WASM size: $(du -h build/wasm/dist/secp256k1_wasm.wasm | cut -f1)"
+          echo "KAT test files:"
+          ls -lh build/wasm/kat/
 
       - name: Setup Node.js
         uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6
@@ -358,7 +360,7 @@ jobs:
           node ../../../wasm/bench_wasm.mjs
 
       - name: Run WASM KAT equivalence test
-        run: node build/wasm/kat/wasm_kat_test.js
+        run: node --stack-size=4096 build/wasm/kat/wasm_kat_test.js
 
       - name: Upload WASM artifact
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0

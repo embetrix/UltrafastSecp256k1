@@ -154,10 +154,11 @@ target_link_options(wasm_kat_test PRIVATE
     "SHELL:-s STACK_SIZE=524288"
     "SHELL:-s EXIT_RUNTIME=1"
     "SHELL:-s FILESYSTEM=0"
+    "SHELL:-s SINGLE_FILE=1"
 )
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
     target_compile_options(wasm_kat_test PRIVATE -O3 -fno-exceptions)
-    target_link_options(wasm_kat_test PRIVATE -O3 "SHELL:-s ASSERTIONS=0")
+    target_link_options(wasm_kat_test PRIVATE -O3 "SHELL:-s ASSERTIONS=1")
 endif()
 set_target_properties(wasm_kat_test PROPERTIES
     SUFFIX ".js"
