@@ -238,9 +238,9 @@ size_t ufsecp_ctx_size(void) {
 ufsecp_error_t ufsecp_seckey_verify(const ufsecp_ctx* ctx,
                                     const uint8_t privkey[32]) {
     if (!privkey) return UFSECP_ERR_NULL_ARG;
+    (void)ctx;
     auto sk = scalar_from_bytes(privkey);
     return sk.is_zero() ? UFSECP_ERR_BAD_KEY : UFSECP_OK;
-    (void)ctx;
 }
 
 ufsecp_error_t ufsecp_seckey_negate(ufsecp_ctx* ctx, uint8_t privkey[32]) {

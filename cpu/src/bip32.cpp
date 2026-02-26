@@ -322,7 +322,8 @@ std::pair<ExtendedKey, bool> ExtendedKey::derive_child(uint32_t index) const {
     data[35] = static_cast<uint8_t>(index >> 8);
     data[36] = static_cast<uint8_t>(index);
 
-    auto I = hmac_sha512(chain_code.data(), 32, data, hardened ? 37 : 37);
+    // Both hardened (0x00||key||index) and normal (pubkey||index) are 37 bytes
+    auto I = hmac_sha512(chain_code.data(), 32, data, 37);
 
     std::array<uint8_t, 32> IL{}, IR{};
     std::memcpy(IL.data(), I.data(), 32);

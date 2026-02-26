@@ -1129,7 +1129,7 @@ static bool test_scalar_stress(bool verbose) {
         Scalar c = Scalar::from_limbs(lc);
         if (!(a * (b + c) == a * b + a * c)) ok = false;         // distributive
         if (!((a * b) * c == a * (b * c))) ok = false;            // associativity
-        if (!((a - a) == zero_s)) ok = false;                     // a-a=0
+        { Scalar a2 = a; if (!((a - a2) == zero_s)) ok = false; } // a-a=0
         if (!((a * one_s) == a)) ok = false;                      // a*1=a
     }
     if (verbose) SELFTEST_PRINT(ok ? "    PASS\n" : "    FAIL\n");
