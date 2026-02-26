@@ -232,6 +232,10 @@ static void test_point_kat() {
         printf("    {\"s2G_uncomp\", \"%s\"},\n", bytes_to_hex(ps2_uncomp.data(), 65).c_str());
     }
 
+    // Verify s2*G against golden vector (generator path correctness)
+    verify_hex("s2G", ps2_comp.data(), 33,
+        "032abe6b784449d52015644f460d13673c5f38f18cc13d213d9c5d969c73b74d15");
+
     // Verify on curve: y^2 == x^3 + 7
     auto x = Ps2.x();
     auto y = Ps2.y();
@@ -269,6 +273,14 @@ static void test_point_kat() {
         auto expected = G.scalar_mul(s2_squared);
         auto exp_comp = expected.to_compressed();
         auto qs2_comp = Q_times_s2.to_compressed();
+
+        // Diagnostic: print hex values for cross-check debugging
+        printf("  [diag] s2*G       = %s\n", bytes_to_hex(ps2_comp.data(), 33).c_str());
+        printf("  [diag] Q*s2       = %s\n", bytes_to_hex(qs2_comp.data(), 33).c_str());
+        printf("  [diag] G*(s2^2)   = %s\n", bytes_to_hex(exp_comp.data(), 33).c_str());
+        auto s2sq_bytes = s2_squared.to_bytes();
+        printf("  [diag] s2^2 mod n = %s\n", bytes_to_hex(s2sq_bytes.data(), 32).c_str());
+
         CHECK(qs2_comp == exp_comp, "Q*s2 == G*(s2^2) cross-check");
     }
 

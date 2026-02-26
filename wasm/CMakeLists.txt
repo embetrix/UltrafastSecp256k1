@@ -44,6 +44,14 @@ set(SECP256K1_INSTALL OFF CACHE BOOL "" FORCE)
 set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../cpu ${CMAKE_CURRENT_BINARY_DIR}/cpu)
 
+# WASM (wasm32): __int128 is defined by Emscripten's Clang but emulated via
+# compiler builtins (__multi3 etc.).  Empirically the emulated __int128
+# produces incorrect results in the schoolbook/Barrett scalar multiply path
+# (field KAT passes because SafeGCD only checks a few vectors).
+# Force the portable 32-bit-safe helpers (mul64, add64, sub64) that use only
+# native i64 ops -- correct and fast on wasm32.
+target_compile_definitions(fastsecp256k1 PUBLIC SECP256K1_NO_INT128)
+
 # -- WASM module --------------------------------------------------------------
 
 # Exported C functions for JS interop
