@@ -96,6 +96,14 @@ inline bool is_on_curve(const Point& pt) noexcept {
     FieldElement x3 = x2 * x;
     FieldElement rhs = x3 + FieldElement::from_uint64(7);
     
+    // Normalize both sides before comparing:
+    // Some optimized *_impl paths (e.g. montgomery_reduce_bmi2) may produce
+    // results in [p, 2^256) that are correct mod p but not canonical.
+    // Adding zero forces add_impl's conditional p-subtraction, ensuring
+    // both values are in [0, p) for correct limb-wise operator==.
+    lhs = lhs + FieldElement::zero();
+    rhs = rhs + FieldElement::zero();
+    
     return lhs == rhs;
 }
 
