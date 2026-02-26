@@ -60,13 +60,27 @@ namespace secp256k1::ct {
 // Uses inline asm (GCC/Clang) or volatile (MSVC) to create optimization barrier.
 
 #if defined(__GNUC__) || defined(__clang__)
-    // Force value through a register so compiler cannot reason about it
+#if defined(__riscv)
+    // RISC-V in-order cores (U74): register-only barrier.
+    // "memory" clobber forces excessive stack spills/reloads on simple
+    // in-order pipelines, creating store-to-load forwarding timing jitter
+    // that defeats CT guarantees. "+r" alone prevents the compiler from
+    // reasoning about the register value (sufficient for branchless patterns).
+    inline void value_barrier(std::uint64_t& v) noexcept {
+        asm volatile("" : "+r"(v));
+    }
+    inline void value_barrier(std::uint32_t& v) noexcept {
+        asm volatile("" : "+r"(v));
+    }
+#else
+    // x86/ARM OOO cores: memory clobber is cheap; keep full fence.
     inline void value_barrier(std::uint64_t& v) noexcept {
         asm volatile("" : "+r"(v) : : "memory");
     }
     inline void value_barrier(std::uint32_t& v) noexcept {
         asm volatile("" : "+r"(v) : : "memory");
     }
+#endif
 #else
     // MSVC: volatile prevents optimization of subsequent operations
     inline void value_barrier(std::uint64_t& v) noexcept {

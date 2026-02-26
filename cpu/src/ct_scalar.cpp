@@ -193,22 +193,29 @@ std::uint64_t scalar_bit(const Scalar& a, std::size_t index) noexcept {
 
 std::uint64_t scalar_window(const Scalar& a, std::size_t pos,
                             unsigned width) noexcept {
-    // Direct limb access: pos and width are public (derived from loop counter),
-    // so variable-time access to the limb index is safe. Only the scalar VALUE
-    // is secret, and shift+mask doesn't leak it.
+    // Branchless window extraction.
+    // pos and width are public (from loop counter), scalar VALUE is secret.
+    // Despite pos being public, we avoid branches for dudect-clean CT proof.
     const auto& limbs = a.limbs();
     std::size_t limb_idx = pos >> 6;
     std::size_t bit_idx  = pos & 63;
     std::uint64_t mask   = (1ULL << width) - 1;
 
-    // Fast path: window doesn't span limb boundary
-    if (bit_idx + width <= 64) {
-        return (limbs[limb_idx] >> bit_idx) & mask;
-    }
-    // Slow path: window crosses limb boundary (only when bit_idx + width > 64)
     std::uint64_t lo = limbs[limb_idx] >> bit_idx;
-    std::uint64_t hi = (limb_idx + 1 < 4) ? limbs[limb_idx + 1] : 0;
-    return (lo | (hi << (64 - bit_idx))) & mask;
+
+    // Load next limb; wrap index and zero when out-of-bounds (limb_idx == 3)
+    std::uint64_t hi = limbs[(limb_idx + 1) & 3];
+    std::uint64_t in_bounds = is_nonzero_mask(
+        static_cast<std::uint64_t>(limb_idx ^ 3));
+    hi &= in_bounds;
+
+    // Combine: shift by (64 - bit_idx). When bit_idx == 0 shift would be 64
+    // (UB), so clamp to [0,63] and zero hi contribution instead.
+    std::uint64_t shift = (64 - bit_idx) & 63;
+    std::uint64_t hi_active = is_nonzero_mask(static_cast<std::uint64_t>(bit_idx));
+    hi &= hi_active;
+
+    return (lo | (hi << shift)) & mask;
 }
 
 } // namespace secp256k1::ct

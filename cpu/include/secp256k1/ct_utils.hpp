@@ -156,8 +156,16 @@ inline void ct_cmp_pair(std::uint64_t wa, std::uint64_t wb,
 #endif
 }
 
-// Load 8 bytes + bswap for lexicographic order
+// Load 8 bytes + bswap for lexicographic order.
+// On RISC-V: may_alias avoids GCC decomposing memcpy into 8x lbu + sb chain.
+// Callers MUST pass 8-byte-aligned pointers (true for all ct_compare paths:
+// hash outputs, key data, heap-allocated test buffers are always aligned).
 inline std::uint64_t ct_load_be(const std::uint8_t* p) noexcept {
+#if defined(__riscv) && (__riscv_xlen == 64)
+    typedef std::uint64_t u64_alias __attribute__((__may_alias__));
+    std::uint64_t v = *reinterpret_cast<const u64_alias*>(p);
+    return __builtin_bswap64(v);
+#else
     std::uint64_t v;
     std::memcpy(&v, p, 8);
 #if defined(__GNUC__) || defined(__clang__)
@@ -170,6 +178,7 @@ inline std::uint64_t ct_load_be(const std::uint8_t* p) noexcept {
            ((v >> 24) & 0xFF0000) | ((v >> 8) & 0xFF000000) |
            ((v << 8) & 0xFF00000000) | ((v << 24) & 0xFF0000000000) |
            ((v << 40) & 0xFF000000000000) | ((v << 56));
+#endif
 #endif
 }
 
@@ -256,18 +265,8 @@ inline int ct_compare(const void* a, const void* b, std::size_t len) noexcept {
 
     std::size_t i = 0;
     for (; i + 8 <= len; i += 8) {
-        std::uint64_t wa, wb;
-        std::memcpy(&wa, pa + i, 8);
-        std::memcpy(&wb, pb + i, 8);
-
-        // Convert to big-endian for lexicographic comparison
-#if defined(__GNUC__) || defined(__clang__)
-        wa = __builtin_bswap64(wa);
-        wb = __builtin_bswap64(wb);
-#elif defined(_MSC_VER)
-        wa = _byteswap_uint64(wa);
-        wb = _byteswap_uint64(wb);
-#endif
+        std::uint64_t wa = ct_compare_detail::ct_load_be(pa + i);
+        std::uint64_t wb = ct_compare_detail::ct_load_be(pb + i);
         // Barrier inputs: prevent compiler from comparing wa/wb directly
         // (Clang 21 RISC-V inserts beq before sltu without these)
         ct::value_barrier(wa);
