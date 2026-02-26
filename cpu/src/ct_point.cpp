@@ -423,10 +423,10 @@ void table_lookup_core(CTAffinePoint* out,
                         std::uint64_t n,
                         unsigned group_size) noexcept {
     std::uint64_t negative = ((n >> (group_size - 1)) ^ 1u) & 1u;
-    std::uint64_t neg_mask = static_cast<std::uint64_t>(-negative);
+    std::uint64_t neg_mask = 0ULL - negative;
 
     unsigned index_bits = group_size - 1;
-    std::uint64_t index = (static_cast<std::uint64_t>(-negative) ^ n) &
+    std::uint64_t index = ((0ULL - negative) ^ n) &
                           ((1ULL << index_bits) - 1u);
 
     // Load first entry (80 bytes = x.n[5] + y.n[5]) into 3 ymm registers
@@ -499,10 +499,10 @@ void table_lookup_core(CTAffinePoint* out,
                         std::uint64_t n,
                         unsigned group_size) noexcept {
     std::uint64_t negative = ((n >> (group_size - 1)) ^ 1u) & 1u;
-    std::uint64_t neg_mask = static_cast<std::uint64_t>(-negative);
+    std::uint64_t neg_mask = 0ULL - negative;
 
     unsigned index_bits = group_size - 1;
-    std::uint64_t index = (static_cast<std::uint64_t>(-negative) ^ n) &
+    std::uint64_t index = ((0ULL - negative) ^ n) &
                           ((1ULL << index_bits) - 1u);
 
     // CT scan: write first entry, then cmov over it
@@ -1932,10 +1932,10 @@ void table_lookup_core(CTAffinePoint* out,
                         std::uint64_t n,
                         unsigned group_size) noexcept {
     std::uint64_t negative = ((n >> (group_size - 1)) ^ 1u) & 1u;
-    std::uint64_t neg_mask = static_cast<std::uint64_t>(-negative);
+    std::uint64_t neg_mask = 0ULL - negative;
 
     unsigned index_bits = group_size - 1;
-    std::uint64_t index = (static_cast<std::uint64_t>(-negative) ^ n) &
+    std::uint64_t index = ((0ULL - negative) ^ n) &
                           ((1ULL << index_bits) - 1u);
 
     out->x = table[0].x;

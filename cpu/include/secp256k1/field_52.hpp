@@ -92,7 +92,7 @@ struct alignas(8) FieldElement52 {
     // These just do 5 plain adds per operation. Caller is responsible
     // for normalizing before limbs would exceed 64 bits (after ~4096 adds).
 
-    // add: r[i] = a[i] + b[i]  (magnitude += 1)
+    // add: result limb i equals sum of operand limbs (magnitude increases by 1)
     FieldElement52 operator+(const FieldElement52& rhs) const noexcept;
     void add_assign(const FieldElement52& rhs) noexcept;
 
@@ -114,7 +114,6 @@ struct alignas(8) FieldElement52 {
     // -- Comparison (requires normalized inputs!) ---------------------
     bool is_zero() const noexcept;
     bool operator==(const FieldElement52& rhs) const noexcept;
-    bool operator!=(const FieldElement52& rhs) const noexcept;
 
     // -- Fast Variable-time Zero Check --------------------------------
     // Checks if value reduces to zero mod p WITHOUT full normalization.

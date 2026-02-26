@@ -7,6 +7,7 @@
 // ============================================================================
 // Wraps BIP-32 derivation with coin-aware path construction:
 //   m / purpose' / coin_type' / account' / change / address_index
+//   (where ' denotes hardened derivation)
 //
 // Standard purposes:
 //   44' -- P2PKH (BIP-44)

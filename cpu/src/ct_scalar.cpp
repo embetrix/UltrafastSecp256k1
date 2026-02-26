@@ -110,7 +110,7 @@ Scalar scalar_half(const Scalar& a) noexcept {
     std::uint64_t t[4];
     std::uint64_t carry = 0;
     for (std::size_t i = 0; i < 4; ++i) {
-        std::uint64_t n_masked = N[i] & static_cast<std::uint64_t>(-odd);
+        std::uint64_t n_masked = N[i] & (0ULL - odd);
         std::uint64_t sum_lo = al[i] + n_masked;
         std::uint64_t c1 = static_cast<std::uint64_t>(sum_lo < al[i]);
         std::uint64_t sum = sum_lo + carry;

@@ -13,7 +13,7 @@ namespace secp256k1::fast {
 
 // GLV constants for secp256k1
 namespace glv_constants {
-    // lambda (lambda) - eigenvalue where lambda*G = phi(G)
+    // lambda -- endomorphism eigenvalue: lambda * G equals phi(G)
     // lambda = 0x5363ad4cc05c30e0a5261c028812645a122e22ea20816678df02967c1b23bd72
     constexpr std::array<uint8_t, 32> LAMBDA = {
         0x53, 0x63, 0xad, 0x4c, 0xc0, 0x5c, 0x30, 0xe0,

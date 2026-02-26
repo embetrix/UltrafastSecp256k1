@@ -30,7 +30,7 @@ namespace secp256k1::fast {
 inline void field_cmov(FieldElement* r, const FieldElement* a, 
                        const FieldElement* b, bool flag) noexcept {
     // Convert flag to mask: 0 -> 0x0000000000000000, 1 -> 0xFFFFFFFFFFFFFFFF
-    std::uint64_t mask = -static_cast<std::uint64_t>(flag);
+    std::uint64_t mask = 0ULL - static_cast<std::uint64_t>(flag);
     
     auto& r_limbs = const_cast<std::array<std::uint64_t, 4>&>(r->limbs());
     const auto& a_limbs = a->limbs();
@@ -49,8 +49,8 @@ inline void field_cmovznz(FieldElement* r, const FieldElement* a,
                           const FieldElement* b, std::uint64_t flag) noexcept {
     // Convert flag to mask: 0 -> 0x0000000000000000, nonzero -> 0xFFFFFFFFFFFFFFFF
     // Use bitwise OR reduction across all bits to detect nonzero
-    std::uint64_t mask = (flag | (-flag)) >> 63; // Branchless nonzero test
-    mask = -mask; // Expand to full 64-bit mask
+    std::uint64_t mask = (flag | (0ULL - flag)) >> 63; // Branchless nonzero test
+    mask = 0ULL - mask; // Expand to full 64-bit mask
     
     auto& r_limbs = const_cast<std::array<std::uint64_t, 4>&>(r->limbs());
     const auto& a_limbs = a->limbs();
@@ -66,7 +66,7 @@ inline void field_cmovznz(FieldElement* r, const FieldElement* a,
 // Returns NEW FieldElement (no in-place mutation)
 inline FieldElement field_select(const FieldElement& a, const FieldElement& b, 
                                    bool flag) noexcept {
-    std::uint64_t mask = -static_cast<std::uint64_t>(flag);
+    std::uint64_t mask = 0ULL - static_cast<std::uint64_t>(flag);
     
     const auto& a_limbs = a.limbs();
     const auto& b_limbs = b.limbs();
@@ -85,7 +85,7 @@ inline std::uint64_t field_is_zero(const FieldElement& a) noexcept {
     const auto& limbs = a.limbs();
     std::uint64_t z = limbs[0] | limbs[1] | limbs[2] | limbs[3];
     // Branchless zero check: z==0 ? 1 : 0
-    return (z | (-z)) >> 63 ^ 1;
+    return (z | (0ULL - z)) >> 63 ^ 1;
 }
 
 // Check if two field elements are equal (branchless)
@@ -100,7 +100,7 @@ inline std::uint64_t field_eq(const FieldElement& a, const FieldElement& b) noex
                          (a_limbs[3] ^ b_limbs[3]);
     
     // Branchless equality check: diff==0 ? 1 : 0
-    return (diff | (-diff)) >> 63 ^ 1;
+    return (diff | (0ULL - diff)) >> 63 ^ 1;
 }
 
 // Conditional negate: if (flag) *r = -a; else *r = a;

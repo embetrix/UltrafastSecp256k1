@@ -102,7 +102,6 @@ public:
     void inverse_inplace();   // this = this^-^1 (modifies this)
 
     bool operator==(const FieldElement& rhs) const noexcept;
-    bool operator!=(const FieldElement& rhs) const noexcept { return !(*this == rhs); }
 
     // Zero-cost conversion to/from shared data type (for cross-backend interop)
 #if defined(__GNUC__)

@@ -39,7 +39,6 @@ public:
 
     bool is_zero() const noexcept;
     bool operator==(const Scalar& rhs) const noexcept;
-    bool operator!=(const Scalar& rhs) const noexcept { return !(*this == rhs); }
 
     // Modular inverse: a^{-1} mod n  (Fermat's little theorem: a^{n-2} mod n)
     // Returns zero if this is zero.

@@ -116,7 +116,6 @@ struct alignas(4) FieldElement26 {
     // -- Comparison (requires normalized inputs!) ---------------------
     bool is_zero() const noexcept;
     bool operator==(const FieldElement26& rhs) const noexcept;
-    bool operator!=(const FieldElement26& rhs) const noexcept;
 
     // -- Half ---------------------------------------------------------
     // Computes a/2 mod p. Branchless.

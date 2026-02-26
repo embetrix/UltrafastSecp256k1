@@ -68,7 +68,7 @@ FieldElement field_inv(const FieldElement& a) noexcept;
 void field_cmov(FieldElement* r, const FieldElement& a,
                 std::uint64_t mask) noexcept;
 
-// CT conditional swap: if (mask == all-ones) swap(a, b); else unchanged
+// CT conditional swap: when mask is all-ones, swaps a and b; otherwise unchanged
 void field_cswap(FieldElement* a, FieldElement* b,
                  std::uint64_t mask) noexcept;
 

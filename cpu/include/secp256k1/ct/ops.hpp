@@ -96,10 +96,10 @@ inline std::uint64_t is_zero_mask(std::uint64_t v) noexcept {
         : "=r"(mask) : "r"(v));
     return mask;
 #else
-    // ~(v | -v) has MSB set iff v == 0
+    // ~(v | (0-v)) has MSB set iff v == 0
     value_barrier(v);   // prevent compiler from recognising v's value range
-    std::uint64_t nv = -v;
-    value_barrier(nv);  // prevent compiler from knowing nv == -v
+    std::uint64_t nv = 0ULL - v;
+    value_barrier(nv);  // prevent compiler from knowing nv == (0-v)
     std::uint64_t mask = static_cast<std::uint64_t>(
         -static_cast<std::int64_t>((~(v | nv)) >> 63));
     value_barrier(mask); // prevent compiler from converting result into branch
@@ -121,22 +121,22 @@ inline std::uint64_t eq_mask(std::uint64_t a, std::uint64_t b) noexcept {
 inline std::uint64_t bool_to_mask(bool flag) noexcept {
     std::uint64_t v = static_cast<std::uint64_t>(flag);
     value_barrier(v);
-    std::uint64_t mask = -v;
+    std::uint64_t mask = 0ULL - v;
     value_barrier(mask); // prevent converting to branch
     return mask;
 }
 
-// Returns 0xFFFFFFFFFFFFFFFF if a < b (unsigned), else 0
+// Returns all-ones mask when a is strictly less than b (unsigned), else zero
 // Uses the borrow bit from subtraction
 inline std::uint64_t lt_mask(std::uint64_t a, std::uint64_t b) noexcept {
     // If a < b, then (a - b) borrows, so bit 64 of the extended result is 1
-    // We compute this as: a < b  <=>  ~a >= b  <=>  we check borrow
+    // Subtraction borrows when a < b; detects wrap via XOR-OR-shift pattern
     std::uint64_t diff = a - b;
     // Borrow occurred iff a < b. The borrow is in the "carry out" position.
     // For unsigned: a < b iff the subtract wraps, iff (a ^ ((a ^ b) | (diff ^ a))) has MSB set
     std::uint64_t borrow = (a ^ ((a ^ b) | (diff ^ a))) >> 63;
     value_barrier(borrow);
-    return -borrow;
+    return 0ULL - borrow;
 }
 
 // --- Conditional move (CT) ---------------------------------------------------

@@ -431,7 +431,7 @@ limbs4 sub_impl(const limbs4& a, const limbs4& b) {
         out[i] = sub64(a[i], b[i], borrow);
     }
     // Branchless: if borrow, add PRIME (mask selects PRIME or 0)
-    const auto mask = -static_cast<std::uint64_t>(borrow);
+    const auto mask = 0ULL - static_cast<std::uint64_t>(borrow);
     unsigned char carry = 0;
     out[0] = add64(out[0], PRIME[0] & mask, carry);
     out[1] = add64(out[1], PRIME[1] & mask, carry);
@@ -458,7 +458,7 @@ limbs4 add_impl(const limbs4& a, const limbs4& b) {
     // carry=1 means sum >= 2^256 -> definitely >= p
     // borrow=0 means (sum - p) didn't underflow -> sum >= p
     const auto use_reduced = static_cast<std::uint64_t>(carry | (1U - borrow));
-    const auto mask = -use_reduced;
+    const auto mask = 0ULL - use_reduced;
     out[0] ^= (out[0] ^ reduced[0]) & mask;
     out[1] ^= (out[1] ^ reduced[1]) & mask;
     out[2] ^= (out[2] ^ reduced[2]) & mask;
@@ -1063,7 +1063,7 @@ void normalize(limbs4& value) {
     reduced[2] = sub64(value[2], PRIME[2], borrow);
     reduced[3] = sub64(value[3], PRIME[3], borrow);
     // borrow == 0 means value >= PRIME -> use reduced
-    const auto mask = -static_cast<std::uint64_t>(1U - borrow);
+    const auto mask = 0ULL - static_cast<std::uint64_t>(1U - borrow);
     value[0] ^= (value[0] ^ reduced[0]) & mask;
     value[1] ^= (value[1] ^ reduced[1]) & mask;
     value[2] ^= (value[2] ^ reduced[2]) & mask;
