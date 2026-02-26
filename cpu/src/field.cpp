@@ -3096,7 +3096,16 @@ FieldElement FieldElement::sqrt() const {
 }
 
 bool FieldElement::operator==(const FieldElement& rhs) const noexcept {
-    return limbs_ == rhs.limbs_;
+    // Normalize both operands to canonical form [0, p) before comparing.
+    // Optimized arithmetic paths (e.g. montgomery_reduce_bmi2, square_impl)
+    // can produce results in [p, 2^256) that are correct mod p but have
+    // non-canonical limb representations.  A single conditional subtract
+    // of p is sufficient because all outputs are < 2p (since p > 2^255).
+    limbs4 a = limbs_;
+    limbs4 b = rhs.limbs_;
+    normalize(a);
+    normalize(b);
+    return a == b;
 }
 
 FieldElement fe_inverse_binary(const FieldElement& value) {
