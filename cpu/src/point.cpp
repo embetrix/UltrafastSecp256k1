@@ -1878,7 +1878,11 @@ static Point gen_fixed_mul(const Scalar& k) {
 #endif  // SECP256K1_PLATFORM_ESP32
 
 Point Point::scalar_mul(const Scalar& scalar) const {
-#if !defined(SECP256K1_PLATFORM_ESP32) && !defined(ESP_PLATFORM) && !defined(SECP256K1_PLATFORM_STM32)
+#if !defined(SECP256K1_PLATFORM_ESP32) && !defined(ESP_PLATFORM) && !defined(SECP256K1_PLATFORM_STM32) && !defined(__EMSCRIPTEN__)
+    // WASM: precompute tables produce incorrect results under Emscripten's
+    // __int128 emulation (field ops are fine, but the windowed accumulation
+    // path diverges for some scalars).  Use the proven double-and-add
+    // fallback instead -- correct and acceptable perf for WASM.
     if (is_generator_) {
         return scalar_mul_generator(scalar);
     }
