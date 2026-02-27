@@ -1,5 +1,5 @@
 # ============================================================================
-# UltrafastSecp256k1 — WebAssembly (Emscripten) Build
+# UltrafastSecp256k1 -- WebAssembly (Emscripten) Build
 # ============================================================================
 # Usage (standalone):
 #   emcmake cmake -S wasm -B build-wasm -DCMAKE_BUILD_TYPE=Release
@@ -37,14 +37,22 @@ message(STATUS "  Emscripten:  ${EMSCRIPTEN_VERSION}")
 message(STATUS "  Build Type:  ${CMAKE_BUILD_TYPE}")
 message(STATUS "======================================")
 
-# ── CPU library (portable mode, no ASM) ──────────────────────────────────────
+# -- CPU library (portable mode, no ASM) --------------------------------------
 set(SECP256K1_USE_ASM OFF CACHE BOOL "" FORCE)
 set(SECP256K1_USE_FAST_REDUCTION OFF CACHE BOOL "" FORCE)
 set(SECP256K1_INSTALL OFF CACHE BOOL "" FORCE)
 set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../cpu ${CMAKE_CURRENT_BINARY_DIR}/cpu)
 
-# ── WASM module ──────────────────────────────────────────────────────────────
+# WASM (wasm32): __int128 is defined by Emscripten's Clang but emulated via
+# compiler builtins (__multi3 etc.).  Empirically the emulated __int128
+# produces incorrect results in the schoolbook/Barrett scalar multiply path
+# (field KAT passes because SafeGCD only checks a few vectors).
+# Force the portable 32-bit-safe helpers (mul64, add64, sub64) that use only
+# native i64 ops -- correct and fast on wasm32.
+target_compile_definitions(fastsecp256k1 PUBLIC SECP256K1_NO_INT128)
+
+# -- WASM module --------------------------------------------------------------
 
 # Exported C functions for JS interop
 set(WASM_EXPORTED_FUNCTIONS
@@ -98,7 +106,7 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release")
     target_link_options(secp256k1_wasm PRIVATE
         -O3 -flto
         "SHELL:-s ASSERTIONS=0"
-        # NOTE: --closure 1 removed — it breaks atexit/exception runtime
+        # NOTE: --closure 1 removed -- it breaks atexit/exception runtime
     )
 else()
     target_link_options(secp256k1_wasm PRIVATE
@@ -130,8 +138,38 @@ add_custom_command(TARGET secp256k1_wasm POST_BUILD
 
 message(STATUS "")
 message(STATUS "WASM build configured. Output will be in build-wasm/dist/")
-message(STATUS "  secp256k1_wasm.js    — Emscripten loader (ES6 module)")
-message(STATUS "  secp256k1_wasm.wasm  — WebAssembly binary")
-message(STATUS "  secp256k1.mjs        — High-level JS wrapper")
-message(STATUS "  secp256k1.d.ts       — TypeScript declarations")
+message(STATUS "  secp256k1_wasm.js    -- Emscripten loader (ES6 module)")
+message(STATUS "  secp256k1_wasm.wasm  -- WebAssembly binary")
+message(STATUS "  secp256k1.mjs        -- High-level JS wrapper")
+message(STATUS "  secp256k1.d.ts       -- TypeScript declarations")
 message(STATUS "")
+
+# -- Cross-Platform KAT Test (Node.js executable) ----------------------------
+# Compiles the golden-vector test to WASM, runnable via: node wasm_kat_test.js
+# Verifies byte-exact equivalence of field/scalar/point/ECDSA/Schnorr on WASM.
+add_executable(wasm_kat_test
+    ${CMAKE_CURRENT_SOURCE_DIR}/../audit/test_cross_platform_kat.cpp
+)
+target_link_libraries(wasm_kat_test PRIVATE fastsecp256k1)
+target_include_directories(wasm_kat_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../cpu/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../include
+)
+target_link_options(wasm_kat_test PRIVATE
+    "SHELL:-s ENVIRONMENT=node"
+    "SHELL:-s ALLOW_MEMORY_GROWTH=1"
+    "SHELL:-s INITIAL_MEMORY=16777216"
+    "SHELL:-s STACK_SIZE=2097152"
+    "SHELL:-s EXIT_RUNTIME=1"
+    "SHELL:-s FILESYSTEM=0"
+    "SHELL:-s SINGLE_FILE=1"
+)
+if(CMAKE_BUILD_TYPE STREQUAL "Release")
+    target_compile_options(wasm_kat_test PRIVATE -O3 -flto -fno-exceptions)
+    target_link_options(wasm_kat_test PRIVATE -O3 -flto "SHELL:-s ASSERTIONS=0")
+endif()
+set_target_properties(wasm_kat_test PROPERTIES
+    SUFFIX ".js"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/kat"
+)
+message(STATUS "  wasm_kat_test.js     -- Cross-platform KAT test (node) [build/wasm/kat/]")

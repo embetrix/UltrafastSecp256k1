@@ -55,6 +55,18 @@
     #define SECP256K1_UNLIKELY(x) (x)
 #endif
 
+// Prevent inlining: critical for large-stack-frame functions where MSVC's
+// GS-cookie (stack canary) can be corrupted when the compiler inlines ~5KB+
+// of local arrays into a caller's frame. GCC/Clang use __attribute__; MSVC
+// requires __declspec(noinline) (it silently ignores __attribute__).
+#if defined(_MSC_VER)
+    #define SECP256K1_NOINLINE __declspec(noinline)
+#elif defined(__GNUC__) || defined(__clang__)
+    #define SECP256K1_NOINLINE __attribute__((noinline))
+#else
+    #define SECP256K1_NOINLINE
+#endif
+
 // Restrict pointer aliasing optimization
 #if defined(_MSC_VER)
     #define SECP256K1_RESTRICT __restrict

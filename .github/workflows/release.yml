@@ -100,7 +100,7 @@ jobs:
 
       # -- Test --
       - name: Test
-        run: ctest --test-dir build --output-on-failure -j4 -E "^ct_sidechannel$"
+        run: ctest --test-dir build --output-on-failure -j4 -E "^ct_sidechannel"
 
       # -- Install into staging dir --
       - name: Install
@@ -197,7 +197,7 @@ jobs:
       - name: Test (via QEMU)
         run: |
           export QEMU_LD_PREFIX=/usr/aarch64-linux-gnu
-          ctest --test-dir build --output-on-failure -j4 -E "^ct_sidechannel$" || echo "Some tests may skip under QEMU"
+          ctest --test-dir build --output-on-failure -j4 -E "^ct_sidechannel" || echo "Some tests may skip under QEMU"
 
       - name: Collect release artifacts
         run: |
@@ -377,6 +377,7 @@ jobs:
         uses: mymindstorm/setup-emsdk@6ab9eb1bda2574c4ddb79809fc9247783eaf9021 # v14
         with:
           version: 3.1.51
+          actions-cache-folder: emsdk-cache
 
       - name: Set version from tag
         run: echo "${GITHUB_REF_NAME#v}" > VERSION.txt
@@ -1563,11 +1564,11 @@ jobs:
           find . -type f \( -name '*.tar.gz' -o -name '*.zip' -o -name '*.whl' \
             -o -name '*.nupkg' -o -name '*.tgz' -o -name '*.gem' -o -name '*.jar' \) \
             | sort | while read -r f; do
-              sha256sum "$f"
-            done > ../SHA256SUMS.txt
+              sha256sum "$f" | sed 's|  \./[^/]*/|  |; s|  \./|  |'
+            done > ../SHA256SUMS
           cd ..
-          echo "=== SHA256SUMS.txt ==="
-          cat SHA256SUMS.txt
+          echo "=== SHA256SUMS ==="
+          cat SHA256SUMS
 
       - name: Attest build provenance
         uses: actions/attest-build-provenance@96278af6caaf10aea03fd8d33a09a777ca52d62f # v3.2.0
@@ -1579,6 +1580,102 @@ jobs:
             dist/**/*.nupkg
             dist/**/*.tgz
 
+      # -- Cosign keyless signing (Sigstore) --
+      - name: Install cosign
+        uses: sigstore/cosign-installer@d7d6bc7722e3daa8354c50bcb52f4837da5e9b6a # v3.8.0
+
+      - name: Sign release artifacts with cosign
+        run: |
+          # Sign the SHA256SUMS manifest itself (most important)
+          echo "Signing: SHA256SUMS"
+          cosign sign-blob --yes SHA256SUMS \
+            --output-signature SHA256SUMS.sig \
+            --output-certificate SHA256SUMS.pem 2>/dev/null || \
+            echo "  (skipped -- cosign keyless requires OIDC)"
+
+          # Sign individual release archives
+          cd dist
+          find . -type f \( -name '*.tar.gz' -o -name '*.zip' -o -name '*.whl' \
+            -o -name '*.nupkg' -o -name '*.tgz' -o -name '*.gem' -o -name '*.jar' \) \
+            | while read -r f; do
+              echo "Signing: $f"
+              cosign sign-blob --yes "$f" --output-signature "${f}.sig" \
+                --output-certificate "${f}.pem" 2>/dev/null || \
+              echo "  (skipped -- cosign keyless requires OIDC)"
+            done
+          cd ..
+
+      # -- Verification Artifacts --
+      - name: Generate verification artifacts
+        run: |
+          # Selftest report JSON (build a minimal test binary that dumps JSON)
+          echo '#include "secp256k1/selftest.hpp"
+          #include <cstdio>
+          int main() {
+            auto r = secp256k1::fast::selftest_report(secp256k1::fast::SelftestMode::ci, 0);
+            printf("%s\n", r.to_json().c_str());
+            return r.all_passed ? 0 : 1;
+          }' > /tmp/selftest_json_gen.cpp
+
+          # Build against the library we already built
+          if [ -f build/lib/libfastsecp256k1.a ] || [ -f build/libfastsecp256k1.a ]; then
+            LIB=$(find build -name 'libfastsecp256k1.a' -print -quit 2>/dev/null || true)
+            if [ -n "$LIB" ]; then
+              ${CXX:-g++} -std=c++20 -O2 \
+                -I cpu/include -I staging/include \
+                /tmp/selftest_json_gen.cpp "$LIB" \
+                -o /tmp/selftest_json_gen 2>/dev/null && \
+              /tmp/selftest_json_gen > selftest_report.json 2>/dev/null || \
+              echo '{"error":"selftest binary build failed","all_passed":null}' > selftest_report.json
+            else
+              echo '{"error":"library not found","all_passed":null}' > selftest_report.json
+            fi
+          else
+            echo '{"error":"library not found","all_passed":null}' > selftest_report.json
+          fi
+
+          # Copy verification transparency report
+          cp docs/AUDIT_READINESS_REPORT_v1.md verification_report.md 2>/dev/null || true
+
+          # Generate traceability matrix (Phase IV, Task 4.1.4)
+          if [ -x scripts/generate_traceability.sh ]; then
+            echo "Generating traceability report..."
+            bash scripts/generate_traceability.sh 2>/dev/null || \
+              echo '{"error":"traceability generation failed"}' > traceability_report.json
+          fi
+
+          echo "=== Verification artifacts ==="
+          ls -la selftest_report.json verification_report.md traceability_report.json 2>/dev/null || true
+
+      # -- SBOM generation (CycloneDX) --
+      - name: Generate SBOM
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          cat > sbom.cdx.json <<'SBOM_HEREDOC'
+          {
+            "bomFormat": "CycloneDX",
+            "specVersion": "1.6",
+            "version": 1,
+            "metadata": {
+              "timestamp": "TIMESTAMP_PLACEHOLDER",
+              "component": {
+                "type": "library",
+                "name": "UltrafastSecp256k1",
+                "version": "VERSION_PLACEHOLDER",
+                "purl": "pkg:github/shrec/UltrafastSecp256k1@vVERSION_PLACEHOLDER",
+                "licenses": [{"license": {"id": "MIT"}}]
+              }
+            },
+            "components": [
+              {"type": "library", "name": "fastsecp256k1", "version": "VERSION_PLACEHOLDER", "scope": "required"},
+              {"type": "library", "name": "ufsecp", "version": "VERSION_PLACEHOLDER", "scope": "optional"}
+            ],
+            "dependencies": [{"ref": "UltrafastSecp256k1", "dependsOn": []}]
+          }
+          SBOM_HEREDOC
+          sed -i "s/VERSION_PLACEHOLDER/${VERSION}/g; s/TIMESTAMP_PLACEHOLDER/${TIMESTAMP}/g" sbom.cdx.json
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2
         with:
@@ -1589,7 +1686,13 @@ jobs:
           prerelease: ${{ contains(github.ref_name, '-rc') || contains(github.ref_name, '-beta') || contains(github.ref_name, '-alpha') }}
           files: |
             dist/**/*
-            SHA256SUMS.txt
+            SHA256SUMS
+            SHA256SUMS.sig
+            SHA256SUMS.pem
+            sbom.cdx.json
+            selftest_report.json
+            traceability_report.json
+            verification_report.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

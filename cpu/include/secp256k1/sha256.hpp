@@ -71,6 +71,12 @@ public:
         std::uint64_t bits = total_ * 8;
 
         // -- Direct in-place padding (no per-byte update() calls) ---------
+        // Defensive: buf_len_ is [0,63] after update() processes full blocks.
+        // Guard satisfies static analysis (S3519) without changing behavior.
+        if (buf_len_ >= 64) {
+            detail::sha256_compress_dispatch(buf_, state_);
+            buf_len_ = 0;
+        }
         buf_[buf_len_++] = 0x80;
 
         if (buf_len_ > 56) {

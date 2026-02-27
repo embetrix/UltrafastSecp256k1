@@ -72,7 +72,7 @@ static const SC K_CONST = SC::from_limbs({
 });
 static const SC S_OFFSET = SC::from_limbs({0, 0, 1, 0});
 
-static void diagnose_scalar(const char* name, const SC& k) {
+[[maybe_unused]] static void diagnose_scalar(const char* name, const SC& k) {
     printf("\n=== DIAGNOSE scalar: %s ===\n", name);
     print_limbs("  k       = ", k);
     
@@ -151,6 +151,7 @@ static void diagnose_scalar(const char* name, const SC& k) {
     printf("  GLV verify: %s\n", glv_ok ? "OK" : "*** MISMATCH ***");
 }
 
+#ifndef UNIFIED_AUDIT_RUNNER
 int main() {
     printf("=== ct::scalar_mul detailed diagnostic ===\n\n");
     
@@ -200,5 +201,36 @@ int main() {
                   ct_gk.x().to_bytes() == fast_gk.x().to_bytes());
     printf("ct::scalar_mul(G, k_fail): %s\n", gk_eq ? "OK" : "MISMATCH");
     
+    return fails > 0 ? 1 : 0;
+}
+#endif // UNIFIED_AUDIT_RUNNER
+
+// ============================================================================
+// _run() entry point for unified audit runner
+// ============================================================================
+
+int diag_scalar_mul_run() {
+    using PT_local = secp256k1::fast::Point;
+    using SC_local = secp256k1::fast::Scalar;
+
+    PT_local G = PT_local::generator();
+    int fails = 0;
+
+    TestRng rng(0xCAFEBABEu);
+    for (int i = 0; i < 64; i++) {
+        SC_local base_k = rng.random_scalar();
+        PT_local P = G.scalar_mul(base_k);
+        SC_local k = rng.random_scalar();
+
+        PT_local ct_r = ct::scalar_mul(P, k);
+        PT_local fast_r = P.scalar_mul(k);
+
+        bool eq = (ct_r.is_infinity() && fast_r.is_infinity()) ||
+                  (!ct_r.is_infinity() && !fast_r.is_infinity() &&
+                   ct_r.x().to_bytes() == fast_r.x().to_bytes() &&
+                   ct_r.y().to_bytes() == fast_r.y().to_bytes());
+        if (!eq) fails++;
+    }
+
     return fails > 0 ? 1 : 0;
 }

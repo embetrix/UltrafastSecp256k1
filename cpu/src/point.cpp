@@ -3,7 +3,7 @@
 #include "secp256k1/precompute.hpp"
 #endif
 #include "secp256k1/glv.hpp"
-#if defined(__SIZEOF_INT128__)
+#if defined(__SIZEOF_INT128__) && !defined(__EMSCRIPTEN__)
 #include "secp256k1/field_52.hpp"
 #endif
 
@@ -400,7 +400,7 @@ static inline void jacobian_add_inplace(JacobianPoint& p, const JacobianPoint& q
 // This gives ~2.5-3x speedup to point double/add/mixed-add.
 // ===============================================================================
 
-#if defined(__SIZEOF_INT128__)
+#if defined(__SIZEOF_INT128__) && !defined(__EMSCRIPTEN__)
 #define SECP256K1_FAST_52BIT 1
 
 struct JacobianPoint52 {
@@ -449,7 +449,7 @@ static inline Point from_jac52(const JacobianPoint52& j) {
 // -- Point Doubling (5x52) ----------------------------------------------------
 // Formula: dbl-2009-l (a=0 specialization)
 // Cost: 2M + 5S + ~11A (additions near-free in 5x52)
-SECP256K1_HOT_FUNCTION __attribute__((noinline))
+SECP256K1_HOT_FUNCTION SECP256K1_NOINLINE
 static JacobianPoint52 jac52_double(const JacobianPoint52& p) {
     if (SECP256K1_UNLIKELY(p.infinity)) {
         return {FieldElement52::zero(), FieldElement52::one(), FieldElement52::zero(), true};
@@ -547,7 +547,7 @@ static inline void jac52_double_inplace(JacobianPoint52& p) {
 // -- Mixed Addition (5x52): Jacobian + Affine -> Jacobian ----------------------
 // Formula: madd-2007-bl (a=0 specialization)
 // Cost: 7M + 4S + ~12A (additions near-free in 5x52)
-[[maybe_unused]] SECP256K1_HOT_FUNCTION __attribute__((noinline))
+[[maybe_unused]] SECP256K1_HOT_FUNCTION SECP256K1_NOINLINE
 static JacobianPoint52 jac52_add_mixed(const JacobianPoint52& p, const AffinePoint52& q) {
     if (SECP256K1_UNLIKELY(p.infinity)) {
         return {q.x, q.y, FieldElement52::one(), false};
@@ -627,7 +627,7 @@ static JacobianPoint52 jac52_add_mixed(const JacobianPoint52& p, const AffinePoi
 // Same formula as jac52_add_mixed but overwrites p in-place.
 // noinline: reduces hot-loop code size from ~5KB to ~1KB, improving I-cache.
 // The 127KB dual_scalar_mul_gen_point thrashes L1 I-cache (32-48KB) when inlined.
-SECP256K1_HOT_FUNCTION __attribute__((noinline))
+SECP256K1_HOT_FUNCTION SECP256K1_NOINLINE
 static void jac52_add_mixed_inplace(JacobianPoint52& p, const AffinePoint52& q) {
     if (SECP256K1_UNLIKELY(p.infinity)) {
         p.x = q.x; p.y = q.y; p.z = FieldElement52::one(); p.infinity = false;
@@ -752,7 +752,7 @@ static inline void jac52_add_inplace(JacobianPoint52& p, const JacobianPoint52& 
 // -- Full Jacobian Addition (5x52): Jacobian + Jacobian -> Jacobian ------------
 // Formula: add-2007-bl (a=0)
 // Cost: 12M + 5S + ~11A
-SECP256K1_HOT_FUNCTION __attribute__((noinline))
+SECP256K1_HOT_FUNCTION SECP256K1_NOINLINE
 static JacobianPoint52 jac52_add(const JacobianPoint52& p, const JacobianPoint52& q) {
     if (SECP256K1_UNLIKELY(p.infinity)) return q;
     if (SECP256K1_UNLIKELY(q.infinity)) return p;
@@ -823,7 +823,7 @@ static inline JacobianPoint52 jac52_negate(const JacobianPoint52& p) {
 // occurs when Clang 21 inlines all jac52 helpers into Point::scalar_mul.
 // The try/catch is required: it forces Clang to emit an SEH frame on
 // Windows, without which the large stack frame triggers a GS-cookie fault.
-__attribute__((noinline))
+SECP256K1_NOINLINE
 static Point scalar_mul_glv52(const Point& base, const Scalar& scalar) {
     // Guard: infinity base or zero scalar -> result is always infinity
     if (SECP256K1_UNLIKELY(base.is_infinity() || scalar.is_zero())) {
@@ -1878,7 +1878,11 @@ static Point gen_fixed_mul(const Scalar& k) {
 #endif  // SECP256K1_PLATFORM_ESP32
 
 Point Point::scalar_mul(const Scalar& scalar) const {
-#if !defined(SECP256K1_PLATFORM_ESP32) && !defined(ESP_PLATFORM) && !defined(SECP256K1_PLATFORM_STM32)
+#if !defined(SECP256K1_PLATFORM_ESP32) && !defined(ESP_PLATFORM) && !defined(SECP256K1_PLATFORM_STM32) && !defined(__EMSCRIPTEN__)
+    // WASM: precompute tables produce incorrect results under Emscripten's
+    // __int128 emulation (field ops are fine, but the windowed accumulation
+    // path diverges for some scalars).  Use the proven double-and-add
+    // fallback instead -- correct and acceptable perf for WASM.
     if (is_generator_) {
         return scalar_mul_generator(scalar);
     }
@@ -1986,49 +1990,36 @@ Point Point::scalar_mul(const Scalar& scalar) const {
 
 #else
     // -----------------------------------------------------------------
-    // Desktop: GLV decomposition + Shamir's trick + 5x52 field ops
+    // Non-embedded: GLV decomposition + Shamir's trick
     // -----------------------------------------------------------------
     // Splits 256-bit scalar into two ~128-bit half-scalars:
     //   k*P = sign1*|k1|*P + sign2*|k2|*phi(P)
-    // Uses 5x52 FieldElement52 for all point arithmetic (~2.5x faster).
-    // Combined GLV + 5x52 gives ~3x improvement over plain wNAF w=5.
-    //
-    // Fallback: If __int128 is unavailable, falls back to plain wNAF w=5.
+    // Uses 5x52 FieldElement52 when available (~2.5x faster).
+    // Without FE52 (WASM, MSVC): uses regular 4x64 FieldElement with
+    // GLV + Shamir (same algorithm proven on ESP32/STM32).
     // -----------------------------------------------------------------
 
 #ifdef SECP256K1_FAST_52BIT
     return scalar_mul_glv52(*this, scalar);
 #else
-    // Fallback (no __int128): plain wNAF w=5 (original code path)
-    constexpr unsigned window_width = 5;
-    std::array<int32_t, 260> wnaf_buf{};
-    std::size_t wnaf_len = 0;
-    compute_wnaf_into(scalar, window_width, wnaf_buf.data(), wnaf_buf.size(), wnaf_len);
-
-    constexpr int table_size = (1 << (window_width - 1));
-    std::array<Point, table_size> precomp;
-    std::array<Point, table_size> neg_precomp;
-    precomp[0] = *this;
-    Point double_p = *this;
-    double_p.dbl_inplace();
-    for (int i = 1; i < table_size; i++) {
-        precomp[i] = precomp[i-1];
-        precomp[i].add_inplace(double_p);
-    }
-    // Pre-negate table (eliminates copy+negate in hot loop)
-    for (int i = 0; i < table_size; i++) {
-        neg_precomp[i] = precomp[i];
-        neg_precomp[i].negate_inplace();
-    }
-
+    // -----------------------------------------------------------------
+    // Non-FE52 fallback: simple right-to-left binary double-and-add.
+    // No GLV, no wNAF -- just iterate over 256 scalar bits.
+    // Correctness-first: uses only dbl_inplace + add_inplace.
+    // Performance: ~256 doublings + ~128 additions (acceptable for WASM).
+    // -----------------------------------------------------------------
+    auto scalar_bytes = scalar.to_bytes();  // big-endian: [0]=MSB
     Point result = Point::infinity();
-    for (int i = static_cast<int>(wnaf_len) - 1; i >= 0; --i) {
-        result.dbl_inplace();
-        int32_t digit = wnaf_buf[static_cast<std::size_t>(i)];
-        if (digit > 0) {
-            result.add_inplace(precomp[(digit - 1) / 2]);
-        } else if (digit < 0) {
-            result.add_inplace(neg_precomp[(-digit - 1) / 2]);
+    Point base = *this;    // 2^0 * P initially
+
+    // Scan bits from LSB (byte 31, bit 0) to MSB (byte 0, bit 7)
+    for (int byte_idx = 31; byte_idx >= 0; --byte_idx) {
+        uint8_t byte_val = scalar_bytes[static_cast<std::size_t>(byte_idx)];
+        for (int bit = 0; bit < 8; ++bit) {
+            if ((byte_val >> bit) & 1) {
+                result.add_inplace(base);
+            }
+            base.dbl_inplace();
         }
     }
     return result;
@@ -2314,7 +2305,7 @@ std::pair<std::array<uint8_t, 32>, bool> Point::x_bytes_and_parity() const {
 // Then: a_lo*G + a_hi*H + b1*P + b2*psi(P) where H = 2^128*G
 // G/H affine tables are cached statically (computed once, w=15 -> 8192 entries).
 #if defined(SECP256K1_FAST_52BIT)
-__attribute__((noinline))
+SECP256K1_NOINLINE
 Point Point::dual_scalar_mul_gen_point(const Scalar& a, const Scalar& b, const Point& P) {
     // -- 128-bit arithmetic split of a --------------------------------
     const auto& a_limbs = a.limbs();
@@ -2610,9 +2601,10 @@ Point Point::dual_scalar_mul_gen_point(const Scalar& a, const Scalar& b, const P
         AffinePoint neg_tbl_phiG[TABLE_SIZE];
     };
 
-    static DualGenTables* s_gen4 = nullptr;
-    if (!s_gen4) {
-        s_gen4 = new DualGenTables;
+    // C++11 magic static: thread-safe one-time initialization.
+    // Replaces bare check-then-allocate pattern that had a data race.
+    static const DualGenTables& gen4 = *[]() {
+        auto* t = new DualGenTables;
 
         // Build [1,3,5,...,15]xG in Jacobian, then batch-invert to affine
         Point G = Point::generator();
@@ -2646,15 +2638,17 @@ Point Point::dual_scalar_mul_gen_point(const Scalar& a, const Scalar& b, const P
             FieldElement ax = pts_j[i].x_raw() * zi2;
             FieldElement ay = pts_j[i].y_raw() * zi3;
 
-            s_gen4->tbl_G[i] = {ax, ay};
-            s_gen4->neg_tbl_G[i] = {ax, FieldElement::zero() - ay};
+            t->tbl_G[i] = {ax, ay};
+            t->neg_tbl_G[i] = {ax, FieldElement::zero() - ay};
 
             // phi(G): x -> beta*x, y -> y (same parity)
             FieldElement phix = ax * beta;
-            s_gen4->tbl_phiG[i] = {phix, ay};
-            s_gen4->neg_tbl_phiG[i] = {phix, FieldElement::zero() - ay};
+            t->tbl_phiG[i] = {phix, ay};
+            t->neg_tbl_phiG[i] = {phix, FieldElement::zero() - ay};
         }
-    }
+
+        return t;
+    }();
 
     // -- Precompute P tables (per-call: 8 odd multiples + negated + endomorphism) --
     Point P_base = decomp_b.k1_neg ? P.negate() : P;
@@ -2702,12 +2696,12 @@ Point Point::dual_scalar_mul_gen_point(const Scalar& a, const Scalar& b, const P
     }
 
     // -- Handle G sign: if a decomposed with k1_neg, use neg tables --
-    const AffinePoint* g_pos  = decomp_a.k1_neg ? s_gen4->neg_tbl_G : s_gen4->tbl_G;
-    const AffinePoint* g_neg  = decomp_a.k1_neg ? s_gen4->tbl_G : s_gen4->neg_tbl_G;
+    const AffinePoint* g_pos  = decomp_a.k1_neg ? gen4.neg_tbl_G : gen4.tbl_G;
+    const AffinePoint* g_neg  = decomp_a.k1_neg ? gen4.tbl_G : gen4.neg_tbl_G;
     // phi(G) sign: flip if k1_neg != k2_neg for a
     bool flip_a = (decomp_a.k1_neg != decomp_a.k2_neg);
-    const AffinePoint* pg_pos = flip_a ? s_gen4->neg_tbl_phiG : s_gen4->tbl_phiG;
-    const AffinePoint* pg_neg = flip_a ? s_gen4->tbl_phiG : s_gen4->neg_tbl_phiG;
+    const AffinePoint* pg_pos = flip_a ? gen4.neg_tbl_phiG : gen4.tbl_phiG;
+    const AffinePoint* pg_neg = flip_a ? gen4.tbl_phiG : gen4.neg_tbl_phiG;
 
     // -- 4-stream Shamir interleaved scan (JacobianPoint direct -- no Point wrapper) --
     std::size_t max_len = len_a1;

@@ -35,7 +35,7 @@ Scalar scalar_half(const Scalar& a) noexcept;
 // CT conditional move: if (mask) r = a; else r unchanged
 void scalar_cmov(Scalar* r, const Scalar& a, std::uint64_t mask) noexcept;
 
-// CT conditional swap: if (mask) swap(a, b)
+// CT conditional swap: when mask is nonzero, swaps a and b
 void scalar_cswap(Scalar* a, Scalar* b, std::uint64_t mask) noexcept;
 
 // CT select: returns a if mask==all-ones, else b

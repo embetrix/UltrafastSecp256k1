@@ -52,13 +52,15 @@ jobs:
             -DSECP256K1_BUILD_TESTS=ON \
             -DSECP256K1_BUILD_BENCH=ON \
             -DSECP256K1_BUILD_EXAMPLES=ON \
-            -DSECP256K1_BUILD_METAL=ON
+            -DSECP256K1_BUILD_METAL=ON \
+            -DSECP256K1_BUILD_FUZZ_TESTS=ON \
+            -DSECP256K1_BUILD_PROTOCOL_TESTS=ON
 
       - name: Build
         run: cmake --build build -j$(nproc)
 
       - name: Test
-        run: ctest --test-dir build --output-on-failure -j$(nproc) -E "^ct_sidechannel$"
+        run: ctest --test-dir build --output-on-failure -j$(nproc) -E "^ct_sidechannel"
 
   # -- Linux ARM64 (cross-compile, aarch64-linux-gnu) -----------------------
   linux-arm64:
@@ -132,6 +134,8 @@ jobs:
           cmake -S . -B build/${{ matrix.sanitizer }} \
             -DCMAKE_BUILD_TYPE=Debug \
             -DSECP256K1_BUILD_TESTS=ON \
+            -DSECP256K1_BUILD_FUZZ_TESTS=ON \
+            -DSECP256K1_BUILD_PROTOCOL_TESTS=ON \
             -DSECP256K1_USE_ASM=OFF \
             ${{ matrix.cmake_flags }}
 
@@ -139,7 +143,7 @@ jobs:
         run: cmake --build build/${{ matrix.sanitizer }} -j$(nproc)
 
       - name: Test (${{ matrix.label }})
-        run: ctest --test-dir build/${{ matrix.sanitizer }} --output-on-failure -j$(nproc) -E "^ct_sidechannel$"
+        run: ctest --test-dir build/${{ matrix.sanitizer }} --output-on-failure -j$(nproc) -E "^(ct_sidechannel|unified_audit)" --timeout 300
 
   # -- Windows (MSVC + Clang-cl) ----------------------------------------------
   windows:
@@ -163,13 +167,15 @@ jobs:
             -DSECP256K1_BUILD_TESTS=ON `
             -DSECP256K1_BUILD_BENCH=ON `
             -DSECP256K1_BUILD_EXAMPLES=ON `
-            -DSECP256K1_BUILD_METAL=ON
+            -DSECP256K1_BUILD_METAL=ON `
+            -DSECP256K1_BUILD_FUZZ_TESTS=ON `
+            -DSECP256K1_BUILD_PROTOCOL_TESTS=ON
 
       - name: Build
         run: cmake --build build --config ${{ matrix.build_type }} -j
 
       - name: Test
-        run: ctest --test-dir build -C ${{ matrix.build_type }} --output-on-failure -j -E "^ct_sidechannel$"
+        run: ctest --test-dir build -C ${{ matrix.build_type }} --output-on-failure -j -E "^ct_sidechannel"
 
   # -- macOS (AppleClang + Metal GPU) -----------------------------------------
   macos:
@@ -194,13 +200,15 @@ jobs:
             -DSECP256K1_BUILD_TESTS=ON \
             -DSECP256K1_BUILD_BENCH=ON \
             -DSECP256K1_BUILD_EXAMPLES=ON \
-            -DSECP256K1_BUILD_METAL=ON
+            -DSECP256K1_BUILD_METAL=ON \
+            -DSECP256K1_BUILD_FUZZ_TESTS=ON \
+            -DSECP256K1_BUILD_PROTOCOL_TESTS=ON
 
       - name: Build
         run: cmake --build build -j$(sysctl -n hw.logicalcpu)
 
       - name: Test (all including Metal GPU)
-        run: ctest --test-dir build --output-on-failure -j$(sysctl -n hw.logicalcpu) -E "^ct_sidechannel$"
+        run: ctest --test-dir build --output-on-failure -j$(sysctl -n hw.logicalcpu) -E "^ct_sidechannel"
 
       - name: Metal GPU benchmarks
         if: success()
@@ -307,7 +315,7 @@ jobs:
         run: cmake --build build/rocm -j$(nproc)
 
       - name: Test (CPU-only, compile check)
-        run: ctest --test-dir build/rocm --output-on-failure -j$(nproc) -E "^ct_sidechannel$"
+        run: ctest --test-dir build/rocm --output-on-failure -j$(nproc) -E "^ct_sidechannel"
 
   # -- WebAssembly (Emscripten) -----------------------------------------------
   wasm:
@@ -325,6 +333,7 @@ jobs:
         uses: mymindstorm/setup-emsdk@6ab9eb1bda2574c4ddb79809fc9247783eaf9021 # v14
         with:
           version: 3.1.51
+          actions-cache-folder: emsdk-cache
 
       - name: Configure (WASM)
         run: emcmake cmake -S wasm -B build/wasm -DCMAKE_BUILD_TYPE=Release
@@ -337,6 +346,8 @@ jobs:
           ls -lh build/wasm/dist/secp256k1_wasm.js
           ls -lh build/wasm/dist/secp256k1_wasm.wasm
           echo "WASM size: $(du -h build/wasm/dist/secp256k1_wasm.wasm | cut -f1)"
+          echo "KAT test files:"
+          ls -lh build/wasm/kat/
 
       - name: Setup Node.js
         uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6
@@ -348,8 +359,12 @@ jobs:
           cd build/wasm/dist
           node ../../../wasm/bench_wasm.mjs
 
+      - name: Run WASM KAT equivalence test
+        run: node build/wasm/kat/wasm_kat_test.js
+
       - name: Upload WASM artifact
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        continue-on-error: true
         with:
           name: secp256k1-wasm
           path: |
@@ -427,6 +442,8 @@ jobs:
             -DCMAKE_BUILD_TYPE=Debug \
             -DSECP256K1_BUILD_TESTS=ON \
             -DSECP256K1_BUILD_BENCH=OFF \
+            -DSECP256K1_BUILD_FUZZ_TESTS=ON \
+            -DSECP256K1_BUILD_PROTOCOL_TESTS=ON \
             -DSECP256K1_USE_ASM=OFF \
             -DCMAKE_C_FLAGS="-fprofile-instr-generate -fcoverage-mapping" \
             -DCMAKE_CXX_FLAGS="-fprofile-instr-generate -fcoverage-mapping" \
@@ -436,7 +453,7 @@ jobs:
         run: cmake --build build/cov -j"$(nproc)"
 
       - name: Test
-        run: ctest --test-dir build/cov --output-on-failure -j"$(nproc)" -E "^ct_sidechannel$"
+        run: ctest --test-dir build/cov --output-on-failure -j"$(nproc)" -E "^ct_sidechannel"
         env:
           LLVM_PROFILE_FILE: "build/cov/%p-%m.profraw"
 

@@ -26,7 +26,7 @@ struct SchnorrSignature {
     std::array<std::uint8_t, 32> r;  // R.x (x-coordinate of nonce point)
     fast::Scalar s;                   // scalar s
 
-    // 64-byte compact encoding: r (32) || s (32)
+    // 64-byte compact encoding: r [32 bytes] concatenated with s [32 bytes]
     std::array<std::uint8_t, 64> to_bytes() const;
     static SchnorrSignature from_bytes(const std::array<std::uint8_t, 64>& data);
 };
@@ -87,7 +87,7 @@ bool schnorr_verify(const SchnorrXonlyPubkey& pubkey,
 
 // -- Tagged Hashing (BIP-340) -------------------------------------------------
 
-// H_tag(msg) = SHA256(SHA256(tag) || SHA256(tag) || msg)
+// H_tag: SHA256 of (SHA256(tag) concatenated twice with msg)
 std::array<std::uint8_t, 32> tagged_hash(const char* tag,
                                           const void* data, std::size_t len);
 

@@ -644,10 +644,6 @@ bool FieldElement26::operator==(const FieldElement26& rhs) const noexcept {
          & (a.n[9] == b.n[9]);
 }
 
-bool FieldElement26::operator!=(const FieldElement26& rhs) const noexcept {
-    return !(*this == rhs);
-}
-
 // ===========================================================================
 // Half (a/2 mod p) -- branchless
 // ===========================================================================
@@ -657,7 +653,7 @@ FieldElement26 FieldElement26::half() const noexcept {
     tmp.normalize_weak();
 
     // mask = 0 if even, all-ones if odd
-    std::uint32_t mask = -(tmp.n[0] & 1U);
+    std::uint32_t mask = 0U - (tmp.n[0] & 1U);
 
     // Conditionally add p
     std::uint32_t t0 = tmp.n[0] + (P0 & mask);

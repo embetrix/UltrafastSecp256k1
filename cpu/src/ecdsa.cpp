@@ -312,7 +312,8 @@ ECDSASignature ecdsa_sign(const std::array<uint8_t, 32>& msg_hash,
 bool ecdsa_verify(const std::array<uint8_t, 32>& msg_hash,
                   const Point& public_key,
                   const ECDSASignature& sig) {
-    // Check r, s in [1, n-1]
+    // Reject degenerate inputs early
+    if (public_key.is_infinity()) return false;
     if (sig.r.is_zero() || sig.s.is_zero()) return false;
 
     // z = message hash as scalar

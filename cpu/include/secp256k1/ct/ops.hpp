@@ -60,13 +60,27 @@ namespace secp256k1::ct {
 // Uses inline asm (GCC/Clang) or volatile (MSVC) to create optimization barrier.
 
 #if defined(__GNUC__) || defined(__clang__)
-    // Force value through a register so compiler cannot reason about it
+#if defined(__riscv)
+    // RISC-V in-order cores (U74): register-only barrier.
+    // "memory" clobber forces excessive stack spills/reloads on simple
+    // in-order pipelines, creating store-to-load forwarding timing jitter
+    // that defeats CT guarantees. "+r" alone prevents the compiler from
+    // reasoning about the register value (sufficient for branchless patterns).
+    inline void value_barrier(std::uint64_t& v) noexcept {
+        asm volatile("" : "+r"(v));
+    }
+    inline void value_barrier(std::uint32_t& v) noexcept {
+        asm volatile("" : "+r"(v));
+    }
+#else
+    // x86/ARM OOO cores: memory clobber is cheap; keep full fence.
     inline void value_barrier(std::uint64_t& v) noexcept {
         asm volatile("" : "+r"(v) : : "memory");
     }
     inline void value_barrier(std::uint32_t& v) noexcept {
         asm volatile("" : "+r"(v) : : "memory");
     }
+#endif
 #else
     // MSVC: volatile prevents optimization of subsequent operations
     inline void value_barrier(std::uint64_t& v) noexcept {
@@ -83,11 +97,28 @@ namespace secp256k1::ct {
 
 // Returns 0xFFFFFFFFFFFFFFFF if v == 0, else 0x0000000000000000
 inline std::uint64_t is_zero_mask(std::uint64_t v) noexcept {
-    // ~(v | -v) has MSB set iff v == 0
-    std::uint64_t nv = -v;
-    value_barrier(nv);
-    return static_cast<std::uint64_t>(
+#if defined(__riscv) && (__riscv_xlen == 64)
+    // RISC-V: seqz + neg produces fully branchless is-zero mask.
+    //   seqz tmp, v   ->  tmp = (v == 0) ? 1 : 0
+    //   neg  tmp, tmp ->  tmp = 0 - tmp  (all-ones if was 1, zero if was 0)
+    // asm volatile prevents the compiler from reasoning about the output,
+    // so downstream code stays branchless.
+    std::uint64_t mask;
+    asm volatile(
+        "seqz %0, %1\n\t"
+        "neg   %0, %0"
+        : "=r"(mask) : "r"(v));
+    return mask;
+#else
+    // ~(v | (0-v)) has MSB set iff v == 0
+    value_barrier(v);   // prevent compiler from recognising v's value range
+    std::uint64_t nv = 0ULL - v;
+    value_barrier(nv);  // prevent compiler from knowing nv == (0-v)
+    std::uint64_t mask = static_cast<std::uint64_t>(
         -static_cast<std::int64_t>((~(v | nv)) >> 63));
+    value_barrier(mask); // prevent compiler from converting result into branch
+    return mask;
+#endif
 }
 
 // Returns 0xFFFFFFFFFFFFFFFF if v != 0, else 0x0000000000000000
@@ -104,20 +135,22 @@ inline std::uint64_t eq_mask(std::uint64_t a, std::uint64_t b) noexcept {
 inline std::uint64_t bool_to_mask(bool flag) noexcept {
     std::uint64_t v = static_cast<std::uint64_t>(flag);
     value_barrier(v);
-    return -v;
+    std::uint64_t mask = 0ULL - v;
+    value_barrier(mask); // prevent converting to branch
+    return mask;
 }
 
-// Returns 0xFFFFFFFFFFFFFFFF if a < b (unsigned), else 0
+// Returns all-ones mask when a is strictly less than b (unsigned), else zero
 // Uses the borrow bit from subtraction
 inline std::uint64_t lt_mask(std::uint64_t a, std::uint64_t b) noexcept {
     // If a < b, then (a - b) borrows, so bit 64 of the extended result is 1
-    // We compute this as: a < b  <=>  ~a >= b  <=>  we check borrow
+    // Subtraction borrows when a < b; detects wrap via XOR-OR-shift pattern
     std::uint64_t diff = a - b;
     // Borrow occurred iff a < b. The borrow is in the "carry out" position.
     // For unsigned: a < b iff the subtract wraps, iff (a ^ ((a ^ b) | (diff ^ a))) has MSB set
     std::uint64_t borrow = (a ^ ((a ^ b) | (diff ^ a))) >> 63;
     value_barrier(borrow);
-    return -borrow;
+    return 0ULL - borrow;
 }
 
 // --- Conditional move (CT) ---------------------------------------------------

@@ -97,10 +97,6 @@ bool FieldElement52::operator==(const FieldElement52& rhs) const noexcept {
          & (a.n[3] == b.n[3]) & (a.n[4] == b.n[4]);
 }
 
-bool FieldElement52::operator!=(const FieldElement52& rhs) const noexcept {
-    return !(*this == rhs);
-}
-
 // half: now inline in field_52_impl.hpp
 
 // ===========================================================================

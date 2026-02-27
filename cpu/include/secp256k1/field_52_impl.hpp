@@ -412,7 +412,7 @@ FieldElement52 FieldElement52::half() const noexcept {
     const std::uint64_t* src = n;
 
     // mask = 0 if even, all-ones if odd
-    std::uint64_t mask = -(src[0] & 1ULL);
+    std::uint64_t mask = 0ULL - (src[0] & 1ULL);
 
     // Conditionally add p
     std::uint64_t t0 = src[0] + (P0 & mask);
@@ -478,7 +478,7 @@ static void fe52_normalize_inline(std::uint64_t* r) noexcept {
     std::uint64_t overflow = u4 >> 48;
     u4 &= M48;
 
-    std::uint64_t mask = -overflow;
+    std::uint64_t mask = 0ULL - overflow;
     r[0] = (u0 & mask) | (t0 & ~mask);
     r[1] = (u1 & mask) | (t1 & ~mask);
     r[2] = (u2 & mask) | (t2 & ~mask);

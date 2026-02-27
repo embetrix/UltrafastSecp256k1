@@ -43,7 +43,7 @@ enum class Network : std::uint8_t {
 // Encode data with 4-byte SHA256d checksum in Base58
 std::string base58check_encode(const std::uint8_t* data, std::size_t len);
 
-// Decode Base58Check, returns {data, valid}
+// Decode Base58Check, returns pair of (data, valid)
 std::pair<std::vector<std::uint8_t>, bool>
 base58check_decode(const std::string& encoded);
 
@@ -75,7 +75,7 @@ Bech32DecodeResult bech32_decode(const std::string& addr);
 
 // -- HASH160 ------------------------------------------------------------------
 
-// HASH160(data) = RIPEMD160(SHA256(data))
+// HASH160: RIPEMD160 applied to SHA256 digest
 std::array<std::uint8_t, 20> hash160(const std::uint8_t* data, std::size_t len);
 
 // -- Address Derivation -------------------------------------------------------

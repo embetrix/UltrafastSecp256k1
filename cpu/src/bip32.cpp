@@ -222,7 +222,7 @@ fast::Point ExtendedKey::public_key() const {
         return Point::generator().scalar_mul(sk);
     }
     // Public key: decompress from pub_prefix + key (x-coordinate)
-    // y² = x³ + 7, then pick y matching parity
+    // y^2 = x^3 + 7, then pick y matching parity
     auto x = fast::FieldElement::from_bytes(key);
     auto x2 = x * x;
     auto x3 = x2 * x;
@@ -322,7 +322,8 @@ std::pair<ExtendedKey, bool> ExtendedKey::derive_child(uint32_t index) const {
     data[35] = static_cast<uint8_t>(index >> 8);
     data[36] = static_cast<uint8_t>(index);
 
-    auto I = hmac_sha512(chain_code.data(), 32, data, hardened ? 37 : 37);
+    // Both hardened (0x00||key||index) and normal (pubkey||index) are 37 bytes
+    auto I = hmac_sha512(chain_code.data(), 32, data, 37);
 
     std::array<uint8_t, 32> IL{}, IR{};
     std::memcpy(IL.data(), I.data(), 32);

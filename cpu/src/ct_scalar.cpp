@@ -110,7 +110,7 @@ Scalar scalar_half(const Scalar& a) noexcept {
     std::uint64_t t[4];
     std::uint64_t carry = 0;
     for (std::size_t i = 0; i < 4; ++i) {
-        std::uint64_t n_masked = N[i] & static_cast<std::uint64_t>(-odd);
+        std::uint64_t n_masked = N[i] & (0ULL - odd);
         std::uint64_t sum_lo = al[i] + n_masked;
         std::uint64_t c1 = static_cast<std::uint64_t>(sum_lo < al[i]);
         std::uint64_t sum = sum_lo + carry;
@@ -193,22 +193,41 @@ std::uint64_t scalar_bit(const Scalar& a, std::size_t index) noexcept {
 
 std::uint64_t scalar_window(const Scalar& a, std::size_t pos,
                             unsigned width) noexcept {
-    // Direct limb access: pos and width are public (derived from loop counter),
-    // so variable-time access to the limb index is safe. Only the scalar VALUE
-    // is secret, and shift+mask doesn't leak it.
     const auto& limbs = a.limbs();
     std::size_t limb_idx = pos >> 6;
     std::size_t bit_idx  = pos & 63;
     std::uint64_t mask   = (1ULL << width) - 1;
 
-    // Fast path: window doesn't span limb boundary
+#if defined(__riscv)
+    // Branchless window extraction for RISC-V in-order cores.
+    // Branches on pos/width are public but create timing jitter on U74
+    // that fails dudect. Fully branchless via is_nonzero_mask.
+    std::uint64_t lo = limbs[limb_idx] >> bit_idx;
+
+    // Load next limb; wrap index and zero when out-of-bounds (limb_idx == 3)
+    std::uint64_t hi = limbs[(limb_idx + 1) & 3];
+    std::uint64_t in_bounds = is_nonzero_mask(
+        static_cast<std::uint64_t>(limb_idx ^ 3));
+    hi &= in_bounds;
+
+    // Combine: shift by (64 - bit_idx). When bit_idx == 0 shift would be 64
+    // (UB), so clamp to [0,63] and zero hi contribution instead.
+    std::uint64_t shift = (64 - bit_idx) & 63;
+    std::uint64_t hi_active = is_nonzero_mask(static_cast<std::uint64_t>(bit_idx));
+    hi &= hi_active;
+
+    return (lo | (hi << shift)) & mask;
+#else
+    // Branched path: safe on x86/ARM OOO cores (branch predictor handles
+    // the public pos/width pattern perfectly). Avoids MSVC/Clang LTCG
+    // miscompilation of the branchless is_nonzero_mask pattern.
     if (bit_idx + width <= 64) {
         return (limbs[limb_idx] >> bit_idx) & mask;
     }
-    // Slow path: window crosses limb boundary (only when bit_idx + width > 64)
     std::uint64_t lo = limbs[limb_idx] >> bit_idx;
     std::uint64_t hi = (limb_idx + 1 < 4) ? limbs[limb_idx + 1] : 0;
     return (lo | (hi << (64 - bit_idx))) & mask;
+#endif
 }
 
 } // namespace secp256k1::ct

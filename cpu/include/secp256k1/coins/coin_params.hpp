@@ -18,6 +18,7 @@
 
 #include <cstdint>
 #include <array>
+#include <iterator>
 
 namespace secp256k1::coins {
 
@@ -614,27 +615,27 @@ inline constexpr const CoinParams* ALL_COINS[] = {
     &BitcoinGold, &Komodo,
 };
 
-inline constexpr std::size_t ALL_COINS_COUNT = sizeof(ALL_COINS) / sizeof(ALL_COINS[0]);
+inline constexpr std::size_t ALL_COINS_COUNT = std::size(ALL_COINS);
 
 // Find coin by BIP-44 coin_type (returns nullptr if not found)
 inline const CoinParams* find_by_coin_type(std::uint32_t coin_type) {
-    for (std::size_t i = 0; i < ALL_COINS_COUNT; ++i) {
-        if (ALL_COINS[i]->coin_type == coin_type) return ALL_COINS[i];
+    for (const auto* coin : ALL_COINS) {
+        if (coin->coin_type == coin_type) return coin;
     }
     return nullptr;
 }
 
 // Find coin by ticker string (case-sensitive, returns nullptr if not found)
 inline const CoinParams* find_by_ticker(const char* ticker) {
-    for (std::size_t i = 0; i < ALL_COINS_COUNT; ++i) {
-        const char* a = ALL_COINS[i]->ticker;
+    for (const auto* coin : ALL_COINS) {
+        const char* a = coin->ticker;
         const char* b = ticker;
         bool match = true;
         while (*a && *b) {
             if (*a != *b) { match = false; break; }
             ++a; ++b;
         }
-        if (match && *a == *b) return ALL_COINS[i];
+        if (match && *a == *b) return coin;
     }
     return nullptr;
 }

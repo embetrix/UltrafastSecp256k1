@@ -180,7 +180,7 @@ FieldElement field_half(const FieldElement& a) noexcept {
     // r = a/2 mod p. Branchless.
     // If a is odd: r = (a + p) / 2; if even: r = a / 2.
     const auto& al = a.limbs();
-    std::uint64_t odd = -(al[0] & 1);  // all-ones if odd, 0 if even
+    std::uint64_t odd = 0ULL - (al[0] & 1);  // all-ones if odd, 0 if even
 
     // Conditionally add p (only if odd)
     std::uint64_t t[4];
