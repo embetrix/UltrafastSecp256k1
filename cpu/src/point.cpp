@@ -566,7 +566,10 @@ static JacobianPoint52 jac52_add_mixed(const JacobianPoint52& p, const AffinePoi
     // H = U2 - X1 [sub via negate]
     // p.x magnitude: <=23 (from jac52_double) or <=7 (from add_mixed). Use 23.
     const FieldElement52 negX1 = p.x.negate(23);     // mag 24
-    const FieldElement52 h = u2 + negX1;             // mag 25
+    FieldElement52 h = u2 + negX1;                   // mag 25
+    // normalize_weak before zero-check: h is at magnitude 25 (= 1 + 24).
+    // Reduce limbs to canonical range so normalizes_to_zero() is reliable.
+    h.normalize_weak();
 
     // Check for point equality/inverse (rare -- fast normalizes_to_zero)
     if (SECP256K1_UNLIKELY(h.normalizes_to_zero())) {
@@ -642,6 +645,9 @@ static void jac52_add_mixed_inplace(JacobianPoint52& p, const AffinePoint52& q) 
     FieldElement52 negX1 = p.x.negate(23);
     FieldElement52 h = u2 + negX1;                            // u2, negX1 dead
 
+    // normalize_weak before zero-check: h is at magnitude 25 (= 1 + 24).
+    // Reduce limbs to canonical range so normalizes_to_zero() is reliable.
+    h.normalize_weak();
     if (SECP256K1_UNLIKELY(h.normalizes_to_zero())) {
         FieldElement52 negY1 = p.y.negate(10);
         FieldElement52 diff = s2 + negY1;
@@ -893,6 +899,10 @@ static Point scalar_mul_glv52(const Point& base, const Scalar& scalar) {
         for (std::size_t i = 1; i < glv_table_size; i++) {
             prods[i] = prods[i - 1] * eff_z[i];
         }
+        // Guard: if any eff_z is zero the cumulative product is zero
+        // and batch inversion is undefined. Fall through to 4x64 path.
+        if (SECP256K1_UNLIKELY(prods[glv_table_size - 1].normalizes_to_zero()))
+            throw 0;  // caught by catch(...) below -> 4x64 fallback
         FieldElement52 inv = prods[glv_table_size - 1].inverse_safegcd();
         std::array<FieldElement52, glv_table_size> zs;
         for (std::size_t i = glv_table_size - 1; i > 0; --i) {
@@ -1200,7 +1210,12 @@ Point Point::from_jacobian_coords(const FieldElement& x, const FieldElement& y, 
 
 #if defined(SECP256K1_FAST_52BIT)
 Point Point::from_jacobian52(const FieldElement52& x, const FieldElement52& y, const FieldElement52& z, bool infinity) {
-    if (infinity) return Point::infinity();
+    // normalizes_to_zero() uses only ONE overflow-reduction pass and can
+    // produce false negatives on high-magnitude limbs (e.g. result of
+    // Shamir's trick where Z accumulated many additions).  is_zero() does
+    // a full fe52_normalize_inline (TWO reduction passes + conditional
+    // subtraction of p) so it is reliable at any magnitude.
+    if (infinity || z.is_zero()) return Point::infinity();
     return Point(x, y, z, false, false);
 }
 
@@ -1258,7 +1273,11 @@ FieldElement Point::x() const {
         return FieldElement::zero();
     }
 #if defined(SECP256K1_FAST_52BIT)
-    FieldElement z_fe = z_.to_fe();
+    FieldElement z_fe = z_.to_fe();  // fully normalizes
+    { const auto& zL = z_fe.limbs();
+      if (SECP256K1_UNLIKELY((zL[0] | zL[1] | zL[2] | zL[3]) == 0))
+          return FieldElement::zero();
+    }
     FieldElement z_inv = z_fe.inverse();
     FieldElement z_inv2 = z_inv;
     z_inv2.square_inplace();
@@ -1276,7 +1295,11 @@ FieldElement Point::y() const {
         return FieldElement::zero();
     }
 #if defined(SECP256K1_FAST_52BIT)
-    FieldElement z_fe = z_.to_fe();
+    FieldElement z_fe = z_.to_fe();  // fully normalizes
+    { const auto& zL = z_fe.limbs();
+      if (SECP256K1_UNLIKELY((zL[0] | zL[1] | zL[2] | zL[3]) == 0))
+          return FieldElement::zero();
+    }
     FieldElement z_inv = z_fe.inverse();
     FieldElement z_inv3 = z_inv;
     z_inv3.square_inplace();
@@ -2209,7 +2232,13 @@ std::array<std::uint8_t, 33> Point::to_compressed() const {
     }
     // Compute affine coordinates with a single inversion
 #if defined(SECP256K1_FAST_52BIT)
-    FieldElement z_fe = z_.to_fe();
+    FieldElement z_fe = z_.to_fe();  // fully normalizes
+    // Defensive: if Z reduces to zero treat as infinity
+    { const auto& zL = z_fe.limbs();
+      if (SECP256K1_UNLIKELY((zL[0] | zL[1] | zL[2] | zL[3]) == 0)) {
+          out.fill(0); return out;
+      }
+    }
     FieldElement z_inv = z_fe.inverse();
     FieldElement z_inv2 = z_inv;
     z_inv2.square_inplace();
@@ -2237,7 +2266,13 @@ std::array<std::uint8_t, 65> Point::to_uncompressed() const {
     }
     // Compute affine coordinates with a single inversion
 #if defined(SECP256K1_FAST_52BIT)
-    FieldElement z_fe = z_.to_fe();
+    FieldElement z_fe = z_.to_fe();  // fully normalizes
+    // Defensive: if Z reduces to zero treat as infinity
+    { const auto& zL = z_fe.limbs();
+      if (SECP256K1_UNLIKELY((zL[0] | zL[1] | zL[2] | zL[3]) == 0)) {
+          out.fill(0); return out;
+      }
+    }
     FieldElement z_inv = z_fe.inverse();
     FieldElement z_inv2 = z_inv;
     z_inv2.square_inplace();
@@ -2262,7 +2297,10 @@ std::array<std::uint8_t, 65> Point::to_uncompressed() const {
 bool Point::has_even_y() const {
     if (infinity_) return false;
 #if defined(SECP256K1_FAST_52BIT)
-    FieldElement z_fe = z_.to_fe();
+    FieldElement z_fe = z_.to_fe();  // fully normalizes
+    { const auto& zL = z_fe.limbs();
+      if (SECP256K1_UNLIKELY((zL[0] | zL[1] | zL[2] | zL[3]) == 0)) return false;
+    }
     FieldElement z_inv = z_fe.inverse();
     FieldElement z_inv2 = z_inv;
     z_inv2.square_inplace();
@@ -2281,7 +2319,11 @@ bool Point::has_even_y() const {
 std::pair<std::array<uint8_t, 32>, bool> Point::x_bytes_and_parity() const {
     if (infinity_) return {std::array<uint8_t,32>{}, false};
 #if defined(SECP256K1_FAST_52BIT)
-    FieldElement z_fe = z_.to_fe();
+    FieldElement z_fe = z_.to_fe();  // fully normalizes
+    { const auto& zL = z_fe.limbs();
+      if (SECP256K1_UNLIKELY((zL[0] | zL[1] | zL[2] | zL[3]) == 0))
+          return {std::array<uint8_t,32>{}, false};
+    }
     FieldElement z_inv = z_fe.inverse();
     FieldElement z_inv2 = z_inv;
     z_inv2.square_inplace();
