@@ -25,7 +25,7 @@
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">UltrafastSecp256k1<span id="projectnumber">&#160;3.12.2</span>
+   <div id="projectname">UltrafastSecp256k1<span id="projectnumber">&#160;3.14.0</span>
    </div>
    <div id="projectbrief">Ultra high-performance secp256k1 elliptic curve cryptography library</div>
   </td>
@@ -103,6 +103,8 @@ $(document).ready(function(){initNavTree('namespacesecp256k1_1_1fast.html',''); 
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="namespaces" name="namespaces"></a>
 Namespaces</h2></td></tr>
+<tr class="memitem:namespacesecp256k1_1_1fast_1_1debug" id="r_namespacesecp256k1_1_1fast_1_1debug"><td class="memItemLeft" align="right" valign="top">namespace &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacesecp256k1_1_1fast_1_1debug.html">debug</a></td></tr>
+<tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:namespacesecp256k1_1_1fast_1_1detail" id="r_namespacesecp256k1_1_1fast_1_1detail"><td class="memItemLeft" align="right" valign="top">namespace &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacesecp256k1_1_1fast_1_1detail.html">detail</a></td></tr>
 <tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:namespacesecp256k1_1_1fast_1_1fe26__constants" id="r_namespacesecp256k1_1_1fast_1_1fe26__constants"><td class="memItemLeft" align="right" valign="top">namespace &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacesecp256k1_1_1fast_1_1fe26__constants.html">fe26_constants</a></td></tr>
@@ -146,6 +148,10 @@ Classes</h2></td></tr>
 <tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:"><td class="memItemLeft" align="right" valign="top">struct &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="structsecp256k1_1_1fast_1_1ScalarDecomposition.html">ScalarDecomposition</a></td></tr>
 <tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:"><td class="memItemLeft" align="right" valign="top">struct &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="structsecp256k1_1_1fast_1_1SelftestCaseResult.html">SelftestCaseResult</a></td></tr>
+<tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:"><td class="memItemLeft" align="right" valign="top">struct &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="structsecp256k1_1_1fast_1_1SelftestReport.html">SelftestReport</a></td></tr>
+<tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="typedef-members" name="typedef-members"></a>
 Typedefs</h2></td></tr>
@@ -156,11 +162,11 @@ Typedefs</h2></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="enum-members" name="enum-members"></a>
 Enumerations</h2></td></tr>
-<tr class="memitem:acde831e11e1dcaddfc8b9c9c70e777d4" id="r_acde831e11e1dcaddfc8b9c9c70e777d4"><td class="memItemLeft" align="right" valign="top">enum class &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacesecp256k1_1_1fast.html#acde831e11e1dcaddfc8b9c9c70e777d4">FieldTier</a> { <a class="el" href="namespacesecp256k1_1_1fast.html#acde831e11e1dcaddfc8b9c9c70e777d4a6e1d26616f2e87e0a0b534bc6357cb84">FE64</a>
-, <a class="el" href="namespacesecp256k1_1_1fast.html#acde831e11e1dcaddfc8b9c9c70e777d4a95990f4b1bea2398e23ca5c8eb746d6a">FE52</a>
-, <a class="el" href="namespacesecp256k1_1_1fast.html#acde831e11e1dcaddfc8b9c9c70e777d4a0220c35e8e7b548084256c53654d0a59">FE26</a>
+<tr class="memitem:a0eaa920ca64c359d03cc376492e70cab" id="r_a0eaa920ca64c359d03cc376492e70cab"><td class="memItemLeft" align="right" valign="top">enum class &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacesecp256k1_1_1fast.html#a0eaa920ca64c359d03cc376492e70cab">FieldTier</a> : std::uint8_t { <a class="el" href="namespacesecp256k1_1_1fast.html#a0eaa920ca64c359d03cc376492e70caba6e1d26616f2e87e0a0b534bc6357cb84">FE64</a>
+, <a class="el" href="namespacesecp256k1_1_1fast.html#a0eaa920ca64c359d03cc376492e70caba95990f4b1bea2398e23ca5c8eb746d6a">FE52</a>
+, <a class="el" href="namespacesecp256k1_1_1fast.html#a0eaa920ca64c359d03cc376492e70caba0220c35e8e7b548084256c53654d0a59">FE26</a>
  }</td></tr>
-<tr class="separator:acde831e11e1dcaddfc8b9c9c70e777d4"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="separator:a0eaa920ca64c359d03cc376492e70cab"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:aa79919388fa732a5045d756e9fe2830a" id="r_aa79919388fa732a5045d756e9fe2830a"><td class="memItemLeft" align="right" valign="top">enum class &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacesecp256k1_1_1fast.html#aa79919388fa732a5045d756e9fe2830a">SelftestMode</a> : uint8_t { <a class="el" href="namespacesecp256k1_1_1fast.html#aa79919388fa732a5045d756e9fe2830aafdfa02ecf86feac3801254da57c1c9ba">smoke</a> = 0
 , <a class="el" href="namespacesecp256k1_1_1fast.html#aa79919388fa732a5045d756e9fe2830aa35ea51baf1fe7f0142ad5f950855dde0">ci</a> = 1
 , <a class="el" href="namespacesecp256k1_1_1fast.html#aa79919388fa732a5045d756e9fe2830aae10a36f1a5231e597daf8f42dc1ab55a">stress</a> = 2
@@ -261,8 +267,8 @@ Functions</h2></td></tr>
 <tr class="separator:aaea6cee421dfa54732da9899bea063b3"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a8a85eef57b722a52c17ac36a28c6fc10" id="r_a8a85eef57b722a52c17ac36a28c6fc10"><td class="memItemLeft" align="right" valign="top"><a class="el" href="classsecp256k1_1_1fast_1_1FieldElement.html">FieldElement</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacesecp256k1_1_1fast.html#a8a85eef57b722a52c17ac36a28c6fc10">pow_p_minus_2_warp_optimized</a> (<a class="el" href="classsecp256k1_1_1fast_1_1FieldElement.html">FieldElement</a> base)</td></tr>
 <tr class="separator:a8a85eef57b722a52c17ac36a28c6fc10"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a530d1a93905ae03f24bdb1f11eda9838" id="r_a530d1a93905ae03f24bdb1f11eda9838"><td class="memItemLeft" align="right" valign="top"><a class="el" href="classsecp256k1_1_1fast_1_1FieldElement.html">FieldElement</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacesecp256k1_1_1fast.html#a530d1a93905ae03f24bdb1f11eda9838">pow_p_minus_2_double_base</a> (<a class="el" href="classsecp256k1_1_1fast_1_1FieldElement.html">FieldElement</a> base)</td></tr>
-<tr class="separator:a530d1a93905ae03f24bdb1f11eda9838"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a2f78be3f271012542db24ae54e1b5a8e" id="r_a2f78be3f271012542db24ae54e1b5a8e"><td class="memItemLeft" align="right" valign="top"><a class="el" href="classsecp256k1_1_1fast_1_1FieldElement.html">FieldElement</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacesecp256k1_1_1fast.html#a2f78be3f271012542db24ae54e1b5a8e">pow_p_minus_2_double_base</a> (const <a class="el" href="classsecp256k1_1_1fast_1_1FieldElement.html">FieldElement</a> &amp;base)</td></tr>
+<tr class="separator:a2f78be3f271012542db24ae54e1b5a8e"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a614b3a4c5c4438f7b6af648985f10608" id="r_a614b3a4c5c4438f7b6af648985f10608"><td class="memItemLeft" align="right" valign="top"><a class="el" href="classsecp256k1_1_1fast_1_1FieldElement.html">FieldElement</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacesecp256k1_1_1fast.html#a614b3a4c5c4438f7b6af648985f10608">pow_p_minus_2_compact_table</a> (<a class="el" href="classsecp256k1_1_1fast_1_1FieldElement.html">FieldElement</a> base)</td></tr>
 <tr class="separator:a614b3a4c5c4438f7b6af648985f10608"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a3ae45c25c5eea3750b3752f2c2940444" id="r_a3ae45c25c5eea3750b3752f2c2940444"><td class="memItemLeft" align="right" valign="top"><a class="el" href="classsecp256k1_1_1fast_1_1FieldElement.html">FieldElement</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacesecp256k1_1_1fast.html#a3ae45c25c5eea3750b3752f2c2940444">fe_inverse_window_naf_v2</a> (const <a class="el" href="classsecp256k1_1_1fast_1_1FieldElement.html">FieldElement</a> &amp;value)</td></tr>
@@ -437,10 +443,12 @@ Functions</h2></td></tr>
 <tr class="separator:a0f2630617093e195459d21cdac4db28a"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:ae749942cd0a5c56c5b1a95b7e051f71b" id="r_ae749942cd0a5c56c5b1a95b7e051f71b"><td class="memItemLeft" align="right" valign="top">bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacesecp256k1_1_1fast.html#ae749942cd0a5c56c5b1a95b7e051f71b">Selftest</a> (bool verbose, <a class="el" href="namespacesecp256k1_1_1fast.html#aa79919388fa732a5045d756e9fe2830a">SelftestMode</a> mode, uint64_t seed=0)</td></tr>
 <tr class="separator:ae749942cd0a5c56c5b1a95b7e051f71b"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a811eb7556b7b171489fca5e2503d461d" id="r_a811eb7556b7b171489fca5e2503d461d"><td class="memItemLeft" align="right" valign="top"><a class="el" href="structsecp256k1_1_1fast_1_1SelftestReport.html">SelftestReport</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacesecp256k1_1_1fast.html#a811eb7556b7b171489fca5e2503d461d">selftest_report</a> (<a class="el" href="namespacesecp256k1_1_1fast.html#aa79919388fa732a5045d756e9fe2830a">SelftestMode</a> mode=<a class="el" href="namespacesecp256k1_1_1fast.html#aa79919388fa732a5045d756e9fe2830aafdfa02ecf86feac3801254da57c1c9ba">SelftestMode::smoke</a>, uint64_t seed=0)</td></tr>
+<tr class="separator:a811eb7556b7b171489fca5e2503d461d"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="var-members" name="var-members"></a>
 Variables</h2></td></tr>
-<tr class="memitem:ac077839f3cd4edb76742bd262e204772" id="r_ac077839f3cd4edb76742bd262e204772"><td class="memItemLeft" align="right" valign="top">constexpr <a class="el" href="namespacesecp256k1_1_1fast.html#acde831e11e1dcaddfc8b9c9c70e777d4">FieldTier</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacesecp256k1_1_1fast.html#ac077839f3cd4edb76742bd262e204772">kOptimalTier</a> = <a class="el" href="namespacesecp256k1_1_1fast.html#acde831e11e1dcaddfc8b9c9c70e777d4a6e1d26616f2e87e0a0b534bc6357cb84">FieldTier::FE64</a></td></tr>
+<tr class="memitem:ac077839f3cd4edb76742bd262e204772" id="r_ac077839f3cd4edb76742bd262e204772"><td class="memItemLeft" align="right" valign="top">constexpr <a class="el" href="namespacesecp256k1_1_1fast.html#a0eaa920ca64c359d03cc376492e70cab">FieldTier</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacesecp256k1_1_1fast.html#ac077839f3cd4edb76742bd262e204772">kOptimalTier</a> = <a class="el" href="namespacesecp256k1_1_1fast.html#a0eaa920ca64c359d03cc376492e70caba6e1d26616f2e87e0a0b534bc6357cb84">FieldTier::FE64</a></td></tr>
 <tr class="separator:ac077839f3cd4edb76742bd262e204772"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a1e421faed0a680753b2c618fef2a1444" id="r_a1e421faed0a680753b2c618fef2a1444"><td class="memItemLeft" align="right" valign="top">constexpr const char *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacesecp256k1_1_1fast.html#a1e421faed0a680753b2c618fef2a1444">kOptimalTierName</a> = &quot;4x64 (baseline)&quot;</td></tr>
 <tr class="separator:a1e421faed0a680753b2c618fef2a1444"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -479,8 +487,8 @@ Variables</h2></td></tr>
 </div>
 </div>
 <h2 class="groupheader">Enumeration Type Documentation</h2>
-<a id="acde831e11e1dcaddfc8b9c9c70e777d4" name="acde831e11e1dcaddfc8b9c9c70e777d4"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#acde831e11e1dcaddfc8b9c9c70e777d4">&#9670;&#160;</a></span>FieldTier</h2>
+<a id="a0eaa920ca64c359d03cc376492e70cab" name="a0eaa920ca64c359d03cc376492e70cab"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0eaa920ca64c359d03cc376492e70cab">&#9670;&#160;</a></span>FieldTier</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -489,7 +497,7 @@ Variables</h2></td></tr>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">enum class <a class="el" href="namespacesecp256k1_1_1fast.html#acde831e11e1dcaddfc8b9c9c70e777d4">secp256k1::fast::FieldTier</a></td>
+          <td class="memname">enum class <a class="el" href="namespacesecp256k1_1_1fast.html#a0eaa920ca64c359d03cc376492e70cab">secp256k1::fast::FieldTier</a> : std::uint8_t</td>
         </tr>
       </table>
   </td>
@@ -499,9 +507,9 @@ Variables</h2></td></tr>
 </table>
 </div><div class="memdoc">
 <table class="fieldtable">
-<tr><th colspan="2">Enumerator</th></tr><tr><td class="fieldname"><a id="acde831e11e1dcaddfc8b9c9c70e777d4a6e1d26616f2e87e0a0b534bc6357cb84" name="acde831e11e1dcaddfc8b9c9c70e777d4a6e1d26616f2e87e0a0b534bc6357cb84"></a>FE64&#160;</td><td class="fielddoc"></td></tr>
-<tr><td class="fieldname"><a id="acde831e11e1dcaddfc8b9c9c70e777d4a95990f4b1bea2398e23ca5c8eb746d6a" name="acde831e11e1dcaddfc8b9c9c70e777d4a95990f4b1bea2398e23ca5c8eb746d6a"></a>FE52&#160;</td><td class="fielddoc"></td></tr>
-<tr><td class="fieldname"><a id="acde831e11e1dcaddfc8b9c9c70e777d4a0220c35e8e7b548084256c53654d0a59" name="acde831e11e1dcaddfc8b9c9c70e777d4a0220c35e8e7b548084256c53654d0a59"></a>FE26&#160;</td><td class="fielddoc"></td></tr>
+<tr><th colspan="2">Enumerator</th></tr><tr><td class="fieldname"><a id="a0eaa920ca64c359d03cc376492e70caba6e1d26616f2e87e0a0b534bc6357cb84" name="a0eaa920ca64c359d03cc376492e70caba6e1d26616f2e87e0a0b534bc6357cb84"></a>FE64&#160;</td><td class="fielddoc"></td></tr>
+<tr><td class="fieldname"><a id="a0eaa920ca64c359d03cc376492e70caba95990f4b1bea2398e23ca5c8eb746d6a" name="a0eaa920ca64c359d03cc376492e70caba95990f4b1bea2398e23ca5c8eb746d6a"></a>FE52&#160;</td><td class="fielddoc"></td></tr>
+<tr><td class="fieldname"><a id="a0eaa920ca64c359d03cc376492e70caba0220c35e8e7b548084256c53654d0a59" name="a0eaa920ca64c359d03cc376492e70caba0220c35e8e7b548084256c53654d0a59"></a>FE26&#160;</td><td class="fielddoc"></td></tr>
 </table>
 
 <p class="definition">Definition at line <a class="el" href="field__optimal_8hpp_source.html#l00121">121</a> of file <a class="el" href="field__optimal_8hpp_source.html">field_optimal.hpp</a>.</p>
@@ -533,7 +541,7 @@ Variables</h2></td></tr>
 <tr><td class="fieldname"><a id="aa79919388fa732a5045d756e9fe2830aae10a36f1a5231e597daf8f42dc1ab55a" name="aa79919388fa732a5045d756e9fe2830aae10a36f1a5231e597daf8f42dc1ab55a"></a>stress&#160;</td><td class="fielddoc"></td></tr>
 </table>
 
-<p class="definition">Definition at line <a class="el" href="selftest_8hpp_source.html#l00013">13</a> of file <a class="el" href="selftest_8hpp_source.html">selftest.hpp</a>.</p>
+<p class="definition">Definition at line <a class="el" href="selftest_8hpp_source.html#l00015">15</a> of file <a class="el" href="selftest_8hpp_source.html">selftest.hpp</a>.</p>
 
 </div>
 </div>
@@ -1217,7 +1225,7 @@ Variables</h2></td></tr>
 
 <p class="reference">References <a class="el" href="namespacesecp256k1_1_1fast.html#aa1ade8639ae8e331731389af48483662">Selftest()</a>.</p>
 
-<p class="reference">Referenced by <a class="el" href="ufsecp__impl_8cpp_source.html#l00182">ufsecp_ctx_create()</a>.</p>
+<p class="reference">Referenced by <a class="el" href="ufsecp__impl_8cpp_source.html#l00185">ufsecp_ctx_create()</a>.</p>
 
 </div>
 </div>
@@ -3042,8 +3050,8 @@ This function is optimized for fixed-step ECC walks where we have a deterministi
 
 </div>
 </div>
-<a id="a530d1a93905ae03f24bdb1f11eda9838" name="a530d1a93905ae03f24bdb1f11eda9838"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a530d1a93905ae03f24bdb1f11eda9838">&#9670;&#160;</a></span>pow_p_minus_2_double_base()</h2>
+<a id="a2f78be3f271012542db24ae54e1b5a8e" name="a2f78be3f271012542db24ae54e1b5a8e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a2f78be3f271012542db24ae54e1b5a8e">&#9670;&#160;</a></span>pow_p_minus_2_double_base()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -3051,7 +3059,7 @@ This function is optimized for fixed-step ECC walks where we have a deterministi
         <tr>
           <td class="memname"><a class="el" href="classsecp256k1_1_1fast_1_1FieldElement.html">FieldElement</a> secp256k1::fast::pow_p_minus_2_double_base </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="classsecp256k1_1_1fast_1_1FieldElement.html">FieldElement</a>&#160;</td>
+          <td class="paramtype">const <a class="el" href="classsecp256k1_1_1fast_1_1FieldElement.html">FieldElement</a> &amp;&#160;</td>
           <td class="paramname"><em>base</em></td><td>)</td>
           <td></td>
         </tr>
@@ -3794,6 +3802,34 @@ This function is optimized for fixed-step ECC walks where we have a deterministi
 
 </div>
 </div>
+<a id="a811eb7556b7b171489fca5e2503d461d" name="a811eb7556b7b171489fca5e2503d461d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a811eb7556b7b171489fca5e2503d461d">&#9670;&#160;</a></span>selftest_report()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="structsecp256k1_1_1fast_1_1SelftestReport.html">SelftestReport</a> secp256k1::fast::selftest_report </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="namespacesecp256k1_1_1fast.html#aa79919388fa732a5045d756e9fe2830a">SelftestMode</a>&#160;</td>
+          <td class="paramname"><em>mode</em> = <code><a class="el" href="namespacesecp256k1_1_1fast.html#aa79919388fa732a5045d756e9fe2830aafdfa02ecf86feac3801254da57c1c9ba">SelftestMode::smoke</a></code>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t&#160;</td>
+          <td class="paramname"><em>seed</em> = <code>0</code>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
 <a id="ad3ced354357f695073913024f5539a8d" name="ad3ced354357f695073913024f5539a8d"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#ad3ced354357f695073913024f5539a8d">&#9670;&#160;</a></span>split_scalar_glv()</h2>
 
@@ -3866,7 +3902,7 @@ This function is optimized for fixed-step ECC walks where we have a deterministi
 </table>
 </div><div class="memdoc">
 
-<p class="definition">Definition at line <a class="el" href="field_8hpp_source.html#l00136">136</a> of file <a class="el" href="field_8hpp_source.html">field.hpp</a>.</p>
+<p class="definition">Definition at line <a class="el" href="field_8hpp_source.html#l00135">135</a> of file <a class="el" href="field_8hpp_source.html">field.hpp</a>.</p>
 
 </div>
 </div>
@@ -3894,7 +3930,7 @@ This function is optimized for fixed-step ECC walks where we have a deterministi
 </table>
 </div><div class="memdoc">
 
-<p class="definition">Definition at line <a class="el" href="field_8hpp_source.html#l00132">132</a> of file <a class="el" href="field_8hpp_source.html">field.hpp</a>.</p>
+<p class="definition">Definition at line <a class="el" href="field_8hpp_source.html#l00131">131</a> of file <a class="el" href="field_8hpp_source.html">field.hpp</a>.</p>
 
 </div>
 </div>
@@ -3973,7 +4009,7 @@ This function is optimized for fixed-step ECC walks where we have a deterministi
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">constexpr <a class="el" href="namespacesecp256k1_1_1fast.html#acde831e11e1dcaddfc8b9c9c70e777d4">FieldTier</a> secp256k1::fast::kOptimalTier = <a class="el" href="namespacesecp256k1_1_1fast.html#acde831e11e1dcaddfc8b9c9c70e777d4a6e1d26616f2e87e0a0b534bc6357cb84">FieldTier::FE64</a></td>
+          <td class="memname">constexpr <a class="el" href="namespacesecp256k1_1_1fast.html#a0eaa920ca64c359d03cc376492e70cab">FieldTier</a> secp256k1::fast::kOptimalTier = <a class="el" href="namespacesecp256k1_1_1fast.html#a0eaa920ca64c359d03cc376492e70caba6e1d26616f2e87e0a0b534bc6357cb84">FieldTier::FE64</a></td>
         </tr>
       </table>
   </td>

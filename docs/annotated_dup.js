@@ -18,6 +18,9 @@ var annotated_dup =
         [ "CTJacobianPoint", "structsecp256k1_1_1ct_1_1CTJacobianPoint.html", "structsecp256k1_1_1ct_1_1CTJacobianPoint" ]
       ] ],
       [ "fast", "namespacesecp256k1_1_1fast.html", [
+        [ "debug", "namespacesecp256k1_1_1fast_1_1debug.html", [
+          [ "DebugCounters", "structsecp256k1_1_1fast_1_1debug_1_1DebugCounters.html", "structsecp256k1_1_1fast_1_1debug_1_1DebugCounters" ]
+        ] ],
         [ "AffinePointCompact", "structsecp256k1_1_1fast_1_1AffinePointCompact.html", "structsecp256k1_1_1fast_1_1AffinePointCompact" ],
         [ "CombAffinePoint", "structsecp256k1_1_1fast_1_1CombAffinePoint.html", "structsecp256k1_1_1fast_1_1CombAffinePoint" ],
         [ "CombGenContext", "classsecp256k1_1_1fast_1_1CombGenContext.html", "classsecp256k1_1_1fast_1_1CombGenContext" ],
@@ -32,7 +35,9 @@ var annotated_dup =
         [ "PrecomputedScalar", "structsecp256k1_1_1fast_1_1PrecomputedScalar.html", "structsecp256k1_1_1fast_1_1PrecomputedScalar" ],
         [ "PrecomputedScalarOptimized", "structsecp256k1_1_1fast_1_1PrecomputedScalarOptimized.html", "structsecp256k1_1_1fast_1_1PrecomputedScalarOptimized" ],
         [ "Scalar", "classsecp256k1_1_1fast_1_1Scalar.html", "classsecp256k1_1_1fast_1_1Scalar" ],
-        [ "ScalarDecomposition", "structsecp256k1_1_1fast_1_1ScalarDecomposition.html", "structsecp256k1_1_1fast_1_1ScalarDecomposition" ]
+        [ "ScalarDecomposition", "structsecp256k1_1_1fast_1_1ScalarDecomposition.html", "structsecp256k1_1_1fast_1_1ScalarDecomposition" ],
+        [ "SelftestCaseResult", "structsecp256k1_1_1fast_1_1SelftestCaseResult.html", "structsecp256k1_1_1fast_1_1SelftestCaseResult" ],
+        [ "SelftestReport", "structsecp256k1_1_1fast_1_1SelftestReport.html", "structsecp256k1_1_1fast_1_1SelftestReport" ]
       ] ],
       [ "test", "namespacesecp256k1_1_1test.html", [
         [ "TestCounters", "structsecp256k1_1_1test_1_1TestCounters.html", "structsecp256k1_1_1test_1_1TestCounters" ]

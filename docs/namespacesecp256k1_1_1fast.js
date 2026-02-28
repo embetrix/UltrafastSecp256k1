@@ -1,5 +1,6 @@
 var namespacesecp256k1_1_1fast =
 [
+    [ "debug", "namespacesecp256k1_1_1fast_1_1debug.html", "namespacesecp256k1_1_1fast_1_1debug" ],
     [ "detail", "namespacesecp256k1_1_1fast_1_1detail.html", [
       [ "adcx64", "namespacesecp256k1_1_1fast_1_1detail.html#a9bd260c01b29fc57c371cedfb786a558", null ],
       [ "adox64", "namespacesecp256k1_1_1fast_1_1detail.html#aa1db22e8bece98f43b019f7cc922fe0b", null ],
@@ -58,12 +59,14 @@ var namespacesecp256k1_1_1fast =
     [ "PrecomputedScalarOptimized", "structsecp256k1_1_1fast_1_1PrecomputedScalarOptimized.html", "structsecp256k1_1_1fast_1_1PrecomputedScalarOptimized" ],
     [ "Scalar", "classsecp256k1_1_1fast_1_1Scalar.html", "classsecp256k1_1_1fast_1_1Scalar" ],
     [ "ScalarDecomposition", "structsecp256k1_1_1fast_1_1ScalarDecomposition.html", "structsecp256k1_1_1fast_1_1ScalarDecomposition" ],
+    [ "SelftestCaseResult", "structsecp256k1_1_1fast_1_1SelftestCaseResult.html", "structsecp256k1_1_1fast_1_1SelftestCaseResult" ],
+    [ "SelftestReport", "structsecp256k1_1_1fast_1_1SelftestReport.html", "structsecp256k1_1_1fast_1_1SelftestReport" ],
     [ "OptimalFieldElement", "namespacesecp256k1_1_1fast.html#ad889772ac557be09629ddc6f15b093f8", null ],
     [ "ProgressCallback", "namespacesecp256k1_1_1fast.html#a37c1f085bc37d25789620da90ed4988a", null ],
-    [ "FieldTier", "namespacesecp256k1_1_1fast.html#acde831e11e1dcaddfc8b9c9c70e777d4", [
-      [ "FE64", "namespacesecp256k1_1_1fast.html#acde831e11e1dcaddfc8b9c9c70e777d4a6e1d26616f2e87e0a0b534bc6357cb84", null ],
-      [ "FE52", "namespacesecp256k1_1_1fast.html#acde831e11e1dcaddfc8b9c9c70e777d4a95990f4b1bea2398e23ca5c8eb746d6a", null ],
-      [ "FE26", "namespacesecp256k1_1_1fast.html#acde831e11e1dcaddfc8b9c9c70e777d4a0220c35e8e7b548084256c53654d0a59", null ]
+    [ "FieldTier", "namespacesecp256k1_1_1fast.html#a0eaa920ca64c359d03cc376492e70cab", [
+      [ "FE64", "namespacesecp256k1_1_1fast.html#a0eaa920ca64c359d03cc376492e70caba6e1d26616f2e87e0a0b534bc6357cb84", null ],
+      [ "FE52", "namespacesecp256k1_1_1fast.html#a0eaa920ca64c359d03cc376492e70caba95990f4b1bea2398e23ca5c8eb746d6a", null ],
+      [ "FE26", "namespacesecp256k1_1_1fast.html#a0eaa920ca64c359d03cc376492e70caba0220c35e8e7b548084256c53654d0a59", null ]
     ] ],
     [ "SelftestMode", "namespacesecp256k1_1_1fast.html#aa79919388fa732a5045d756e9fe2830a", [
       [ "smoke", "namespacesecp256k1_1_1fast.html#aa79919388fa732a5045d756e9fe2830aafdfa02ecf86feac3801254da57c1c9ba", null ],
@@ -163,7 +166,7 @@ var namespacesecp256k1_1_1fast =
     [ "pow_p_minus_2_bos_coster", "namespacesecp256k1_1_1fast.html#ab9598b1d02d3fb8bade3095f709d4485", null ],
     [ "pow_p_minus_2_branchless", "namespacesecp256k1_1_1fast.html#af691b8ae075490bdc7a334c65ec094ee", null ],
     [ "pow_p_minus_2_compact_table", "namespacesecp256k1_1_1fast.html#a614b3a4c5c4438f7b6af648985f10608", null ],
-    [ "pow_p_minus_2_double_base", "namespacesecp256k1_1_1fast.html#a530d1a93905ae03f24bdb1f11eda9838", null ],
+    [ "pow_p_minus_2_double_base", "namespacesecp256k1_1_1fast.html#a2f78be3f271012542db24ae54e1b5a8e", null ],
     [ "pow_p_minus_2_eea", "namespacesecp256k1_1_1fast.html#a94282283a47b6cbc497d0bad997193dc", null ],
     [ "pow_p_minus_2_fermat_gpu", "namespacesecp256k1_1_1fast.html#ab237a01755439311897a03306549f78e", null ],
     [ "pow_p_minus_2_fixed_window5", "namespacesecp256k1_1_1fast.html#aedd2ad06e0ba3ce8e3be6ab7a51a3c0e", null ],
@@ -197,6 +200,7 @@ var namespacesecp256k1_1_1fast =
     [ "scalar_mul_generator_glv_predecomposed", "namespacesecp256k1_1_1fast.html#a4a1d98ebe3ad209dc842065b216535b0", null ],
     [ "Selftest", "namespacesecp256k1_1_1fast.html#aa1ade8639ae8e331731389af48483662", null ],
     [ "Selftest", "namespacesecp256k1_1_1fast.html#ae749942cd0a5c56c5b1a95b7e051f71b", null ],
+    [ "selftest_report", "namespacesecp256k1_1_1fast.html#a811eb7556b7b171489fca5e2503d461d", null ],
     [ "split_scalar_glv", "namespacesecp256k1_1_1fast.html#ad3ced354357f695073913024f5539a8d", null ],
     [ "to_optimal", "namespacesecp256k1_1_1fast.html#abb486389b82ab227c311dc3574ca6a11", null ],
     [ "toMid", "namespacesecp256k1_1_1fast.html#a299678fa62af6171cad9ac631856acf0", null ],
